@@ -26,6 +26,27 @@ def render_markdown(result: ResearchResult) -> str:
     lines.extend(
         [
             "",
+            "## 数据来源与新鲜度",
+            "",
+            "| 代码 | 名称 | 来源 | as_of | updated_at | expires_at | stale |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for valuation in sorted(result.valuations.values(), key=lambda item: item.fund.code):
+        fund = valuation.fund
+        metadata = fund.metadata
+        source = fund.source
+        as_of = metadata.get("as_of") or metadata.get("cache_as_of") or result.as_of or "--"
+        updated_at = metadata.get("updated_at", "--")
+        expires_at = metadata.get("expires_at", "--")
+        stale = "是" if metadata.get("stale") else "否"
+        lines.append(
+            f"| {fund.code} | {fund.name} | {source} | {as_of} | {updated_at} | {expires_at} | {stale} |"
+        )
+
+    lines.extend(
+        [
+            "",
             "## 研究优先级",
             "",
             "| 排名 | 代码 | 名称 | 类型 | 分数 | 证据 | 估值方式 | 置信度 |",

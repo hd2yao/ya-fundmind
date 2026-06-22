@@ -78,3 +78,33 @@ def test_markdown_report_marks_stale_cache_data():
 
     assert "stale data" in markdown
     assert "2026-06-20" in markdown
+
+
+def test_markdown_report_includes_data_freshness_table():
+    result = run_research(
+        [
+            FundRecord(
+                code="510300",
+                name="沪深300ETF",
+                category="ETF",
+                nav=4.01,
+                nav_date="2026-06-21",
+                valuation_date="2026-06-22",
+                source="akshare",
+                metadata={
+                    "as_of": "2026-06-22",
+                    "updated_at": "2026-06-22T01:00:00+00:00",
+                    "expires_at": "2026-06-23T01:00:00+00:00",
+                    "stale": False,
+                },
+            )
+        ],
+        as_of="2026-06-22",
+    )
+
+    markdown = render_markdown(result)
+
+    assert "数据来源与新鲜度" in markdown
+    assert "akshare" in markdown
+    assert "2026-06-22" in markdown
+    assert "| 510300 | 沪深300ETF | akshare | 2026-06-22 |" in markdown
