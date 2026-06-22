@@ -35,6 +35,9 @@ def _run_report(args) -> int:
     except ProviderUnavailable as exc:
         print(f"Live provider unavailable: {exc}")
         return 2
+    except Exception as exc:
+        print(f"Failed to load fund data: {exc}")
+        return 2
 
     holdings = None
     if args.portfolio_file:

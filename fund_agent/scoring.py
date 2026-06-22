@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from statistics import mean, pstdev
 
 from .models import FundRecord, ScoreBreakdown, ScoredFund

@@ -12,3 +12,15 @@ def test_demo_command_writes_markdown_and_html_reports(tmp_path):
     assert html.exists()
     assert "基金 ETF Agent 日报" in markdown.read_text(encoding="utf-8")
     assert "不构成投资建议" in html.read_text(encoding="utf-8")
+
+
+def test_live_source_failure_returns_nonzero(monkeypatch, tmp_path):
+    class FailingProvider:
+        def fetch_funds(self):
+            raise RuntimeError("network down")
+
+    monkeypatch.setattr("fund_agent.cli.AkshareProvider", lambda: FailingProvider())
+
+    exit_code = main(["screen", "--source", "live", "--output-dir", str(tmp_path)])
+
+    assert exit_code == 2
