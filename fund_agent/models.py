@@ -11,6 +11,7 @@ class FundRecord:
     category: str
     nav: float | None = None
     nav_date: str | None = None
+    valuation_date: str | None = None
     returns: dict[str, float] = field(default_factory=dict)
     scale_billion: float | None = None
     manager: str | None = None

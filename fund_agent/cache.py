@@ -36,6 +36,7 @@ class FundCache:
                     category TEXT NOT NULL,
                     nav REAL,
                     nav_date TEXT,
+                    valuation_date TEXT,
                     returns_json TEXT NOT NULL,
                     scale_billion REAL,
                     manager TEXT,
@@ -109,17 +110,18 @@ class FundCache:
                 conn.execute(
                     """
                     INSERT INTO fund_basics (
-                        code, as_of, name, category, nav, nav_date, returns_json,
-                        scale_billion, manager, fee_rate, exchange_traded, price,
-                        target_etf, proxy_symbol, source, metadata_json,
+                        code, as_of, name, category, nav, nav_date, valuation_date,
+                        returns_json, scale_billion, manager, fee_rate,
+                        exchange_traded, price, target_etf, proxy_symbol, source, metadata_json,
                         updated_at, expires_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(code, as_of) DO UPDATE SET
                         name = excluded.name,
                         category = excluded.category,
                         nav = excluded.nav,
                         nav_date = excluded.nav_date,
+                        valuation_date = excluded.valuation_date,
                         returns_json = excluded.returns_json,
                         scale_billion = excluded.scale_billion,
                         manager = excluded.manager,
@@ -140,6 +142,7 @@ class FundCache:
                         fund.category,
                         fund.nav,
                         fund.nav_date,
+                        fund.valuation_date,
                         json.dumps(fund.returns, ensure_ascii=False, sort_keys=True),
                         fund.scale_billion,
                         fund.manager,
@@ -216,6 +219,7 @@ class FundCache:
             category=str(row["category"]),
             nav=row["nav"],
             nav_date=row["nav_date"],
+            valuation_date=row["valuation_date"],
             returns=json.loads(row["returns_json"] or "{}"),
             scale_billion=row["scale_billion"],
             manager=row["manager"],
