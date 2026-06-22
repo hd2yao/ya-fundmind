@@ -40,3 +40,12 @@ class ScoredFund:
     breakdown: ScoreBreakdown
     evidence_label: str
     notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ValuationResult:
+    fund: FundRecord
+    method: str
+    estimated_value: float | None
+    confidence: str
+    notes: tuple[str, ...] = ()
