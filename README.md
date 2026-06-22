@@ -8,6 +8,7 @@
 - 估值分类：场内 ETF/LOF、ETF 联接、QDII 代理、指数/NAV-only、unsupported。
 - 持仓分析：当前市值、浮动收益、目标权重偏离、单只集中度、数据新鲜度。
 - 报告输出：Markdown + HTML，包含证据标签、估值方式、风险提示和核对清单。
+- 本地数据可靠性：SQLite 缓存、watchlist/portfolio YAML 配置、每日 snapshot 对比。
 - 无密钥 demo：默认使用 `data/fixtures/funds.json` 和 `data/portfolio.example.json`。
 
 ## 快速运行
@@ -20,6 +21,7 @@ python -m fund_agent.cli demo --output-dir outputs --as-of 2026-06-22
 
 - `outputs/fund_agent_report.md`
 - `outputs/fund_agent_report.html`
+- `outputs/snapshots/YYYY-MM-DD.json`
 
 ## 常用命令
 
@@ -27,12 +29,26 @@ python -m fund_agent.cli demo --output-dir outputs --as-of 2026-06-22
 # 只做基金/ETF 筛选
 python -m fund_agent.cli screen --output-dir outputs
 
+# 使用自选池配置筛选
+python -m fund_agent.cli screen --watchlist-file configs/watchlist.yaml --output-dir outputs
+
 # 用本地持仓文件分析组合
 python -m fund_agent.cli portfolio --portfolio-file data/portfolio.example.json --output-dir outputs
+
+# 用 YAML 持仓配置分析组合
+python -m fund_agent.cli portfolio --portfolio-config configs/portfolio.yaml --output-dir outputs
 
 # 可选：尝试 AKShare 实时数据，需要先安装 akshare
 python -m fund_agent.cli screen --source live --output-dir outputs
 ```
+
+## 本地数据与配置
+
+- SQLite 缓存默认路径：`data/cache/funds.sqlite`。缓存记录包含 `source`、`as_of`、`updated_at`、`expires_at`；live provider 失败且配置了缓存时，可以回退到缓存数据。
+- 如果报告使用了过期缓存，基金记录会携带 stale 标记，后续报告会把它作为数据新鲜度风险提示。
+- 自选池配置：`configs/watchlist.yaml`。
+- 持仓配置：`configs/portfolio.yaml`。`demo` 仍默认使用 fixture 和 `data/portfolio.example.json`，便于无配置试运行。
+- 每次成功运行都会写入 `outputs/snapshots/YYYY-MM-DD.json`；当存在上一期 snapshot 时，报告会展示评分、估值、风险和持仓风险变化。
 
 ## 测试
 

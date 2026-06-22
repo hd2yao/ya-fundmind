@@ -1,0 +1,10 @@
+name: YA FundMind watchlist
+funds:
+  - code: 510300
+    name: 沪深300ETF
+  - code: 000311
+    name: 华夏沪深300ETF联接A
+  - code: 000834
+    name: 广发纳斯达克100ETF联接A
+  - code: 110022
+    name: 易方达消费行业股票

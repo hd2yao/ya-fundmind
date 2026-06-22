@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Protocol
 
+from .cache import FundCache
 from .models import FundRecord
 from .portfolio import PortfolioHolding
 
@@ -15,6 +17,24 @@ class ProviderUnavailable(RuntimeError):
 class FundProvider(Protocol):
     def fetch_funds(self) -> list[FundRecord]:
         """Return normalized fund records."""
+
+
+def normalize_fund_code(value: object) -> str:
+    text = str(value or "").strip()
+    if "." in text:
+        text = text.split(".", 1)[0]
+    if len(text) == 8 and text[:2].isalpha() and text[2:].isdigit():
+        return text[2:]
+    return text
+
+
+def normalize_fund_name(value: object) -> str:
+    return str(value or "").strip()
+
+
+def normalize_fund_category(value: object) -> str:
+    text = str(value or "").strip()
+    return text or "基金"
 
 
 class FixtureProvider:
@@ -34,14 +54,26 @@ class AkshareProvider:
     ProviderUnavailable error instead of an import failure.
     """
 
-    def __init__(self, fund_type: str = "全部"):
+    def __init__(
+        self,
+        fund_type: str = "全部",
+        *,
+        ak_module=None,
+        cache: FundCache | None = None,
+        allow_stale_cache: bool = True,
+    ):
         self.fund_type = fund_type
-        try:
-            import akshare as ak  # type: ignore
-        except Exception:  # pragma: no cover - depends on local environment
-            self._ak = None
-        else:  # pragma: no cover - live provider is smoke-tested manually
-            self._ak = ak
+        self.cache = cache
+        self.allow_stale_cache = allow_stale_cache
+        if ak_module is not None:
+            self._ak = ak_module
+        else:
+            try:
+                import akshare as ak  # type: ignore
+            except Exception:  # pragma: no cover - depends on local environment
+                self._ak = None
+            else:  # pragma: no cover - live provider is smoke-tested manually
+                self._ak = ak
 
     @property
     def available(self) -> bool:
@@ -49,28 +81,48 @@ class AkshareProvider:
 
     def fetch_funds(self) -> list[FundRecord]:
         if self._ak is None:
-            raise ProviderUnavailable("AKShare is not installed; use FixtureProvider or install akshare.")
-        df = self._ak.fund_open_fund_rank_em(symbol=self.fund_type)
+            return self._fallback_to_cache("AKShare is not installed")
+        try:
+            df = self._ak.fund_open_fund_rank_em(symbol=self.fund_type)
+        except Exception as exc:
+            return self._fallback_to_cache(str(exc))
         funds: list[FundRecord] = []
         for _, row in df.iterrows():
-            funds.append(
-                FundRecord(
-                    code=str(row.get("基金代码", "")).strip(),
-                    name=str(row.get("基金简称", "")).strip(),
-                    category=str(row.get("基金类型", "开放式基金")).strip(),
-                    nav=_to_float(row.get("单位净值")),
-                    nav_date=str(row.get("日期", "") or "")[:10] or None,
-                    returns={
-                        "1w": _to_float(row.get("近1周")) or 0.0,
-                        "1m": _to_float(row.get("近1月")) or 0.0,
-                        "3m": _to_float(row.get("近3月")) or 0.0,
-                        "6m": _to_float(row.get("近6月")) or 0.0,
-                        "1y": _to_float(row.get("近1年")) or 0.0,
-                    },
-                    source="akshare",
-                )
-            )
+            try:
+                funds.append(_fund_from_akshare_row(row))
+            except Exception:
+                continue
         return [fund for fund in funds if fund.code and fund.name]
+
+    def _fallback_to_cache(self, reason: str) -> list[FundRecord]:
+        if self.cache is None:
+            raise ProviderUnavailable(
+                f"AKShareProvider unavailable and no cache fallback is configured: {reason}"
+            )
+        funds = self.cache.load_funds(allow_stale=self.allow_stale_cache)
+        if not funds:
+            raise ProviderUnavailable(f"AKShareProvider unavailable and cache is empty: {reason}")
+        return [
+            replace(
+                fund,
+                metadata={
+                    **fund.metadata,
+                    "fallback_reason": reason,
+                    "fallback_provider": "akshare",
+                },
+            )
+            for fund in funds
+        ]
+
+
+class EastmoneyProvider:
+    def fetch_funds(self) -> list[FundRecord]:
+        raise ProviderUnavailable("EastmoneyProvider is reserved for a later data source.")
+
+
+class TiantianFundProvider:
+    def fetch_funds(self) -> list[FundRecord]:
+        raise ProviderUnavailable("TiantianFundProvider is reserved for a later data source.")
 
 
 def _to_float(value: object) -> float | None:
@@ -85,13 +137,52 @@ def _to_float(value: object) -> float | None:
         return None
 
 
+def _first(row: object, *keys: str) -> object:
+    for key in keys:
+        if hasattr(row, "get"):
+            value = row.get(key)
+        else:
+            value = None
+        if value is not None and str(value).strip() != "":
+            return value
+    return None
+
+
+def _date_text(value: object) -> str | None:
+    text = str(value or "").strip()
+    return text[:10] or None
+
+
+def _fund_from_akshare_row(row: object) -> FundRecord:
+    return FundRecord(
+        code=normalize_fund_code(_first(row, "基金代码", "代码", "fund_code")),
+        name=normalize_fund_name(_first(row, "基金简称", "基金名称", "name")),
+        category=normalize_fund_category(_first(row, "基金类型", "类型", "category")),
+        nav=_to_float(_first(row, "单位净值", "最新净值", "nav")),
+        nav_date=_date_text(_first(row, "日期", "净值日期", "nav_date")),
+        valuation_date=_date_text(_first(row, "估值日期", "valuation_date")),
+        returns={
+            "1w": _to_float(_first(row, "近1周", "近一周")) or 0.0,
+            "1m": _to_float(_first(row, "近1月", "近一月")) or 0.0,
+            "3m": _to_float(_first(row, "近3月", "近三月")) or 0.0,
+            "6m": _to_float(_first(row, "近6月", "近六月")) or 0.0,
+            "1y": _to_float(_first(row, "近1年", "近一年")) or 0.0,
+        },
+        scale_billion=_to_float(_first(row, "规模", "基金规模", "scale_billion")),
+        manager=normalize_fund_name(_first(row, "基金经理", "manager")) or None,
+        fee_rate=_to_float(_first(row, "费率", "手续费", "fee_rate")),
+        source="akshare",
+    )
+
+
 def _fund_from_mapping(item: dict, *, source: str) -> FundRecord:
     return FundRecord(
-        code=str(item["code"]),
-        name=str(item["name"]),
-        category=str(item.get("category", "基金")),
+        code=normalize_fund_code(item["code"]),
+        name=normalize_fund_name(item["name"]),
+        category=normalize_fund_category(item.get("category", "基金")),
         nav=_to_float(item.get("nav")),
         nav_date=item.get("nav_date"),
+        valuation_date=item.get("valuation_date"),
         returns={key: float(value) for key, value in item.get("returns", {}).items()},
         scale_billion=_to_float(item.get("scale_billion")),
         manager=item.get("manager"),

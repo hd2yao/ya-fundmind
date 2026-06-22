@@ -49,7 +49,11 @@ def render_markdown(result: ResearchResult) -> str:
 
     lines.extend(["", "## 估值方式与数据缺口", ""])
     for valuation in result.valuations.values():
-        note = "；".join(valuation.notes) if valuation.notes else "无"
+        notes = list(valuation.notes)
+        if valuation.fund.metadata.get("stale"):
+            expires_at = valuation.fund.metadata.get("expires_at", "unknown")
+            notes.append(f"stale data: cache expired at {expires_at}")
+        note = "；".join(notes) if notes else "无"
         value = "--" if valuation.estimated_value is None else f"{valuation.estimated_value:.4f}"
         lines.append(
             f"- {valuation.fund.code} {valuation.fund.name}: {valuation.method}, 估值 {value}, 置信度 {valuation.confidence}。{note}"
@@ -81,6 +85,37 @@ def render_markdown(result: ResearchResult) -> str:
                 lines.append(f"- **{issue.severity}** `{issue.code}`: {issue.message}")
         else:
             lines.append("- 暂无组合层面的集中风险提示；仍需人工核对数据源。")
+
+    if result.snapshot_delta:
+        lines.extend(["", "## 历史快照对比", ""])
+        previous_as_of = result.snapshot_delta.get("previous_as_of", "上一期")
+        lines.append(f"- 对比基准: {previous_as_of}")
+        score_changes = result.snapshot_delta.get("score_changes", [])
+        if score_changes:
+            lines.append("- 评分变化:")
+            for item in score_changes[:5]:
+                lines.append(
+                    f"  - {item['code']} {item.get('name', '')}: {item['delta']:+.2f}"
+                )
+        valuation_changes = result.snapshot_delta.get("valuation_changes", [])
+        if valuation_changes:
+            lines.append("- 估值变化:")
+            for item in valuation_changes[:5]:
+                delta = item.get("value_delta")
+                delta_text = "--" if delta is None else f"{delta:+.4f}"
+                lines.append(f"  - {item['code']}: {delta_text}")
+        risk_changes = result.snapshot_delta.get("risk_changes", {})
+        added = risk_changes.get("added", [])
+        resolved = risk_changes.get("resolved", [])
+        lines.append(f"- 风险变化: 新增 {len(added)} 条，解除 {len(resolved)} 条。")
+        holding_delta = result.snapshot_delta.get("holding_risk_changes", {})
+        if holding_delta:
+            lines.append(
+                "- 持仓风险变化: 风险数量 {:+d}，市值变化 {}。".format(
+                    int(holding_delta.get("risk_count_delta", 0)),
+                    holding_delta.get("total_value_delta", "--"),
+                )
+            )
 
     lines.extend(
         [

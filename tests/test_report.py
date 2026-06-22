@@ -1,6 +1,8 @@
 from pathlib import Path
+from dataclasses import replace
 
 from fund_agent.agents import run_research
+from fund_agent.models import FundRecord
 from fund_agent.providers import FixtureProvider, load_portfolio_file
 from fund_agent.report import render_html, render_markdown
 
@@ -33,3 +35,46 @@ def test_markdown_and_html_reports_include_risk_boundary_and_evidence():
     assert "风险提示" in markdown
     assert "<html" in html
     assert "不构成投资建议" in html
+
+
+def test_markdown_report_includes_snapshot_delta_when_available():
+    funds = FixtureProvider(Path("data/fixtures/funds.json")).fetch_funds()
+    result = run_research(funds, as_of="2026-06-22")
+    result = replace(
+        result,
+        snapshot_delta={
+            "previous_as_of": "2026-06-21",
+            "score_changes": [{"code": "510300", "name": "沪深300ETF", "delta": 1.5}],
+            "valuation_changes": [],
+            "risk_changes": {"added": [], "resolved": []},
+            "holding_risk_changes": {"risk_count_delta": 0},
+        },
+    )
+
+    markdown = render_markdown(result)
+
+    assert "历史快照对比" in markdown
+    assert "2026-06-21" in markdown
+    assert "510300" in markdown
+
+
+def test_markdown_report_marks_stale_cache_data():
+    result = run_research(
+        [
+            FundRecord(
+                code="510300",
+                name="沪深300ETF",
+                category="ETF",
+                nav=4.01,
+                nav_date="2026-06-21",
+                source="cache:akshare",
+                metadata={"stale": True, "expires_at": "2026-06-20T00:00:00+00:00"},
+            )
+        ],
+        as_of="2026-06-22",
+    )
+
+    markdown = render_markdown(result)
+
+    assert "stale data" in markdown
+    assert "2026-06-20" in markdown
