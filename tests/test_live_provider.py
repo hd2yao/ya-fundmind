@@ -69,4 +69,3 @@ def test_akshare_live_rows_are_standardized_and_written_to_cache(tmp_path):
     assert [fund.code for fund in cached] == ["000311", "510300"]
     assert cached[0].source == "cache:akshare"
     assert cached[0].metadata["cache_as_of"] == "2026-06-22"
-

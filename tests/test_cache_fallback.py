@@ -41,4 +41,3 @@ def test_akshare_provider_falls_back_to_cached_funds_with_reason(tmp_path):
     assert funds[0].metadata["cache_as_of"] == "2026-06-22"
     assert funds[0].metadata["fallback_provider"] == "akshare"
     assert "network down" in funds[0].metadata["fallback_reason"]
-

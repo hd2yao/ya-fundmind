@@ -58,4 +58,3 @@ python -m fund_agent.cli daily --provider akshare --watchlist-file configs/watch
 - `data/cache/funds.sqlite`
 
 如果 AKShare 不可用但 cache 中已有可用数据，命令应 fallback 到 cache 并在报告中标记 stale/fallback 信息。如果 cache 为空，命令应以非 0 状态退出并给出明确错误。
-
