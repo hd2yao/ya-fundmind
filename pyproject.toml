@@ -3,9 +3,9 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fund-agent-os"
+name = "ya-fundmind"
 version = "0.1.0"
-description = "Local fund and ETF research assistant"
+description = "YA FundMind local fund and ETF research assistant"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []

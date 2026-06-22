@@ -10,7 +10,7 @@ DISCLAIMER = "本报告仅用于研究辅助，不构成投资建议，不包含
 
 def render_markdown(result: ResearchResult) -> str:
     lines: list[str] = [
-        "# 基金 ETF Agent 日报",
+        "# YA FundMind 基金智研系统日报",
         "",
         f"> {DISCLAIMER}",
         "",
@@ -101,7 +101,7 @@ def render_html(result: ResearchResult) -> str:
     return (
         "<!doctype html>\n"
         "<html lang=\"zh-CN\">\n"
-        "<head><meta charset=\"utf-8\"><title>基金 ETF Agent 日报</title>"
+        "<head><meta charset=\"utf-8\"><title>YA FundMind 基金智研系统日报</title>"
         "<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:960px;margin:32px auto;line-height:1.6;color:#17202a}"
         "p{margin:6px 0} table{border-collapse:collapse} code{background:#f4f6f7;padding:2px 4px}</style></head>\n"
         f"<body>{rows}</body>\n"

@@ -58,7 +58,7 @@ def _run_report(args) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fund-agent",
-        description="基金/ETF 本地投研助手。输出仅用于研究辅助，不构成投资建议。",
+        description="YA FundMind 基金智研系统。输出仅用于研究辅助，不构成投资建议。",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
