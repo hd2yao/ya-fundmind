@@ -12,6 +12,7 @@ data/cache/
 data/reports/
 outputs/
 work/
+.worktrees/
 
 # Local secrets
 .env
