@@ -1,0 +1,24 @@
+name: 示例基金 ETF 组合
+cash_available: 2000.0
+holdings:
+  - code: 510300
+    name: 沪深300ETF
+    shares: 800
+    cost_nav: 3.7
+    buy_date: 2026-02-10
+    target_weight: 0.35
+    notes: 核心宽基 ETF
+  - code: 000834
+    name: 广发纳斯达克100ETF联接A
+    shares: 1000
+    cost_nav: 2.1
+    buy_date: 2026-03-12
+    target_weight: 0.25
+    notes: 海外成长资产
+  - code: 110022
+    name: 易方达消费行业股票
+    shares: 300
+    cost_nav: 4.3
+    buy_date: 2026-01-15
+    target_weight: 0.20
+    notes: 主动权益观察仓
