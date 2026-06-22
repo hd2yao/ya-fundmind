@@ -1,0 +1,67 @@
+from datetime import datetime, timedelta, timezone
+
+from fund_agent.cache import FundCache
+from fund_agent.models import FundRecord
+
+
+def test_cache_initializes_expected_tables(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+
+    table_names = cache.table_names()
+
+    assert {"fund_basics", "fund_navs", "fund_valuations", "fund_details"} <= table_names
+
+
+def test_cache_round_trips_fund_records(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    fund = FundRecord(
+        code=" 510300 ",
+        name="沪深300ETF",
+        category="ETF",
+        nav=4.01,
+        nav_date="2026-06-21",
+        returns={"1m": 3.2, "3m": 7.8},
+        scale_billion=460.0,
+        manager="华泰柏瑞基金",
+        fee_rate=0.6,
+        exchange_traded=True,
+        price=4.05,
+        target_etf="",
+        proxy_symbol=None,
+        source="akshare",
+        metadata={"provider": "rank"},
+    )
+
+    cache.upsert_funds([fund], as_of="2026-06-22", ttl_days=3)
+    cached = cache.load_funds(as_of="2026-06-22")
+
+    assert len(cached) == 1
+    assert cached[0].code == "510300"
+    assert cached[0].source == "cache:akshare"
+    assert cached[0].returns == {"1m": 3.2, "3m": 7.8}
+    assert cached[0].metadata["provider"] == "rank"
+    assert cached[0].metadata["cache_source"] == "akshare"
+    assert cached[0].metadata["stale"] is False
+
+
+def test_cache_filters_expired_records_unless_stale_allowed(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    fund = FundRecord(
+        code="000311",
+        name="华夏沪深300ETF联接A",
+        category="ETF联接",
+        nav=1.42,
+        nav_date="2026-06-21",
+        source="akshare",
+    )
+    now = datetime(2026, 6, 22, tzinfo=timezone.utc)
+
+    cache.upsert_funds([fund], as_of="2026-06-22", ttl_days=1, now=now - timedelta(days=3))
+
+    assert cache.load_funds(as_of="2026-06-22", now=now) == []
+
+    stale = cache.load_funds(as_of="2026-06-22", allow_stale=True, now=now)
+
+    assert len(stale) == 1
+    assert stale[0].metadata["stale"] is True
+    assert stale[0].metadata["expires_at"] < now.isoformat()
