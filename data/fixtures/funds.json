@@ -1,0 +1,75 @@
+[
+  {
+    "code": "510300",
+    "name": "沪深300ETF",
+    "category": "ETF",
+    "nav": 4.01,
+    "price": 4.05,
+    "nav_date": "2026-06-21",
+    "exchange_traded": true,
+    "returns": {"1w": 1.1, "1m": 3.2, "3m": 7.8, "6m": 12.4, "1y": 18.5},
+    "scale_billion": 460.0,
+    "manager": "华泰柏瑞基金",
+    "fee_rate": 0.6
+  },
+  {
+    "code": "000311",
+    "name": "华夏沪深300ETF联接A",
+    "category": "ETF联接",
+    "nav": 1.42,
+    "nav_date": "2026-06-21",
+    "target_etf": "510300",
+    "returns": {"1w": 0.9, "1m": 2.8, "3m": 7.1, "6m": 11.2, "1y": 17.1},
+    "scale_billion": 88.0,
+    "manager": "华夏基金",
+    "fee_rate": 1.0
+  },
+  {
+    "code": "000834",
+    "name": "广发纳斯达克100ETF联接A",
+    "category": "QDII",
+    "nav": 2.35,
+    "nav_date": "2026-06-20",
+    "proxy_symbol": "nasdaq100",
+    "returns": {"1w": 2.5, "1m": 7.2, "3m": 16.0, "6m": 24.0, "1y": 31.0},
+    "scale_billion": 96.0,
+    "manager": "广发基金",
+    "fee_rate": 1.2
+  },
+  {
+    "code": "110022",
+    "name": "易方达消费行业股票",
+    "category": "股票型",
+    "nav": 4.12,
+    "nav_date": "2026-06-21",
+    "returns": {"1w": 0.6, "1m": 2.0, "3m": 5.2, "6m": 8.4, "1y": 13.0},
+    "scale_billion": 180.0,
+    "manager": "易方达基金",
+    "fee_rate": 1.5
+  },
+  {
+    "code": "161725",
+    "name": "招商中证白酒指数(LOF)A",
+    "category": "LOF",
+    "nav": 1.18,
+    "price": 1.19,
+    "nav_date": "2026-06-21",
+    "exchange_traded": true,
+    "returns": {"1w": 7.4, "1m": 24.0, "3m": 25.0, "6m": 4.0, "1y": -8.0},
+    "scale_billion": 210.0,
+    "manager": "招商基金",
+    "fee_rate": 1.0
+  },
+  {
+    "code": "006327",
+    "name": "易方达中证海外中国互联网50ETF联接C",
+    "category": "QDII",
+    "nav": 0.92,
+    "nav_date": "2026-06-18",
+    "proxy_symbol": "hstech",
+    "returns": {"1w": -1.2, "1m": 4.1, "3m": 11.5, "6m": 18.0, "1y": 9.5},
+    "scale_billion": 55.0,
+    "manager": "易方达基金",
+    "fee_rate": 0.4
+  }
+]
