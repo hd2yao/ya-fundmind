@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 
 from .agents import run_research
+from .cache import FundCache
 from .config import load_portfolio_config, load_watchlist_config
 from .providers import AkshareProvider, FixtureProvider, ProviderUnavailable, load_portfolio_file
 from .report import render_html, render_markdown
@@ -16,6 +17,7 @@ DEFAULT_FUNDS_FILE = Path("data/fixtures/funds.json")
 DEFAULT_PORTFOLIO_FILE = Path("data/portfolio.example.json")
 DEFAULT_WATCHLIST_FILE = Path("configs/watchlist.yaml")
 DEFAULT_PORTFOLIO_CONFIG = Path("configs/portfolio.yaml")
+DEFAULT_CACHE_FILE = Path("data/cache/funds.sqlite")
 
 
 def _write_reports(result, output_dir: Path) -> tuple[Path, Path]:
@@ -27,11 +29,18 @@ def _write_reports(result, output_dir: Path) -> tuple[Path, Path]:
     return markdown_path, html_path
 
 
-def _load_funds(source: str, funds_file: Path):
-    if source == "live":
+def _load_funds(args, *, as_of: str):
+    provider_name = getattr(args, "provider", None)
+    if provider_name == "akshare":
+        cache = FundCache(args.cache_file)
+        provider = AkshareProvider(cache=cache, allow_stale_cache=True)
+        return provider.fetch_funds(as_of=as_of)
+    if provider_name == "fixture":
+        return FixtureProvider(args.funds_file).fetch_funds(as_of=as_of)
+    if args.source == "live":
         provider = AkshareProvider()
-        return provider.fetch_funds()
-    return FixtureProvider(funds_file).fetch_funds()
+        return provider.fetch_funds(as_of=as_of)
+    return FixtureProvider(args.funds_file).fetch_funds(as_of=as_of)
 
 
 def _filter_watchlist(funds, watchlist_file: Path | None):
@@ -44,9 +53,10 @@ def _filter_watchlist(funds, watchlist_file: Path | None):
 
 
 def _run_report(args) -> int:
+    as_of = args.as_of or date.today().isoformat()
     try:
         funds = _filter_watchlist(
-            _load_funds(args.source, args.funds_file),
+            _load_funds(args, as_of=as_of),
             args.watchlist_file,
         )
     except ProviderUnavailable as exc:
@@ -65,7 +75,7 @@ def _run_report(args) -> int:
     result = run_research(
         funds,
         holdings=holdings,
-        as_of=args.as_of or date.today().isoformat(),
+        as_of=as_of,
         candidate_limit=args.limit,
     )
     previous_snapshot = load_previous_snapshot(args.output_dir, result.as_of)
@@ -93,10 +103,18 @@ def build_parser() -> argparse.ArgumentParser:
         include_portfolio: bool,
         default_watchlist: Path | None = None,
         default_portfolio_config: Path | None = None,
+        default_provider: str | None = None,
     ) -> None:
         command_parser.add_argument("--source", choices=["fixture", "live"], default="fixture")
+        command_parser.add_argument(
+            "--provider",
+            choices=["fixture", "akshare"],
+            default=default_provider,
+            help="数据 provider。daily 推荐使用 akshare；旧命令未指定时沿用 --source。",
+        )
         command_parser.add_argument("--funds-file", type=Path, default=DEFAULT_FUNDS_FILE)
         command_parser.add_argument("--watchlist-file", type=Path, default=default_watchlist)
+        command_parser.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
         command_parser.add_argument(
             "--portfolio-file",
             type=Path,
@@ -123,6 +141,16 @@ def build_parser() -> argparse.ArgumentParser:
         default_portfolio_config=DEFAULT_PORTFOLIO_CONFIG,
     )
     portfolio.set_defaults(func=_run_report)
+
+    daily = subparsers.add_parser("daily", help="按配置生成每日基金/持仓研究报告")
+    add_report_args(
+        daily,
+        include_portfolio=True,
+        default_watchlist=DEFAULT_WATCHLIST_FILE,
+        default_portfolio_config=DEFAULT_PORTFOLIO_CONFIG,
+        default_provider="fixture",
+    )
+    daily.set_defaults(func=_run_report)
 
     return parser
 
