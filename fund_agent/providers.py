@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from datetime import date
 from pathlib import Path
 from typing import Protocol
 
@@ -15,7 +16,7 @@ class ProviderUnavailable(RuntimeError):
 
 
 class FundProvider(Protocol):
-    def fetch_funds(self) -> list[FundRecord]:
+    def fetch_funds(self, *, as_of: str | None = None) -> list[FundRecord]:
         """Return normalized fund records."""
 
 
@@ -41,7 +42,7 @@ class FixtureProvider:
     def __init__(self, funds_path: Path | str = Path("data/fixtures/funds.json")):
         self.funds_path = Path(funds_path)
 
-    def fetch_funds(self) -> list[FundRecord]:
+    def fetch_funds(self, *, as_of: str | None = None) -> list[FundRecord]:
         payload = json.loads(self.funds_path.read_text(encoding="utf-8"))
         return [_fund_from_mapping(item, source="fixture") for item in payload]
 
@@ -61,10 +62,12 @@ class AkshareProvider:
         ak_module=None,
         cache: FundCache | None = None,
         allow_stale_cache: bool = True,
+        cache_ttl_days: int = 1,
     ):
         self.fund_type = fund_type
         self.cache = cache
         self.allow_stale_cache = allow_stale_cache
+        self.cache_ttl_days = cache_ttl_days
         if ak_module is not None:
             self._ak = ak_module
         else:
@@ -79,27 +82,41 @@ class AkshareProvider:
     def available(self) -> bool:
         return self._ak is not None
 
-    def fetch_funds(self) -> list[FundRecord]:
+    def fetch_funds(self, *, as_of: str | None = None) -> list[FundRecord]:
+        resolved_as_of = as_of or date.today().isoformat()
         if self._ak is None:
-            return self._fallback_to_cache("AKShare is not installed")
+            return self._fallback_to_cache("AKShare is not installed", as_of=resolved_as_of)
         try:
             df = self._ak.fund_open_fund_rank_em(symbol=self.fund_type)
         except Exception as exc:
-            return self._fallback_to_cache(str(exc))
+            return self._fallback_to_cache(str(exc), as_of=resolved_as_of)
         funds: list[FundRecord] = []
         for _, row in df.iterrows():
             try:
                 funds.append(_fund_from_akshare_row(row))
             except Exception:
                 continue
-        return [fund for fund in funds if fund.code and fund.name]
+        normalized_funds = [
+            _with_provider_metadata(fund, as_of=resolved_as_of, provider="akshare")
+            for fund in funds
+            if fund.code and fund.name
+        ]
+        if self.cache is not None and normalized_funds:
+            self.cache.upsert_funds(
+                normalized_funds,
+                as_of=resolved_as_of,
+                ttl_days=self.cache_ttl_days,
+            )
+        return normalized_funds
 
-    def _fallback_to_cache(self, reason: str) -> list[FundRecord]:
+    def _fallback_to_cache(self, reason: str, *, as_of: str | None = None) -> list[FundRecord]:
         if self.cache is None:
             raise ProviderUnavailable(
                 f"AKShareProvider unavailable and no cache fallback is configured: {reason}"
             )
-        funds = self.cache.load_funds(allow_stale=self.allow_stale_cache)
+        funds = self.cache.load_funds(as_of=as_of, allow_stale=self.allow_stale_cache)
+        if not funds and as_of is not None:
+            funds = self.cache.load_funds(allow_stale=self.allow_stale_cache)
         if not funds:
             raise ProviderUnavailable(f"AKShareProvider unavailable and cache is empty: {reason}")
         return [
@@ -116,12 +133,12 @@ class AkshareProvider:
 
 
 class EastmoneyProvider:
-    def fetch_funds(self) -> list[FundRecord]:
+    def fetch_funds(self, *, as_of: str | None = None) -> list[FundRecord]:
         raise ProviderUnavailable("EastmoneyProvider is reserved for a later data source.")
 
 
 class TiantianFundProvider:
-    def fetch_funds(self) -> list[FundRecord]:
+    def fetch_funds(self, *, as_of: str | None = None) -> list[FundRecord]:
         raise ProviderUnavailable("TiantianFundProvider is reserved for a later data source.")
 
 
@@ -151,6 +168,18 @@ def _first(row: object, *keys: str) -> object:
 def _date_text(value: object) -> str | None:
     text = str(value or "").strip()
     return text[:10] or None
+
+
+def _with_provider_metadata(fund: FundRecord, *, as_of: str, provider: str) -> FundRecord:
+    return replace(
+        fund,
+        metadata={
+            **fund.metadata,
+            "provider": provider,
+            "as_of": as_of,
+            "stale": False,
+        },
+    )
 
 
 def _fund_from_akshare_row(row: object) -> FundRecord:
