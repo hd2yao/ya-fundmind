@@ -2,6 +2,7 @@ from pathlib import Path
 from dataclasses import replace
 
 from fund_agent.agents import run_research
+from fund_agent.models import FundRecord
 from fund_agent.providers import FixtureProvider, load_portfolio_file
 from fund_agent.report import render_html, render_markdown
 
@@ -55,3 +56,25 @@ def test_markdown_report_includes_snapshot_delta_when_available():
     assert "历史快照对比" in markdown
     assert "2026-06-21" in markdown
     assert "510300" in markdown
+
+
+def test_markdown_report_marks_stale_cache_data():
+    result = run_research(
+        [
+            FundRecord(
+                code="510300",
+                name="沪深300ETF",
+                category="ETF",
+                nav=4.01,
+                nav_date="2026-06-21",
+                source="cache:akshare",
+                metadata={"stale": True, "expires_at": "2026-06-20T00:00:00+00:00"},
+            )
+        ],
+        as_of="2026-06-22",
+    )
+
+    markdown = render_markdown(result)
+
+    assert "stale data" in markdown
+    assert "2026-06-20" in markdown

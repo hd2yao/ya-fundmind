@@ -49,7 +49,11 @@ def render_markdown(result: ResearchResult) -> str:
 
     lines.extend(["", "## 估值方式与数据缺口", ""])
     for valuation in result.valuations.values():
-        note = "；".join(valuation.notes) if valuation.notes else "无"
+        notes = list(valuation.notes)
+        if valuation.fund.metadata.get("stale"):
+            expires_at = valuation.fund.metadata.get("expires_at", "unknown")
+            notes.append(f"stale data: cache expired at {expires_at}")
+        note = "；".join(notes) if notes else "无"
         value = "--" if valuation.estimated_value is None else f"{valuation.estimated_value:.4f}"
         lines.append(
             f"- {valuation.fund.code} {valuation.fund.name}: {valuation.method}, 估值 {value}, 置信度 {valuation.confidence}。{note}"
