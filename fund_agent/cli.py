@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from .agents import run_research
 from .config import load_portfolio_config, load_watchlist_config
 from .providers import AkshareProvider, FixtureProvider, ProviderUnavailable, load_portfolio_file
 from .report import render_html, render_markdown
+from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
 
 
 DEFAULT_FUNDS_FILE = Path("data/fixtures/funds.json")
@@ -66,9 +68,15 @@ def _run_report(args) -> int:
         as_of=args.as_of or date.today().isoformat(),
         candidate_limit=args.limit,
     )
+    previous_snapshot = load_previous_snapshot(args.output_dir, result.as_of)
+    snapshot_delta = compare_snapshots(previous_snapshot, snapshot_from_result(result))
+    if snapshot_delta:
+        result = replace(result, snapshot_delta=snapshot_delta)
     markdown_path, html_path = _write_reports(result, args.output_dir)
+    snapshot_path = write_snapshot(result, args.output_dir)
     print(f"Markdown report: {markdown_path}")
     print(f"HTML report: {html_path}")
+    print(f"Snapshot: {snapshot_path}")
     return 0
 
 

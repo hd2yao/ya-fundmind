@@ -10,6 +10,7 @@ def test_demo_command_writes_markdown_and_html_reports(tmp_path):
     assert exit_code == 0
     assert markdown.exists()
     assert html.exists()
+    assert (tmp_path / "snapshots" / "2026-06-22.json").exists()
     assert "YA FundMind 基金智研系统日报" in markdown.read_text(encoding="utf-8")
     assert "不构成投资建议" in html.read_text(encoding="utf-8")
 

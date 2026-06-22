@@ -21,6 +21,7 @@ class ResearchResult:
     valuations: dict[str, ValuationResult]
     portfolio: PortfolioSummary | None
     traces: tuple[AgentTrace, ...]
+    snapshot_delta: dict | None = None
 
 
 def run_research(
