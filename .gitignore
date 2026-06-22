@@ -1,0 +1,19 @@
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Local runtime data and generated reports
+data/cache/
+data/reports/
+outputs/
+work/
+
+# Local secrets
+.env
+.env.*
+!.env.example
