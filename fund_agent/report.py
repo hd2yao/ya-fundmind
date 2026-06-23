@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
-from html import escape
 from collections import defaultdict
+from datetime import datetime, timezone
+from html import escape
 from pathlib import Path
 
 from .agents import ResearchResult
@@ -10,6 +11,8 @@ from .snapshot import _provider_health_to_dict
 
 
 DISCLAIMER = "本报告仅用于研究辅助，不构成投资建议，不包含任何自动交易指令。"
+SCHEMA_VERSION = "1.0"
+GENERATOR = "fund_agent"
 
 
 def render_markdown(result: ResearchResult) -> str:
@@ -277,6 +280,9 @@ def render_html(result: ResearchResult) -> str:
 
 def render_json(result: ResearchResult) -> dict:
     return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": _generated_at(),
+        "generator": GENERATOR,
         "as_of": result.as_of,
         "data_quality_grade": result.data_quality_grade,
         "provider_health": [_provider_health_to_dict(item) for item in result.provider_health],
@@ -317,7 +323,7 @@ def render_json(result: ResearchResult) -> dict:
         "snapshot_delta": result.snapshot_delta,
         "report_metadata": {
             "format": "fund_agent_report_json",
-            "schema_version": 1,
+            "schema_version": SCHEMA_VERSION,
             "disclaimer": DISCLAIMER,
         },
     }
@@ -362,3 +368,7 @@ def _risk_issues_to_json(result: ResearchResult) -> list[dict]:
         {"code": issue.code, "severity": issue.severity, "message": issue.message}
         for issue in result.portfolio.risk_issues
     ]
+
+
+def _generated_at() -> str:
+    return datetime.now(timezone.utc).isoformat()

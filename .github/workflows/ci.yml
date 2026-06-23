@@ -5,6 +5,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      run_akshare_smoke:
+        description: "Run optional AKShare live smoke test"
+        required: false
+        default: "false"
 
 jobs:
   test:
@@ -26,3 +32,21 @@ jobs:
 
       - name: Compile package
         run: python -m compileall -q fund_agent
+
+  akshare-smoke:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_akshare_smoke == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install AKShare
+        run: python -m pip install akshare
+
+      - name: Run optional AKShare smoke
+        run: python -m fund_agent.cli smoke-akshare --watchlist-file configs/watchlist.yaml --portfolio-config configs/portfolio.yaml --output-dir outputs

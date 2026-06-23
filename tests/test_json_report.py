@@ -27,6 +27,9 @@ def test_json_report_contains_machine_readable_sections(tmp_path):
     loaded = json.loads(path.read_text(encoding="utf-8"))
 
     assert path == tmp_path / "fund_agent_report.json"
+    assert payload["schema_version"] == "1.0"
+    assert payload["generator"] == "fund_agent"
+    assert payload["generated_at"]
     assert payload["as_of"] == "2026-06-23"
     assert payload["data_quality_grade"] == "normal"
     assert payload["provider_health"][0]["provider"] == "fixture"
@@ -37,6 +40,7 @@ def test_json_report_contains_machine_readable_sections(tmp_path):
     assert "risk_issues" in payload
     assert "snapshot_delta" in payload
     assert loaded["report_metadata"]["format"] == "fund_agent_report_json"
+    assert loaded["report_metadata"]["schema_version"] == "1.0"
 
 
 def test_cli_writes_json_report(tmp_path):
@@ -51,3 +55,18 @@ def test_cli_writes_json_report(tmp_path):
     assert trace_path.exists()
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["as_of"] == "2026-06-23"
+
+
+def test_downstream_json_reader_does_not_need_markdown(tmp_path):
+    result = run_research(
+        [FundRecord(code="510300", name="沪深300ETF", category="ETF", nav=5.0)],
+        as_of="2026-06-23",
+    )
+    path = write_json_report(result, tmp_path)
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    first_candidate = payload["candidates"][0]
+
+    assert first_candidate["code"] == "510300"
+    assert payload["valuations"]["510300"]["confidence"]
+    assert not (tmp_path / "fund_agent_report.md").exists()

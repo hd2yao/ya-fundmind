@@ -1,4 +1,6 @@
 import json
+import os
+from datetime import datetime, timedelta, timezone
 
 from fund_agent.agents import run_research
 from fund_agent.cache import FundCache
@@ -40,6 +42,9 @@ def test_provider_trace_writes_endpoint_and_health_details(tmp_path):
     payload = json.loads(path.read_text(encoding="utf-8"))
 
     assert path == tmp_path / "traces" / "provider-2026-06-23.json"
+    assert payload["schema_version"] == "1.0"
+    assert payload["generator"] == "fund_agent"
+    assert payload["generated_at"]
     assert payload["as_of"] == "2026-06-23"
     assert payload["providers"][0]["provider"] == "akshare"
     assert payload["providers"][0]["endpoints"][0]["endpoint"] == "fund_open_fund_rank_em"
@@ -74,3 +79,39 @@ def test_provider_trace_is_written_when_live_falls_back_to_cache(tmp_path):
     assert payload["providers"][0]["fallback_used"] is True
     assert payload["providers"][0]["fallback_source"] == "cache"
     assert payload["providers"][0]["warnings"]
+
+
+def test_provider_trace_retention_prunes_old_trace_files(tmp_path):
+    trace_dir = tmp_path / "traces"
+    trace_dir.mkdir()
+    old_by_age = trace_dir / "provider-2026-05-01.json"
+    old_by_count = trace_dir / "provider-2026-06-20.json"
+    keep = trace_dir / "provider-2026-06-22.json"
+    for path in (old_by_age, old_by_count, keep):
+        path.write_text("{}", encoding="utf-8")
+    now = datetime(2026, 6, 23, tzinfo=timezone.utc)
+    old_by_age.touch()
+    old_by_count.touch()
+    keep.touch()
+
+    os.utime(old_by_age, (now.timestamp() - timedelta(days=60).total_seconds(),) * 2)
+    os.utime(old_by_count, (now.timestamp() - timedelta(days=3).total_seconds(),) * 2)
+    os.utime(keep, (now.timestamp() - timedelta(days=1).total_seconds(),) * 2)
+
+    result = run_research(
+        [FundRecord(code="510300", name="沪深300ETF", category="ETF", nav=5.0)],
+        as_of="2026-06-23",
+    )
+
+    path = write_provider_trace(
+        result,
+        tmp_path,
+        retention_days=30,
+        max_trace_files=2,
+        now=now,
+    )
+
+    assert path.exists()
+    assert not old_by_age.exists()
+    assert not old_by_count.exists()
+    assert keep.exists()
