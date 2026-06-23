@@ -1,0 +1,5 @@
+akshare:
+  timeout_seconds: 20
+  retry_count: 0
+  retry_backoff_seconds: 0
+  verbose: false

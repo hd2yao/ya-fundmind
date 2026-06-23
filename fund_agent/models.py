@@ -58,10 +58,26 @@ class ProviderHealth:
     watchlist_matched_count: int = 0
     watchlist_missing_codes: tuple[str, ...] = ()
     warnings: tuple[ProviderWarning, ...] = ()
+    endpoints: tuple[ProviderEndpointTrace, ...] = ()
 
     @property
     def has_critical_warnings(self) -> bool:
         return any(warning.severity == "critical" for warning in self.warnings)
+
+
+@dataclass(frozen=True)
+class ProviderEndpointTrace:
+    endpoint: str
+    started_at: str
+    finished_at: str
+    duration_ms: int
+    attempts: int = 1
+    success: bool = True
+    error: str | None = None
+    timeout_seconds: float | None = None
+    live_row_count: int = 0
+    mapped_row_count: int = 0
+    skipped_row_count: int = 0
 
 
 @dataclass(frozen=True)

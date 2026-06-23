@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 import contextlib
 import io
+import concurrent.futures
+import time
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
 
 from .cache import FundCache
-from .models import FundRecord, ProviderHealth, ProviderWarning
+from .models import FundRecord, ProviderEndpointTrace, ProviderHealth, ProviderWarning
 from .portfolio import PortfolioHolding
 
 
@@ -76,12 +78,18 @@ class AkshareProvider:
         allow_stale_cache: bool = True,
         cache_ttl_days: int = 1,
         verbose: bool = False,
+        timeout_seconds: float = 20.0,
+        retry_count: int = 0,
+        retry_backoff_seconds: float = 0.0,
     ):
         self.fund_type = fund_type
         self.cache = cache
         self.allow_stale_cache = allow_stale_cache
         self.cache_ttl_days = cache_ttl_days
         self.verbose = verbose
+        self.timeout_seconds = timeout_seconds
+        self.retry_count = retry_count
+        self.retry_backoff_seconds = retry_backoff_seconds
         self.last_health: ProviderHealth | None = None
         if ak_module is not None:
             self._ak = ak_module
@@ -117,34 +125,47 @@ class AkshareProvider:
         live_row_count = 0
         mapped_row_count = 0
         skipped_row_count = 0
+        endpoints: list[ProviderEndpointTrace] = []
         funds: list[FundRecord] = []
-        try:
-            df = self._call_akshare("fund_open_fund_rank_em", symbol=self.fund_type)
-        except Exception as exc:
-            message = f"fund_open_fund_rank_em: {exc}"
+        result = self._call_akshare("fund_open_fund_rank_em", symbol=self.fund_type)
+        endpoints.append(result.trace)
+        if not result.success:
+            message = f"fund_open_fund_rank_em: {result.error}"
             errors.append(message)
             warnings.append(ProviderWarning(code="live_fetch_error", message=message))
         else:
-            result = _funds_from_rows(df, _fund_from_akshare_row, endpoint="fund_open_fund_rank_em")
-            live_row_count += result.live_row_count
-            mapped_row_count += len(result.funds)
-            skipped_row_count += result.skipped_row_count
-            warnings.extend(result.warnings)
-            funds.extend(result.funds)
+            mapping = _funds_from_rows(result.data, _fund_from_akshare_row, endpoint="fund_open_fund_rank_em")
+            live_row_count += mapping.live_row_count
+            mapped_row_count += len(mapping.funds)
+            skipped_row_count += mapping.skipped_row_count
+            warnings.extend(mapping.warnings)
+            funds.extend(mapping.funds)
+            endpoints[-1] = replace(
+                endpoints[-1],
+                live_row_count=mapping.live_row_count,
+                mapped_row_count=len(mapping.funds),
+                skipped_row_count=mapping.skipped_row_count,
+            )
         if hasattr(self._ak, "fund_etf_spot_em"):
-            try:
-                etf_df = self._call_akshare("fund_etf_spot_em")
-            except Exception as exc:
-                message = f"fund_etf_spot_em: {exc}"
+            result = self._call_akshare("fund_etf_spot_em")
+            endpoints.append(result.trace)
+            if not result.success:
+                message = f"fund_etf_spot_em: {result.error}"
                 errors.append(message)
                 warnings.append(ProviderWarning(code="live_fetch_error", message=message))
             else:
-                result = _funds_from_rows(etf_df, _fund_from_akshare_etf_row, endpoint="fund_etf_spot_em")
-                live_row_count += result.live_row_count
-                mapped_row_count += len(result.funds)
-                skipped_row_count += result.skipped_row_count
-                warnings.extend(result.warnings)
-                funds.extend(result.funds)
+                mapping = _funds_from_rows(result.data, _fund_from_akshare_etf_row, endpoint="fund_etf_spot_em")
+                live_row_count += mapping.live_row_count
+                mapped_row_count += len(mapping.funds)
+                skipped_row_count += mapping.skipped_row_count
+                warnings.extend(mapping.warnings)
+                funds.extend(mapping.funds)
+                endpoints[-1] = replace(
+                    endpoints[-1],
+                    live_row_count=mapping.live_row_count,
+                    mapped_row_count=len(mapping.funds),
+                    skipped_row_count=mapping.skipped_row_count,
+                )
         updated_at = _utc_now()
         expires_at = updated_at + timedelta(days=self.cache_ttl_days)
         normalized_funds = [
@@ -167,6 +188,7 @@ class AkshareProvider:
                 live_row_count=live_row_count,
                 skipped_row_count=skipped_row_count,
                 warnings=tuple(warnings),
+                endpoints=tuple(endpoints),
             )
         cache_write_count = 0
         if self.cache is not None and normalized_funds:
@@ -186,6 +208,7 @@ class AkshareProvider:
             skipped_row_count=skipped_row_count,
             cache_write_count=cache_write_count,
             warnings=tuple(warnings),
+            endpoints=tuple(endpoints),
         )
         return normalized_funds
 
@@ -198,6 +221,7 @@ class AkshareProvider:
         live_row_count: int = 0,
         skipped_row_count: int = 0,
         warnings: tuple[ProviderWarning, ...] = (),
+        endpoints: tuple[ProviderEndpointTrace, ...] = (),
     ) -> list[FundRecord]:
         started_at = started_at or _utc_now()
         if self.cache is None:
@@ -210,6 +234,7 @@ class AkshareProvider:
                 fallback_used=True,
                 fallback_reason=reason,
                 fallback_source=None,
+                endpoints=endpoints,
                 warnings=(
                     *warnings,
                     ProviderWarning(code="live_fallback", message=reason, severity="critical"),
@@ -231,6 +256,7 @@ class AkshareProvider:
                 fallback_used=True,
                 fallback_reason=reason,
                 fallback_source="cache",
+                endpoints=endpoints,
                 warnings=(
                     *warnings,
                     ProviderWarning(code="empty_live_response", message=reason, severity="critical"),
@@ -262,6 +288,7 @@ class AkshareProvider:
             fallback_used=True,
             fallback_reason=reason,
             fallback_source="cache",
+            endpoints=endpoints,
             warnings=(*warnings, fallback_warning, *stale_warning),
         )
         return [
@@ -277,11 +304,50 @@ class AkshareProvider:
         ]
 
     def _call_akshare(self, name: str, **kwargs):
+        started_at = _utc_now()
         method = getattr(self._ak, name)
-        if self.verbose:
-            return method(**kwargs)
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            return method(**kwargs)
+        attempts = 0
+        last_error: str | None = None
+        for attempt in range(self.retry_count + 1):
+            attempts = attempt + 1
+            try:
+                data = _call_with_timeout(
+                    method,
+                    timeout_seconds=self.timeout_seconds,
+                    verbose=self.verbose,
+                    **kwargs,
+                )
+            except Exception as exc:
+                last_error = str(exc)
+                if attempt < self.retry_count and self.retry_backoff_seconds > 0:
+                    time.sleep(self.retry_backoff_seconds)
+                continue
+            return _EndpointCallResult(
+                data=data,
+                success=True,
+                error=None,
+                trace=_build_endpoint_trace(
+                    endpoint=name,
+                    started_at=started_at,
+                    attempts=attempts,
+                    success=True,
+                    error=None,
+                    timeout_seconds=self.timeout_seconds,
+                ),
+            )
+        return _EndpointCallResult(
+            data=None,
+            success=False,
+            error=last_error or "unknown provider error",
+            trace=_build_endpoint_trace(
+                endpoint=name,
+                started_at=started_at,
+                attempts=attempts,
+                success=False,
+                error=last_error or "unknown provider error",
+                timeout_seconds=self.timeout_seconds,
+            ),
+        )
 
 
 class EastmoneyProvider:
@@ -300,6 +366,14 @@ class _RowMappingResult:
     funds: tuple[FundRecord, ...]
     skipped_row_count: int
     warnings: tuple[ProviderWarning, ...]
+
+
+@dataclass(frozen=True)
+class _EndpointCallResult:
+    data: object | None
+    success: bool
+    error: str | None
+    trace: ProviderEndpointTrace
 
 
 def _to_float(value: object) -> float | None:
@@ -350,6 +424,7 @@ def _build_health(
     fallback_used: bool = False,
     fallback_reason: str | None = None,
     fallback_source: str | None = None,
+    endpoints: tuple[ProviderEndpointTrace, ...] = (),
     warnings: tuple[ProviderWarning, ...] = (),
 ) -> ProviderHealth:
     finished_at = _utc_now()
@@ -366,8 +441,46 @@ def _build_health(
         fallback_used=fallback_used,
         fallback_reason=fallback_reason,
         fallback_source=fallback_source,
+        endpoints=endpoints,
         warnings=warnings,
     )
+
+
+def _build_endpoint_trace(
+    *,
+    endpoint: str,
+    started_at: datetime,
+    attempts: int,
+    success: bool,
+    error: str | None,
+    timeout_seconds: float | None,
+) -> ProviderEndpointTrace:
+    finished_at = _utc_now()
+    return ProviderEndpointTrace(
+        endpoint=endpoint,
+        started_at=started_at.isoformat(),
+        finished_at=finished_at.isoformat(),
+        duration_ms=max(0, int((finished_at - started_at).total_seconds() * 1000)),
+        attempts=attempts,
+        success=success,
+        error=error,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def _call_with_timeout(method, *, timeout_seconds: float, verbose: bool, **kwargs):
+    def call():
+        if verbose:
+            return method(**kwargs)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return method(**kwargs)
+
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(call)
+        return future.result(timeout=timeout_seconds)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def _funds_from_rows(df: object, mapper, *, endpoint: str) -> _RowMappingResult:

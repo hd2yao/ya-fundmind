@@ -101,3 +101,50 @@ def test_old_snapshot_without_provider_health_keeps_compare_compatible():
 
     assert delta is not None
     assert "provider_health" not in delta
+
+
+def test_compare_snapshots_reports_data_quality_and_provider_deltas():
+    previous = {
+        "as_of": "2026-06-22",
+        "candidates": {},
+        "valuations": {},
+        "portfolio": None,
+        "data_quality_grade": "normal",
+        "provider_health": [
+            {
+                "provider": "akshare",
+                "live_row_count": 10,
+                "skipped_row_count": 1,
+                "cache_write_count": 8,
+                "fallback_used": False,
+                "warnings": [{"code": "skipped_rows"}],
+            }
+        ],
+    }
+    current = {
+        "as_of": "2026-06-23",
+        "candidates": {},
+        "valuations": {},
+        "portfolio": None,
+        "data_quality_grade": "degraded",
+        "provider_health": [
+            {
+                "provider": "akshare",
+                "live_row_count": 15,
+                "skipped_row_count": 3,
+                "cache_write_count": 12,
+                "fallback_used": True,
+                "warnings": [{"code": "live_fallback"}, {"code": "stale_cache"}],
+            }
+        ],
+    }
+
+    delta = compare_snapshots(previous, current)
+
+    assert delta["data_quality_grade_delta"] == {"previous": "normal", "current": "degraded"}
+    provider_delta = delta["provider_health_delta"]["akshare"]
+    assert provider_delta["provider_live_rows_delta"] == 5
+    assert provider_delta["provider_skipped_rows_delta"] == 2
+    assert provider_delta["provider_cache_writes_delta"] == 4
+    assert provider_delta["warning_count_delta"] == 1
+    assert provider_delta["fallback_changed"] is True
