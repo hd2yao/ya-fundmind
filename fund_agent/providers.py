@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import contextlib
+import io
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -73,11 +75,13 @@ class AkshareProvider:
         cache: FundCache | None = None,
         allow_stale_cache: bool = True,
         cache_ttl_days: int = 1,
+        verbose: bool = False,
     ):
         self.fund_type = fund_type
         self.cache = cache
         self.allow_stale_cache = allow_stale_cache
         self.cache_ttl_days = cache_ttl_days
+        self.verbose = verbose
         self.last_health: ProviderHealth | None = None
         if ak_module is not None:
             self._ak = ak_module
@@ -115,7 +119,7 @@ class AkshareProvider:
         skipped_row_count = 0
         funds: list[FundRecord] = []
         try:
-            df = self._ak.fund_open_fund_rank_em(symbol=self.fund_type)
+            df = self._call_akshare("fund_open_fund_rank_em", symbol=self.fund_type)
         except Exception as exc:
             message = f"fund_open_fund_rank_em: {exc}"
             errors.append(message)
@@ -129,7 +133,7 @@ class AkshareProvider:
             funds.extend(result.funds)
         if hasattr(self._ak, "fund_etf_spot_em"):
             try:
-                etf_df = self._ak.fund_etf_spot_em()
+                etf_df = self._call_akshare("fund_etf_spot_em")
             except Exception as exc:
                 message = f"fund_etf_spot_em: {exc}"
                 errors.append(message)
@@ -208,7 +212,7 @@ class AkshareProvider:
                 fallback_source=None,
                 warnings=(
                     *warnings,
-                    ProviderWarning(code="fallback_unavailable", message=reason, severity="error"),
+                    ProviderWarning(code="live_fallback", message=reason, severity="critical"),
                 ),
             )
             raise ProviderUnavailable(
@@ -229,14 +233,25 @@ class AkshareProvider:
                 fallback_source="cache",
                 warnings=(
                     *warnings,
-                    ProviderWarning(code="fallback_empty", message=reason, severity="error"),
+                    ProviderWarning(code="empty_live_response", message=reason, severity="critical"),
                 ),
             )
             raise ProviderUnavailable(f"AKShareProvider unavailable and cache is empty: {reason}")
+        stale_funds = [fund for fund in funds if fund.metadata.get("stale")]
         fallback_warning = ProviderWarning(
-            code="fallback_cache",
+            code="live_fallback",
             message=f"AKShare live failed; using cache. reason={reason}",
+            severity="warning",
         )
+        stale_warning = ()
+        if stale_funds:
+            stale_warning = (
+                ProviderWarning(
+                    code="stale_cache",
+                    message=f"Cache fallback used {len(stale_funds)} stale records.",
+                    severity="critical",
+                ),
+            )
         self.last_health = _build_health(
             provider="akshare",
             provider_version=self.provider_version,
@@ -247,7 +262,7 @@ class AkshareProvider:
             fallback_used=True,
             fallback_reason=reason,
             fallback_source="cache",
-            warnings=(*warnings, fallback_warning),
+            warnings=(*warnings, fallback_warning, *stale_warning),
         )
         return [
             replace(
@@ -260,6 +275,13 @@ class AkshareProvider:
             )
             for fund in funds
         ]
+
+    def _call_akshare(self, name: str, **kwargs):
+        method = getattr(self._ak, name)
+        if self.verbose:
+            return method(**kwargs)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return method(**kwargs)
 
 
 class EastmoneyProvider:
@@ -361,8 +383,9 @@ def _funds_from_rows(df: object, mapper, *, endpoint: str) -> _RowMappingResult:
             skipped_row_count += 1
             warnings.append(
                 ProviderWarning(
-                    code="row_skipped",
+                    code="skipped_rows",
                     message=f"{endpoint} row {row_index} skipped: {exc}",
+                    severity="warning",
                     details={"endpoint": endpoint, "row_index": row_index},
                 )
             )
@@ -371,8 +394,9 @@ def _funds_from_rows(df: object, mapper, *, endpoint: str) -> _RowMappingResult:
             skipped_row_count += 1
             warnings.append(
                 ProviderWarning(
-                    code="row_skipped",
+                    code="skipped_rows",
                     message=f"{endpoint} row {row_index} skipped: missing code or name",
+                    severity="info",
                     details={"endpoint": endpoint, "row_index": row_index},
                 )
             )

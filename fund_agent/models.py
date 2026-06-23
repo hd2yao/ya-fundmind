@@ -31,6 +31,14 @@ class ProviderWarning:
     severity: str = "warning"
     details: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        normalized = str(self.severity or "warning").lower()
+        if normalized == "error":
+            normalized = "critical"
+        if normalized not in {"info", "warning", "critical"}:
+            normalized = "warning"
+        object.__setattr__(self, "severity", normalized)
+
 
 @dataclass(frozen=True)
 class ProviderHealth:
@@ -50,6 +58,10 @@ class ProviderHealth:
     watchlist_matched_count: int = 0
     watchlist_missing_codes: tuple[str, ...] = ()
     warnings: tuple[ProviderWarning, ...] = ()
+
+    @property
+    def has_critical_warnings(self) -> bool:
+        return any(warning.severity == "critical" for warning in self.warnings)
 
 
 @dataclass(frozen=True)

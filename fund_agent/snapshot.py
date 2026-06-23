@@ -55,6 +55,7 @@ def snapshot_from_result(result: ResearchResult) -> dict[str, Any]:
         },
         "portfolio": portfolio,
         "provider_health": [_provider_health_to_dict(item) for item in result.provider_health],
+        "data_quality_grade": result.data_quality_grade,
     }
 
 

@@ -156,3 +156,44 @@ def test_markdown_report_includes_provider_health_and_warnings():
     assert "fallback_cache" in markdown
     assert "network down" in markdown
     assert "999999" in markdown
+
+
+def test_markdown_report_groups_warnings_and_marks_degraded_quality():
+    health = ProviderHealth(
+        provider="akshare",
+        started_at="2026-06-23T00:00:00+00:00",
+        finished_at="2026-06-23T00:00:01+00:00",
+        duration_ms=1000,
+        fallback_used=True,
+        fallback_source="cache",
+        fallback_reason="network down",
+        warnings=(
+            ProviderWarning(code="skipped_rows", message="1 bad row", severity="info"),
+            ProviderWarning(code="live_fallback", message="using cache", severity="warning"),
+            ProviderWarning(code="stale_cache", message="cache expired", severity="critical"),
+        ),
+    )
+    result = run_research(
+        [
+            FundRecord(
+                code="510300",
+                name="沪深300ETF",
+                category="ETF",
+                nav=5.0,
+                source="cache:akshare",
+                metadata={"stale": True},
+            )
+        ],
+        as_of="2026-06-23",
+        provider_health=(health,),
+    )
+
+    markdown = render_markdown(result)
+
+    assert "今日数据质量摘要" in markdown
+    assert "数据质量等级: degraded" in markdown
+    assert markdown.index("### Critical") < markdown.index("### Warning")
+    assert markdown.index("### Warning") < markdown.index("### Info")
+    assert "stale_cache" in markdown
+    assert "live_fallback" in markdown
+    assert "skipped_rows" in markdown

@@ -86,3 +86,18 @@ def test_snapshot_includes_provider_health_and_old_snapshots_still_compare():
     assert snapshot["provider_health"][0]["provider"] == "akshare"
     assert snapshot["provider_health"][0]["warnings"][0]["code"] == "row_skipped"
     assert delta is not None
+
+
+def test_old_snapshot_without_provider_health_keeps_compare_compatible():
+    current = snapshot_from_result(_result("2026-06-23"))
+    previous = {
+        "as_of": "2026-06-22",
+        "candidates": {},
+        "valuations": {},
+        "portfolio": None,
+    }
+
+    delta = compare_snapshots(previous, current)
+
+    assert delta is not None
+    assert "provider_health" not in delta

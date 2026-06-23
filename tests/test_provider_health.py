@@ -74,7 +74,7 @@ def test_akshare_provider_records_live_health_and_cache_write_count(tmp_path):
     assert health.cache_write_count == 2
     assert health.fallback_used is False
     assert health.duration_ms >= 0
-    assert any(warning.code == "row_skipped" for warning in health.warnings)
+    assert any(warning.code == "skipped_rows" for warning in health.warnings)
 
 
 class FailingAkshare:
@@ -111,7 +111,7 @@ def test_akshare_provider_records_fallback_warning(tmp_path):
     assert health.fallback_used is True
     assert health.fallback_source == "cache"
     assert "network down" in str(health.fallback_reason)
-    assert any(warning.code == "fallback_cache" for warning in health.warnings)
+    assert any(warning.code == "live_fallback" for warning in health.warnings)
 
 
 def test_cli_records_watchlist_missing_warning(monkeypatch, tmp_path):
