@@ -11,16 +11,26 @@ akshare:
   retry_count: 2
   retry_backoff_seconds: 0.5
   verbose: true
+  trace_retention_days: 14
+  max_trace_files: 20
+policy:
+  fail_on_degraded: true
+  fail_on_critical_provider_warning: true
 """,
         encoding="utf-8",
     )
 
-    settings = load_provider_config(config).akshare
+    provider_config = load_provider_config(config)
+    settings = provider_config.akshare
 
     assert settings.timeout_seconds == 12
     assert settings.retry_count == 2
     assert settings.retry_backoff_seconds == 0.5
     assert settings.verbose is True
+    assert settings.trace_retention_days == 14
+    assert settings.max_trace_files == 20
+    assert provider_config.policy.fail_on_degraded is True
+    assert provider_config.policy.fail_on_critical_provider_warning is True
 
 
 def test_akshare_provider_uses_retry_config():

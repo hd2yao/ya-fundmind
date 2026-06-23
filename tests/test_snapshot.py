@@ -1,4 +1,5 @@
 from dataclasses import replace
+import json
 from pathlib import Path
 
 from fund_agent.agents import run_research
@@ -25,7 +26,11 @@ def test_write_snapshot_creates_daily_json(tmp_path):
 
     assert path == tmp_path / "snapshots" / "2026-06-22.json"
     assert path.exists()
-    assert '"as_of": "2026-06-22"' in path.read_text(encoding="utf-8")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "1.0"
+    assert payload["generator"] == "fund_agent"
+    assert payload["generated_at"]
+    assert payload["as_of"] == "2026-06-22"
 
 
 def test_load_previous_snapshot_finds_latest_before_as_of(tmp_path):
@@ -101,6 +106,44 @@ def test_old_snapshot_without_provider_health_keeps_compare_compatible():
 
     assert delta is not None
     assert "provider_health" not in delta
+
+
+def test_old_snapshot_without_schema_version_still_loads_and_compares(tmp_path):
+    snapshot_dir = tmp_path / "snapshots"
+    snapshot_dir.mkdir()
+    (snapshot_dir / "2026-06-22.json").write_text(
+        json.dumps({"as_of": "2026-06-22", "candidates": {}, "valuations": {}}),
+        encoding="utf-8",
+    )
+    current = snapshot_from_result(_result("2026-06-23"))
+
+    previous = load_previous_snapshot(tmp_path, "2026-06-23")
+    delta = compare_snapshots(previous, current)
+
+    assert previous["as_of"] == "2026-06-22"
+    assert "schema_version" not in previous
+    assert delta is not None
+
+
+def test_compare_snapshot_tolerates_legacy_provider_health_shape():
+    previous = {
+        "as_of": "2026-06-22",
+        "candidates": {},
+        "valuations": {},
+        "provider_health": [{"provider": "akshare"}],
+    }
+    current = {
+        "as_of": "2026-06-23",
+        "candidates": {},
+        "valuations": {},
+        "provider_health": [{"provider": "akshare", "warnings": None}],
+    }
+
+    delta = compare_snapshots(previous, current)
+
+    provider_delta = delta["provider_health_delta"]["akshare"]
+    assert provider_delta["provider_live_rows_delta"] == 0
+    assert provider_delta["warning_count_delta"] == 0
 
 
 def test_compare_snapshots_reports_data_quality_and_provider_deltas():

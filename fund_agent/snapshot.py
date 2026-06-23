@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .agents import ResearchResult
+
+SCHEMA_VERSION = "1.0"
+GENERATOR = "fund_agent"
 
 
 def snapshot_from_result(result: ResearchResult) -> dict[str, Any]:
@@ -34,6 +38,9 @@ def snapshot_from_result(result: ResearchResult) -> dict[str, Any]:
             ],
         }
     return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": _generated_at(),
+        "generator": GENERATOR,
         "as_of": result.as_of,
         "candidates": {
             candidate.fund.code: {
@@ -277,3 +284,7 @@ def _provider_health_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
         for item in snapshot.get("provider_health", []) or []
         if item.get("provider")
     }
+
+
+def _generated_at() -> str:
+    return datetime.now(timezone.utc).isoformat()

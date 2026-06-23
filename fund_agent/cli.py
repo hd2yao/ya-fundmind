@@ -118,6 +118,7 @@ def _apply_watchlist_health(
 
 def _run_report(args) -> int:
     as_of = args.as_of or date.today().isoformat()
+    provider_config = load_provider_config(args.provider_config)
     try:
         all_funds, provider_health = _load_funds(args, as_of=as_of)
         funds = _filter_watchlist(all_funds, args.watchlist_file)
@@ -154,13 +155,47 @@ def _run_report(args) -> int:
     markdown_path, html_path = _write_reports(result, args.output_dir)
     json_path = write_json_report(result, args.output_dir)
     snapshot_path = write_snapshot(result, args.output_dir)
-    trace_path = write_provider_trace(result, args.output_dir)
+    trace_path = write_provider_trace(
+        result,
+        args.output_dir,
+        retention_days=provider_config.akshare.trace_retention_days,
+        max_trace_files=provider_config.akshare.max_trace_files,
+    )
     print(f"Markdown report: {markdown_path}")
     print(f"HTML report: {html_path}")
     print(f"JSON report: {json_path}")
     print(f"Snapshot: {snapshot_path}")
     print(f"Provider trace: {trace_path}")
+    if _should_fail_exit_policy(result, provider_config.policy):
+        print("Data quality exit policy triggered after report generation.")
+        return 3
     return 0
+
+
+def _should_fail_exit_policy(result, policy) -> bool:
+    if policy.fail_on_degraded and result.data_quality_grade == "degraded":
+        return True
+    if policy.fail_on_critical_provider_warning:
+        return any(health.has_critical_warnings for health in result.provider_health)
+    return False
+
+
+def _run_smoke_akshare(args) -> int:
+    provider_config = load_provider_config(args.provider_config).akshare
+    provider = AkshareProvider(
+        cache=FundCache(args.cache_file),
+        allow_stale_cache=True,
+        verbose=bool(getattr(args, "provider_verbose", False) or provider_config.verbose),
+        timeout_seconds=provider_config.timeout_seconds,
+        retry_count=provider_config.retry_count,
+        retry_backoff_seconds=provider_config.retry_backoff_seconds,
+    )
+    if not getattr(provider, "available", False):
+        print("AKShare is not installed; install akshare to run smoke-akshare.")
+        return 2
+    args.provider = "akshare"
+    args.source = "live"
+    return _run_report(args)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -230,6 +265,16 @@ def build_parser() -> argparse.ArgumentParser:
         default_provider="fixture",
     )
     daily.set_defaults(func=_run_report)
+
+    smoke = subparsers.add_parser("smoke-akshare", help="可选：使用 AKShare 真实数据跑 live smoke")
+    add_report_args(
+        smoke,
+        include_portfolio=True,
+        default_watchlist=DEFAULT_WATCHLIST_FILE,
+        default_portfolio_config=DEFAULT_PORTFOLIO_CONFIG,
+        default_provider="akshare",
+    )
+    smoke.set_defaults(func=_run_smoke_akshare)
 
     return parser
 

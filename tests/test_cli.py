@@ -1,6 +1,6 @@
 from fund_agent.cli import main
 from fund_agent.cache import FundCache
-from fund_agent.models import FundRecord
+from fund_agent.models import FundRecord, ProviderHealth, ProviderWarning
 
 
 def test_demo_command_writes_markdown_and_html_reports(tmp_path):
@@ -182,3 +182,109 @@ def test_daily_akshare_provider_can_generate_report_from_cache_fallback(
     assert exit_code == 0
     assert "cache:akshare" in markdown
     assert "stale data" in markdown
+
+
+def test_smoke_akshare_returns_clear_error_when_provider_unavailable(monkeypatch, tmp_path, capsys):
+    class MissingAkshareProvider:
+        def __init__(self, **kwargs):
+            pass
+
+        available = False
+        provider_version = None
+
+    monkeypatch.setattr("fund_agent.cli.AkshareProvider", MissingAkshareProvider)
+
+    exit_code = main(["smoke-akshare", "--output-dir", str(tmp_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "AKShare is not installed" in captured.out
+    assert not (tmp_path / "fund_agent_report.json").exists()
+
+
+def test_default_exit_code_stays_zero_for_degraded_report(monkeypatch, tmp_path):
+    class DegradedProvider:
+        def __init__(self, **kwargs):
+            self.last_health = ProviderHealth(
+                provider="akshare",
+                started_at="2026-06-23T00:00:00+00:00",
+                finished_at="2026-06-23T00:00:01+00:00",
+                duration_ms=1000,
+                warnings=(
+                    ProviderWarning(
+                        code="stale_cache",
+                        message="expired",
+                        severity="critical",
+                    ),
+                ),
+            )
+
+        def fetch_funds(self, *, as_of=None):
+            return [FundRecord(code="510300", name="沪深300ETF", category="ETF", nav=5.0)]
+
+    monkeypatch.setattr("fund_agent.cli.AkshareProvider", DegradedProvider)
+
+    exit_code = main(
+        [
+            "daily",
+            "--provider",
+            "akshare",
+            "--output-dir",
+            str(tmp_path),
+            "--as-of",
+            "2026-06-23",
+        ]
+    )
+
+    assert exit_code == 0
+    assert (tmp_path / "fund_agent_report.json").exists()
+
+
+def test_explicit_exit_policy_returns_nonzero_after_writing_degraded_report(monkeypatch, tmp_path):
+    provider_config = tmp_path / "providers.yaml"
+    provider_config.write_text(
+        """
+policy:
+  fail_on_degraded: true
+  fail_on_critical_provider_warning: true
+""",
+        encoding="utf-8",
+    )
+
+    class DegradedProvider:
+        def __init__(self, **kwargs):
+            self.last_health = ProviderHealth(
+                provider="akshare",
+                started_at="2026-06-23T00:00:00+00:00",
+                finished_at="2026-06-23T00:00:01+00:00",
+                duration_ms=1000,
+                warnings=(
+                    ProviderWarning(
+                        code="stale_cache",
+                        message="expired",
+                        severity="critical",
+                    ),
+                ),
+            )
+
+        def fetch_funds(self, *, as_of=None):
+            return [FundRecord(code="510300", name="沪深300ETF", category="ETF", nav=5.0)]
+
+    monkeypatch.setattr("fund_agent.cli.AkshareProvider", DegradedProvider)
+
+    exit_code = main(
+        [
+            "daily",
+            "--provider",
+            "akshare",
+            "--provider-config",
+            str(provider_config),
+            "--output-dir",
+            str(tmp_path),
+            "--as-of",
+            "2026-06-23",
+        ]
+    )
+
+    assert exit_code == 3
+    assert (tmp_path / "fund_agent_report.json").exists()

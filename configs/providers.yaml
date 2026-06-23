@@ -3,3 +3,8 @@ akshare:
   retry_count: 0
   retry_backoff_seconds: 0
   verbose: false
+  trace_retention_days: 30
+  max_trace_files: 100
+policy:
+  fail_on_degraded: false
+  fail_on_critical_provider_warning: false
