@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from html import escape
+from collections import defaultdict
 
 from .agents import ResearchResult
 
@@ -22,6 +23,37 @@ def render_markdown(result: ResearchResult) -> str:
     ]
     for trace in result.traces:
         lines.append(f"- **{trace.agent_name}**: {trace.summary}")
+
+    lines.extend(
+        [
+            "",
+            "## 今日数据质量摘要",
+            "",
+            f"- 数据质量等级: {result.data_quality_grade}",
+        ]
+    )
+    provider_count = len(result.provider_health)
+    fallback_count = sum(1 for health in result.provider_health if health.fallback_used)
+    stale_count = sum(
+        1 for valuation in result.valuations.values() if valuation.fund.metadata.get("stale")
+    )
+    critical_count = sum(
+        1
+        for health in result.provider_health
+        for warning in health.warnings
+        if warning.severity == "critical"
+    )
+    warning_count = sum(
+        1
+        for health in result.provider_health
+        for warning in health.warnings
+        if warning.severity == "warning"
+    )
+    lines.append(f"- Provider 数量: {provider_count}")
+    lines.append(f"- Fallback 使用: {fallback_count}")
+    lines.append(f"- Stale cache 记录: {stale_count}")
+    lines.append(f"- Critical warnings: {critical_count}")
+    lines.append(f"- Warning 级别 warnings: {warning_count}")
 
     if result.provider_health:
         lines.extend(
@@ -57,10 +89,23 @@ def render_markdown(result: ResearchResult) -> str:
         ]
         lines.extend(["", "### Provider Warnings", ""])
         if warnings:
+            grouped = defaultdict(list)
             for provider, warning in warnings:
-                lines.append(
-                    f"- **{warning.severity}** `{provider}:{warning.code}`: {warning.message}"
-                )
+                grouped[warning.severity].append((provider, warning))
+            for severity, title in (
+                ("critical", "Critical"),
+                ("warning", "Warning"),
+                ("info", "Info"),
+            ):
+                lines.extend(["", f"### {title}", ""])
+                items = grouped.get(severity, [])
+                if not items:
+                    lines.append("- 无")
+                    continue
+                for provider, warning in items:
+                    lines.append(
+                        f"- `{provider}:{warning.code}`: {warning.message}"
+                    )
         else:
             lines.append("- 暂无 fallback warning 或 provider warning。")
 

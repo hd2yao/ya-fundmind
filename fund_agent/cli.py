@@ -34,13 +34,17 @@ def _load_funds(args, *, as_of: str):
     provider_name = getattr(args, "provider", None)
     if provider_name == "akshare":
         cache = FundCache(args.cache_file)
-        provider = AkshareProvider(cache=cache, allow_stale_cache=True)
+        provider = AkshareProvider(
+            cache=cache,
+            allow_stale_cache=True,
+            verbose=getattr(args, "provider_verbose", False),
+        )
         return provider.fetch_funds(as_of=as_of), _provider_health(provider)
     if provider_name == "fixture":
         provider = FixtureProvider(args.funds_file)
         return provider.fetch_funds(as_of=as_of), _provider_health(provider)
     if args.source == "live":
-        provider = AkshareProvider()
+        provider = AkshareProvider(verbose=getattr(args, "provider_verbose", False))
         return provider.fetch_funds(as_of=as_of), _provider_health(provider)
     provider = FixtureProvider(args.funds_file)
     return provider.fetch_funds(as_of=as_of), _provider_health(provider)
@@ -78,10 +82,13 @@ def _apply_watchlist_health(
     matched_count = len(set(requested_codes) & filtered_codes)
     warning = ()
     if missing_codes:
+        code = "all_watchlist_missing" if matched_count == 0 else "watchlist_missing"
+        severity = "critical" if matched_count == 0 else "warning"
         warning = (
             ProviderWarning(
-                code="watchlist_missing",
+                code=code,
                 message=f"Watchlist codes not found in provider data: {', '.join(missing_codes)}",
+                severity=severity,
                 details={"missing_codes": list(missing_codes)},
             ),
         )
@@ -174,6 +181,11 @@ def build_parser() -> argparse.ArgumentParser:
         command_parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
         command_parser.add_argument("--as-of", default="")
         command_parser.add_argument("--limit", type=int, default=5)
+        command_parser.add_argument(
+            "--provider-verbose",
+            action="store_true",
+            help="显示 provider 底层库输出，用于调试 live 数据源。",
+        )
 
     demo = subparsers.add_parser("demo", help="使用内置样例数据生成报告")
     add_report_args(demo, include_portfolio=True)

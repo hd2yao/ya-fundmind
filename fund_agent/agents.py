@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .models import FundRecord, ProviderHealth, ScoredFund, ValuationResult
-from .portfolio import PortfolioHolding, PortfolioSummary, analyze_portfolio
+from .portfolio import PortfolioHolding, PortfolioSummary, RiskIssue, analyze_portfolio
 from .scoring import rank_funds
 from .valuation import estimate_value
 
@@ -23,6 +23,16 @@ class ResearchResult:
     traces: tuple[AgentTrace, ...]
     provider_health: tuple[ProviderHealth, ...] = ()
     snapshot_delta: dict | None = None
+
+    @property
+    def data_quality_grade(self) -> str:
+        if any(health.has_critical_warnings for health in self.provider_health):
+            return "degraded"
+        if any(warning.severity == "warning" for health in self.provider_health for warning in health.warnings):
+            return "warning"
+        if any(valuation.fund.metadata.get("stale") for valuation in self.valuations.values()):
+            return "warning"
+        return "normal"
 
 
 def run_research(
@@ -56,6 +66,12 @@ def run_research(
             as_of=as_of or None,
             concentration_limit=0.35,
         )
+        data_quality_issues = _data_quality_risk_issues(provider_health, valuations)
+        if data_quality_issues:
+            portfolio = replace(
+                portfolio,
+                risk_issues=(*data_quality_issues, *portfolio.risk_issues),
+            )
         traces.append(
             AgentTrace("RiskAgent", f"识别 {len(portfolio.risk_issues)} 条组合风险提示。")
         )
@@ -74,3 +90,51 @@ def run_research(
         traces=tuple(traces),
         provider_health=provider_health,
     )
+
+
+def _data_quality_risk_issues(
+    provider_health: tuple[ProviderHealth, ...],
+    valuations: dict[str, ValuationResult],
+) -> tuple[RiskIssue, ...]:
+    issues: list[RiskIssue] = []
+    for health in provider_health:
+        if health.fallback_used:
+            issues.append(
+                RiskIssue(
+                    code="DATA_QUALITY",
+                    severity="Medium",
+                    message=f"{health.provider} 使用 fallback 数据源 {health.fallback_source or '--'}；reason={health.fallback_reason or '--'}。",
+                )
+            )
+        if health.watchlist_missing_codes:
+            severity = "High" if health.watchlist_matched_count == 0 else "Medium"
+            issues.append(
+                RiskIssue(
+                    code="DATA_QUALITY",
+                    severity=severity,
+                    message=f"watchlist 缺失代码: {', '.join(health.watchlist_missing_codes)}。",
+                )
+            )
+        for warning in health.warnings:
+            if warning.severity == "critical":
+                issues.append(
+                    RiskIssue(
+                        code="DATA_QUALITY",
+                        severity="High",
+                        message=f"critical provider warning `{warning.code}`: {warning.message}",
+                    )
+                )
+    stale_codes = [
+        code
+        for code, valuation in valuations.items()
+        if valuation.fund.metadata.get("stale")
+    ]
+    if stale_codes:
+        issues.append(
+            RiskIssue(
+                code="DATA_QUALITY",
+                severity="High",
+                message=f"stale cache data used for: {', '.join(stale_codes)}。",
+            )
+        )
+    return tuple(issues)
