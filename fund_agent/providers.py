@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
 
@@ -86,26 +86,46 @@ class AkshareProvider:
         resolved_as_of = as_of or date.today().isoformat()
         if self._ak is None:
             return self._fallback_to_cache("AKShare is not installed", as_of=resolved_as_of)
+        errors: list[str] = []
+        funds: list[FundRecord] = []
         try:
             df = self._ak.fund_open_fund_rank_em(symbol=self.fund_type)
         except Exception as exc:
-            return self._fallback_to_cache(str(exc), as_of=resolved_as_of)
-        funds: list[FundRecord] = []
-        for _, row in df.iterrows():
+            errors.append(f"fund_open_fund_rank_em: {exc}")
+        else:
+            funds.extend(_funds_from_rows(df, _fund_from_akshare_row))
+        if hasattr(self._ak, "fund_etf_spot_em"):
             try:
-                funds.append(_fund_from_akshare_row(row))
-            except Exception:
-                continue
+                etf_df = self._ak.fund_etf_spot_em()
+            except Exception as exc:
+                errors.append(f"fund_etf_spot_em: {exc}")
+            else:
+                funds.extend(_funds_from_rows(etf_df, _fund_from_akshare_etf_row))
+        updated_at = _utc_now()
+        expires_at = updated_at + timedelta(days=self.cache_ttl_days)
         normalized_funds = [
-            _with_provider_metadata(fund, as_of=resolved_as_of, provider="akshare")
+            _with_provider_metadata(
+                fund,
+                as_of=resolved_as_of,
+                provider="akshare",
+                updated_at=updated_at,
+                expires_at=expires_at,
+            )
             for fund in funds
             if fund.code and fund.name
         ]
+        normalized_funds = _dedupe_funds(normalized_funds)
+        if not normalized_funds:
+            return self._fallback_to_cache(
+                "; ".join(errors) if errors else "AKShare returned no valid fund rows",
+                as_of=resolved_as_of,
+            )
         if self.cache is not None and normalized_funds:
             self.cache.upsert_funds(
                 normalized_funds,
                 as_of=resolved_as_of,
                 ttl_days=self.cache_ttl_days,
+                now=updated_at,
             )
         return normalized_funds
 
@@ -170,13 +190,49 @@ def _date_text(value: object) -> str | None:
     return text[:10] or None
 
 
-def _with_provider_metadata(fund: FundRecord, *, as_of: str, provider: str) -> FundRecord:
+def _utc_now(value: datetime | None = None) -> datetime:
+    if value is None:
+        return datetime.now(timezone.utc)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _funds_from_rows(df: object, mapper) -> list[FundRecord]:
+    funds: list[FundRecord] = []
+    for _, row in df.iterrows():
+        try:
+            funds.append(mapper(row))
+        except Exception:
+            continue
+    return funds
+
+
+def _dedupe_funds(funds: list[FundRecord]) -> list[FundRecord]:
+    by_code: dict[str, FundRecord] = {}
+    for fund in funds:
+        existing = by_code.get(fund.code)
+        if existing is None or fund.exchange_traded:
+            by_code[fund.code] = fund
+    return list(by_code.values())
+
+
+def _with_provider_metadata(
+    fund: FundRecord,
+    *,
+    as_of: str,
+    provider: str,
+    updated_at: datetime,
+    expires_at: datetime,
+) -> FundRecord:
     return replace(
         fund,
         metadata={
             **fund.metadata,
             "provider": provider,
             "as_of": as_of,
+            "updated_at": updated_at.isoformat(),
+            "expires_at": expires_at.isoformat(),
             "stale": False,
         },
     )
@@ -222,6 +278,34 @@ def _fund_from_mapping(item: dict, *, source: str) -> FundRecord:
         proxy_symbol=item.get("proxy_symbol"),
         source=source,
         metadata=dict(item.get("metadata", {})),
+    )
+
+
+def _fund_from_akshare_etf_row(row: object) -> FundRecord:
+    market_value = _to_float(_first(row, "总市值", "流通市值"))
+    return FundRecord(
+        code=normalize_fund_code(_first(row, "代码", "基金代码", "fund_code")),
+        name=normalize_fund_name(_first(row, "名称", "基金简称", "基金名称", "name")),
+        category="ETF",
+        nav=_to_float(_first(row, "IOPV实时估值", "单位净值", "nav")),
+        nav_date=_date_text(_first(row, "数据日期", "日期", "nav_date")),
+        valuation_date=_date_text(_first(row, "数据日期", "估值日期", "valuation_date")),
+        returns={
+            "1w": 0.0,
+            "1m": 0.0,
+            "3m": 0.0,
+            "6m": 0.0,
+            "1y": 0.0,
+        },
+        scale_billion=None if market_value is None else market_value / 100000000,
+        exchange_traded=True,
+        price=_to_float(_first(row, "最新价", "price")),
+        source="akshare",
+        metadata={
+            "source_updated_at": str(_first(row, "更新时间", "updated_at") or ""),
+            "daily_change_pct": _to_float(_first(row, "涨跌幅", "change_pct")),
+            "discount_rate": _to_float(_first(row, "基金折价率", "discount_rate")),
+        },
     )
 
 
