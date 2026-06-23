@@ -106,3 +106,16 @@ python -m fund_agent.cli daily --provider akshare --watchlist-file configs/watch
 3. Add an optional local smoke helper command or documented script that prints AKShare version and provider summary.
 4. Expand AKShare mapping coverage only after observing real smoke output.
 5. Keep TiantianFundProvider deferred until AKShare smoke is stable.
+
+## 2026-06-23 Smoke Record
+
+- AKShare was installed only in a temporary venv at `/tmp/ya-fundmind-akshare-smoke`.
+- AKShare version: `1.18.64`.
+- Real smoke command exited with status 0.
+- Generated outputs:
+  - `outputs/fund_agent_report.md`
+  - `outputs/fund_agent_report.html`
+  - `outputs/snapshots/2026-06-23.json`
+  - `data/cache/funds.sqlite`
+- Observed fix: `fund_etf_spot_em` is needed to cover exchange-traded ETF code `510300`; `fund_open_fund_rank_em` alone missed that watchlist ETF.
+- Cache result: `fund_basics` contains AKShare records for `as_of=2026-06-23`, including `510300`, `000311`, `000834`, and `110022`.
