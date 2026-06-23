@@ -2,6 +2,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from fund_agent.agents import run_research
+from fund_agent.models import ProviderHealth, ProviderWarning
 from fund_agent.providers import FixtureProvider, load_portfolio_file
 from fund_agent.snapshot import (
     compare_snapshots,
@@ -59,3 +60,29 @@ def test_compare_snapshots_reports_score_valuation_and_risk_changes():
     assert delta["valuation_changes"]
     assert delta["risk_changes"]["added"]
     assert delta["holding_risk_changes"]["risk_count_delta"] == 1
+
+
+def test_snapshot_includes_provider_health_and_old_snapshots_still_compare():
+    health = ProviderHealth(
+        provider="akshare",
+        started_at="2026-06-23T00:00:00+00:00",
+        finished_at="2026-06-23T00:00:01+00:00",
+        duration_ms=1000,
+        live_row_count=2,
+        mapped_row_count=1,
+        skipped_row_count=1,
+        warnings=(ProviderWarning(code="row_skipped", message="bad row"),),
+    )
+    result = run_research(
+        FixtureProvider(Path("data/fixtures/funds.json")).fetch_funds()[:1],
+        as_of="2026-06-23",
+        provider_health=(health,),
+    )
+
+    snapshot = snapshot_from_result(result)
+    old_snapshot = {"as_of": "2026-06-22", "candidates": {}, "valuations": {}}
+    delta = compare_snapshots(old_snapshot, snapshot)
+
+    assert snapshot["provider_health"][0]["provider"] == "akshare"
+    assert snapshot["provider_health"][0]["warnings"][0]["code"] == "row_skipped"
+    assert delta is not None

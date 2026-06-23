@@ -54,6 +54,36 @@ def snapshot_from_result(result: ResearchResult) -> dict[str, Any]:
             for code, valuation in result.valuations.items()
         },
         "portfolio": portfolio,
+        "provider_health": [_provider_health_to_dict(item) for item in result.provider_health],
+    }
+
+
+def _provider_health_to_dict(item) -> dict[str, Any]:
+    return {
+        "provider": item.provider,
+        "provider_version": item.provider_version,
+        "started_at": item.started_at,
+        "finished_at": item.finished_at,
+        "duration_ms": item.duration_ms,
+        "live_row_count": item.live_row_count,
+        "mapped_row_count": item.mapped_row_count,
+        "skipped_row_count": item.skipped_row_count,
+        "cache_write_count": item.cache_write_count,
+        "fallback_used": item.fallback_used,
+        "fallback_reason": item.fallback_reason,
+        "fallback_source": item.fallback_source,
+        "watchlist_requested_count": item.watchlist_requested_count,
+        "watchlist_matched_count": item.watchlist_matched_count,
+        "watchlist_missing_codes": list(item.watchlist_missing_codes),
+        "warnings": [
+            {
+                "code": warning.code,
+                "message": warning.message,
+                "severity": warning.severity,
+                "details": warning.details,
+            }
+            for warning in item.warnings
+        ],
     }
 
 

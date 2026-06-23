@@ -8,6 +8,7 @@ from pathlib import Path
 from .agents import run_research
 from .cache import FundCache
 from .config import load_portfolio_config, load_watchlist_config
+from .models import ProviderHealth, ProviderWarning
 from .providers import AkshareProvider, FixtureProvider, ProviderUnavailable, load_portfolio_file
 from .report import render_html, render_markdown
 from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
@@ -34,13 +35,20 @@ def _load_funds(args, *, as_of: str):
     if provider_name == "akshare":
         cache = FundCache(args.cache_file)
         provider = AkshareProvider(cache=cache, allow_stale_cache=True)
-        return provider.fetch_funds(as_of=as_of)
+        return provider.fetch_funds(as_of=as_of), _provider_health(provider)
     if provider_name == "fixture":
-        return FixtureProvider(args.funds_file).fetch_funds(as_of=as_of)
+        provider = FixtureProvider(args.funds_file)
+        return provider.fetch_funds(as_of=as_of), _provider_health(provider)
     if args.source == "live":
         provider = AkshareProvider()
-        return provider.fetch_funds(as_of=as_of)
-    return FixtureProvider(args.funds_file).fetch_funds(as_of=as_of)
+        return provider.fetch_funds(as_of=as_of), _provider_health(provider)
+    provider = FixtureProvider(args.funds_file)
+    return provider.fetch_funds(as_of=as_of), _provider_health(provider)
+
+
+def _provider_health(provider) -> tuple[ProviderHealth, ...]:
+    health = getattr(provider, "last_health", None)
+    return (health,) if health is not None else ()
 
 
 def _filter_watchlist(funds, watchlist_file: Path | None):
@@ -52,12 +60,53 @@ def _filter_watchlist(funds, watchlist_file: Path | None):
     return [fund for fund in funds if fund.code in codes]
 
 
+def _apply_watchlist_health(
+    health_items: tuple[ProviderHealth, ...],
+    *,
+    all_funds,
+    filtered_funds,
+    watchlist_file: Path | None,
+) -> tuple[ProviderHealth, ...]:
+    if not health_items or watchlist_file is None or not watchlist_file.exists():
+        return health_items
+    requested_codes = tuple(load_watchlist_config(watchlist_file).codes)
+    if not requested_codes:
+        return health_items
+    available_codes = {fund.code for fund in all_funds}
+    filtered_codes = {fund.code for fund in filtered_funds}
+    missing_codes = tuple(code for code in requested_codes if code not in available_codes)
+    matched_count = len(set(requested_codes) & filtered_codes)
+    warning = ()
+    if missing_codes:
+        warning = (
+            ProviderWarning(
+                code="watchlist_missing",
+                message=f"Watchlist codes not found in provider data: {', '.join(missing_codes)}",
+                details={"missing_codes": list(missing_codes)},
+            ),
+        )
+    return tuple(
+        replace(
+            health,
+            watchlist_requested_count=len(requested_codes),
+            watchlist_matched_count=matched_count,
+            watchlist_missing_codes=missing_codes,
+            warnings=(*health.warnings, *warning),
+        )
+        for health in health_items
+    )
+
+
 def _run_report(args) -> int:
     as_of = args.as_of or date.today().isoformat()
     try:
-        funds = _filter_watchlist(
-            _load_funds(args, as_of=as_of),
-            args.watchlist_file,
+        all_funds, provider_health = _load_funds(args, as_of=as_of)
+        funds = _filter_watchlist(all_funds, args.watchlist_file)
+        provider_health = _apply_watchlist_health(
+            provider_health,
+            all_funds=all_funds,
+            filtered_funds=funds,
+            watchlist_file=args.watchlist_file,
         )
     except ProviderUnavailable as exc:
         print(f"Live provider unavailable: {exc}")
@@ -77,6 +126,7 @@ def _run_report(args) -> int:
         holdings=holdings,
         as_of=as_of,
         candidate_limit=args.limit,
+        provider_health=provider_health,
     )
     previous_snapshot = load_previous_snapshot(args.output_dir, result.as_of)
     snapshot_delta = compare_snapshots(previous_snapshot, snapshot_from_result(result))
