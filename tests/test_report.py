@@ -197,3 +197,36 @@ def test_markdown_report_groups_warnings_and_marks_degraded_quality():
     assert "stale_cache" in markdown
     assert "live_fallback" in markdown
     assert "skipped_rows" in markdown
+
+
+def test_markdown_report_includes_data_quality_delta_section():
+    result = run_research(
+        [FundRecord(code="510300", name="沪深300ETF", category="ETF", nav=5.0)],
+        as_of="2026-06-23",
+    )
+    result = replace(
+        result,
+        snapshot_delta={
+            "previous_as_of": "2026-06-22",
+            "score_changes": [],
+            "valuation_changes": [],
+            "risk_changes": {"added": [], "resolved": []},
+            "holding_risk_changes": {},
+            "data_quality_grade_delta": {"previous": "normal", "current": "warning"},
+            "provider_health_delta": {
+                "akshare": {
+                    "provider_live_rows_delta": 5,
+                    "provider_skipped_rows_delta": 2,
+                    "warning_count_delta": 1,
+                    "fallback_changed": True,
+                }
+            },
+        },
+    )
+
+    markdown = render_markdown(result)
+
+    assert "数据质量变化" in markdown
+    assert "normal -> warning" in markdown
+    assert "akshare" in markdown
+    assert "live rows +5" in markdown

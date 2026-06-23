@@ -7,17 +7,19 @@ from pathlib import Path
 
 from .agents import run_research
 from .cache import FundCache
-from .config import load_portfolio_config, load_watchlist_config
+from .config import load_portfolio_config, load_provider_config, load_watchlist_config
 from .models import ProviderHealth, ProviderWarning
 from .providers import AkshareProvider, FixtureProvider, ProviderUnavailable, load_portfolio_file
-from .report import render_html, render_markdown
+from .report import render_html, render_markdown, write_json_report
 from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
+from .trace import write_provider_trace
 
 
 DEFAULT_FUNDS_FILE = Path("data/fixtures/funds.json")
 DEFAULT_PORTFOLIO_FILE = Path("data/portfolio.example.json")
 DEFAULT_WATCHLIST_FILE = Path("configs/watchlist.yaml")
 DEFAULT_PORTFOLIO_CONFIG = Path("configs/portfolio.yaml")
+DEFAULT_PROVIDER_CONFIG = Path("configs/providers.yaml")
 DEFAULT_CACHE_FILE = Path("data/cache/funds.sqlite")
 
 
@@ -32,19 +34,29 @@ def _write_reports(result, output_dir: Path) -> tuple[Path, Path]:
 
 def _load_funds(args, *, as_of: str):
     provider_name = getattr(args, "provider", None)
+    provider_config = load_provider_config(args.provider_config).akshare
+    provider_verbose = bool(getattr(args, "provider_verbose", False) or provider_config.verbose)
     if provider_name == "akshare":
         cache = FundCache(args.cache_file)
         provider = AkshareProvider(
             cache=cache,
             allow_stale_cache=True,
-            verbose=getattr(args, "provider_verbose", False),
+            verbose=provider_verbose,
+            timeout_seconds=provider_config.timeout_seconds,
+            retry_count=provider_config.retry_count,
+            retry_backoff_seconds=provider_config.retry_backoff_seconds,
         )
         return provider.fetch_funds(as_of=as_of), _provider_health(provider)
     if provider_name == "fixture":
         provider = FixtureProvider(args.funds_file)
         return provider.fetch_funds(as_of=as_of), _provider_health(provider)
     if args.source == "live":
-        provider = AkshareProvider(verbose=getattr(args, "provider_verbose", False))
+        provider = AkshareProvider(
+            verbose=provider_verbose,
+            timeout_seconds=provider_config.timeout_seconds,
+            retry_count=provider_config.retry_count,
+            retry_backoff_seconds=provider_config.retry_backoff_seconds,
+        )
         return provider.fetch_funds(as_of=as_of), _provider_health(provider)
     provider = FixtureProvider(args.funds_file)
     return provider.fetch_funds(as_of=as_of), _provider_health(provider)
@@ -140,10 +152,14 @@ def _run_report(args) -> int:
     if snapshot_delta:
         result = replace(result, snapshot_delta=snapshot_delta)
     markdown_path, html_path = _write_reports(result, args.output_dir)
+    json_path = write_json_report(result, args.output_dir)
     snapshot_path = write_snapshot(result, args.output_dir)
+    trace_path = write_provider_trace(result, args.output_dir)
     print(f"Markdown report: {markdown_path}")
     print(f"HTML report: {html_path}")
+    print(f"JSON report: {json_path}")
     print(f"Snapshot: {snapshot_path}")
+    print(f"Provider trace: {trace_path}")
     return 0
 
 
@@ -172,6 +188,7 @@ def build_parser() -> argparse.ArgumentParser:
         command_parser.add_argument("--funds-file", type=Path, default=DEFAULT_FUNDS_FILE)
         command_parser.add_argument("--watchlist-file", type=Path, default=default_watchlist)
         command_parser.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
+        command_parser.add_argument("--provider-config", type=Path, default=DEFAULT_PROVIDER_CONFIG)
         command_parser.add_argument(
             "--portfolio-file",
             type=Path,

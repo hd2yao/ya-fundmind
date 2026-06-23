@@ -20,6 +20,35 @@ class PortfolioConfig:
     holdings: tuple[PortfolioHolding, ...]
 
 
+@dataclass(frozen=True)
+class AkshareProviderConfig:
+    timeout_seconds: float = 20.0
+    retry_count: int = 0
+    retry_backoff_seconds: float = 0.0
+    verbose: bool = False
+
+
+@dataclass(frozen=True)
+class ProviderConfig:
+    akshare: AkshareProviderConfig
+
+
+def load_provider_config(path: Path | str) -> ProviderConfig:
+    config_path = Path(path)
+    if not config_path.exists():
+        return ProviderConfig(akshare=AkshareProviderConfig())
+    payload = _parse_section_yaml(config_path)
+    akshare = payload.get("akshare", {})
+    return ProviderConfig(
+        akshare=AkshareProviderConfig(
+            timeout_seconds=float(akshare.get("timeout_seconds", 20.0) or 20.0),
+            retry_count=int(akshare.get("retry_count", 0) or 0),
+            retry_backoff_seconds=float(akshare.get("retry_backoff_seconds", 0.0) or 0.0),
+            verbose=bool(akshare.get("verbose", False)),
+        )
+    )
+
+
 def load_watchlist_config(path: Path | str) -> WatchlistConfig:
     payload = _parse_simple_yaml(Path(path))
     funds = payload.get("funds", [])
@@ -122,3 +151,23 @@ def _parse_scalar(value: str) -> object:
         return float(text)
     except ValueError:
         return text
+
+
+def _parse_section_yaml(path: Path) -> dict[str, dict[str, object]]:
+    payload: dict[str, dict[str, object]] = {}
+    current_section: dict[str, object] | None = None
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        stripped = line.strip()
+        if not line.startswith(" ") and stripped.endswith(":"):
+            current_section = {}
+            payload[stripped[:-1]] = current_section
+            continue
+        if current_section is not None and line.startswith(" ") and ":" in stripped:
+            key, value = _split_key_value(stripped)
+            current_section[key] = _parse_scalar(value)
+            continue
+        raise ValueError(f"Unsupported provider YAML subset in {path}: {raw_line}")
+    return payload

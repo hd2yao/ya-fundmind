@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 from html import escape
 from collections import defaultdict
+from pathlib import Path
 
 from .agents import ResearchResult
+from .snapshot import _provider_health_to_dict
 
 
 DISCLAIMER = "本报告仅用于研究辅助，不构成投资建议，不包含任何自动交易指令。"
@@ -223,6 +226,27 @@ def render_markdown(result: ResearchResult) -> str:
                     holding_delta.get("total_value_delta", "--"),
                 )
             )
+        data_quality_delta = result.snapshot_delta.get("data_quality_grade_delta")
+        provider_delta = result.snapshot_delta.get("provider_health_delta", {})
+        if data_quality_delta or provider_delta:
+            lines.extend(["", "## 数据质量变化", ""])
+            if data_quality_delta:
+                lines.append(
+                    "- data_quality_grade: {} -> {}".format(
+                        data_quality_delta.get("previous", "unknown"),
+                        data_quality_delta.get("current", "unknown"),
+                    )
+                )
+            for provider, item in provider_delta.items():
+                lines.append(
+                    "- {provider}: live rows {live:+d}, skipped rows {skipped:+d}, warnings {warnings:+d}, fallback_changed {fallback}".format(
+                        provider=provider,
+                        live=int(item.get("provider_live_rows_delta", 0)),
+                        skipped=int(item.get("provider_skipped_rows_delta", 0)),
+                        warnings=int(item.get("warning_count_delta", 0)),
+                        fallback=item.get("fallback_changed", False),
+                    )
+                )
 
     lines.extend(
         [
@@ -249,3 +273,92 @@ def render_html(result: ResearchResult) -> str:
         f"<body>{rows}</body>\n"
         "</html>\n"
     )
+
+
+def render_json(result: ResearchResult) -> dict:
+    return {
+        "as_of": result.as_of,
+        "data_quality_grade": result.data_quality_grade,
+        "provider_health": [_provider_health_to_dict(item) for item in result.provider_health],
+        "provider_warnings": [
+            {
+                "provider": health.provider,
+                "code": warning.code,
+                "message": warning.message,
+                "severity": warning.severity,
+                "details": warning.details,
+            }
+            for health in result.provider_health
+            for warning in health.warnings
+        ],
+        "candidates": [
+            {
+                "code": candidate.fund.code,
+                "name": candidate.fund.name,
+                "category": candidate.fund.category,
+                "score": candidate.total_score,
+                "evidence_label": candidate.evidence_label,
+                "notes": list(candidate.notes),
+            }
+            for candidate in result.ranked_candidates
+        ],
+        "valuations": {
+            code: {
+                "code": code,
+                "method": valuation.method,
+                "estimated_value": valuation.estimated_value,
+                "confidence": valuation.confidence,
+                "notes": list(valuation.notes),
+            }
+            for code, valuation in result.valuations.items()
+        },
+        "portfolio": _portfolio_to_json(result),
+        "risk_issues": _risk_issues_to_json(result),
+        "snapshot_delta": result.snapshot_delta,
+        "report_metadata": {
+            "format": "fund_agent_report_json",
+            "schema_version": 1,
+            "disclaimer": DISCLAIMER,
+        },
+    }
+
+
+def write_json_report(result: ResearchResult, output_dir: Path | str) -> Path:
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    path = output_path / "fund_agent_report.json"
+    path.write_text(
+        json.dumps(render_json(result), ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _portfolio_to_json(result: ResearchResult):
+    if result.portfolio is None:
+        return None
+    return {
+        "total_value": result.portfolio.total_value,
+        "total_cost": result.portfolio.total_cost,
+        "total_unrealized_return_pct": result.portfolio.total_unrealized_return_pct,
+        "positions": [
+            {
+                "code": position.holding.code,
+                "name": position.holding.name,
+                "current_value": position.current_value,
+                "weight": position.weight,
+                "target_drift": position.target_drift,
+                "unrealized_return_pct": position.unrealized_return_pct,
+            }
+            for position in result.portfolio.positions
+        ],
+    }
+
+
+def _risk_issues_to_json(result: ResearchResult) -> list[dict]:
+    if result.portfolio is None:
+        return []
+    return [
+        {"code": issue.code, "severity": issue.severity, "message": issue.message}
+        for issue in result.portfolio.risk_issues
+    ]

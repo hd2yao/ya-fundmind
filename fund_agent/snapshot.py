@@ -85,6 +85,22 @@ def _provider_health_to_dict(item) -> dict[str, Any]:
             }
             for warning in item.warnings
         ],
+        "endpoints": [
+            {
+                "endpoint": endpoint.endpoint,
+                "started_at": endpoint.started_at,
+                "finished_at": endpoint.finished_at,
+                "duration_ms": endpoint.duration_ms,
+                "attempts": endpoint.attempts,
+                "success": endpoint.success,
+                "error": endpoint.error,
+                "timeout_seconds": endpoint.timeout_seconds,
+                "live_row_count": endpoint.live_row_count,
+                "mapped_row_count": endpoint.mapped_row_count,
+                "skipped_row_count": endpoint.skipped_row_count,
+            }
+            for endpoint in item.endpoints
+        ],
     }
 
 
@@ -125,6 +141,8 @@ def compare_snapshots(
         "valuation_changes": _valuation_changes(previous, current),
         "risk_changes": _risk_changes(previous, current),
         "holding_risk_changes": _holding_risk_changes(previous, current),
+        "data_quality_grade_delta": _data_quality_grade_delta(previous, current),
+        "provider_health_delta": _provider_health_delta(previous, current),
     }
 
 
@@ -222,3 +240,40 @@ def _number_delta(previous: object, current: object) -> float | None:
     if previous is None or current is None:
         return None
     return round(float(current) - float(previous), 4)
+
+
+def _data_quality_grade_delta(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, str] | None:
+    previous_grade = previous.get("data_quality_grade")
+    current_grade = current.get("data_quality_grade")
+    if previous_grade == current_grade:
+        return None
+    return {"previous": str(previous_grade or "unknown"), "current": str(current_grade or "unknown")}
+
+
+def _provider_health_delta(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    previous_map = _provider_health_map(previous)
+    current_map = _provider_health_map(current)
+    delta: dict[str, dict[str, Any]] = {}
+    for provider, item in current_map.items():
+        previous_item = previous_map.get(provider, {})
+        delta[provider] = {
+            "provider_live_rows_delta": int(item.get("live_row_count", 0) or 0)
+            - int(previous_item.get("live_row_count", 0) or 0),
+            "provider_skipped_rows_delta": int(item.get("skipped_row_count", 0) or 0)
+            - int(previous_item.get("skipped_row_count", 0) or 0),
+            "provider_cache_writes_delta": int(item.get("cache_write_count", 0) or 0)
+            - int(previous_item.get("cache_write_count", 0) or 0),
+            "warning_count_delta": len(item.get("warnings", []) or [])
+            - len(previous_item.get("warnings", []) or []),
+            "fallback_changed": bool(item.get("fallback_used", False))
+            != bool(previous_item.get("fallback_used", False)),
+        }
+    return delta
+
+
+def _provider_health_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        str(item.get("provider", "")): item
+        for item in snapshot.get("provider_health", []) or []
+        if item.get("provider")
+    }
