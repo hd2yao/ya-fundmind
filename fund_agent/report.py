@@ -23,6 +23,47 @@ def render_markdown(result: ResearchResult) -> str:
     for trace in result.traces:
         lines.append(f"- **{trace.agent_name}**: {trace.summary}")
 
+    if result.provider_health:
+        lines.extend(
+            [
+                "",
+                "## 数据源健康状态",
+                "",
+                "| Provider | Version | Duration(ms) | Live Rows | Mapped | Skipped | Cache Writes | Fallback | Watchlist |",
+                "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+            ]
+        )
+        for health in result.provider_health:
+            fallback = "是" if health.fallback_used else "否"
+            version = health.provider_version or "--"
+            watchlist = (
+                f"{health.watchlist_matched_count}/{health.watchlist_requested_count}"
+                if health.watchlist_requested_count
+                else "--"
+            )
+            lines.append(
+                f"| {health.provider} | {version} | {health.duration_ms} | {health.live_row_count} | {health.mapped_row_count} | {health.skipped_row_count} | {health.cache_write_count} | {fallback} | {watchlist} |"
+            )
+            if health.fallback_used:
+                lines.append(
+                    f"- fallback: source={health.fallback_source or '--'} reason={health.fallback_reason or '--'}"
+                )
+            if health.watchlist_missing_codes:
+                lines.append(f"- watchlist_missing: {', '.join(health.watchlist_missing_codes)}")
+        warnings = [
+            (health.provider, warning)
+            for health in result.provider_health
+            for warning in health.warnings
+        ]
+        lines.extend(["", "### Provider Warnings", ""])
+        if warnings:
+            for provider, warning in warnings:
+                lines.append(
+                    f"- **{warning.severity}** `{provider}:{warning.code}`: {warning.message}"
+                )
+        else:
+            lines.append("- 暂无 fallback warning 或 provider warning。")
+
     lines.extend(
         [
             "",

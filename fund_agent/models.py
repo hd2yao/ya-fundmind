@@ -25,6 +25,34 @@ class FundRecord:
 
 
 @dataclass(frozen=True)
+class ProviderWarning:
+    code: str
+    message: str
+    severity: str = "warning"
+    details: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ProviderHealth:
+    provider: str
+    started_at: str
+    finished_at: str
+    duration_ms: int
+    provider_version: str | None = None
+    live_row_count: int = 0
+    mapped_row_count: int = 0
+    skipped_row_count: int = 0
+    cache_write_count: int = 0
+    fallback_used: bool = False
+    fallback_reason: str | None = None
+    fallback_source: str | None = None
+    watchlist_requested_count: int = 0
+    watchlist_matched_count: int = 0
+    watchlist_missing_codes: tuple[str, ...] = ()
+    warnings: tuple[ProviderWarning, ...] = ()
+
+
+@dataclass(frozen=True)
 class ScoreBreakdown:
     return_quality: float
     trend_quality: float

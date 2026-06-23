@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import FundRecord, ScoredFund, ValuationResult
+from .models import FundRecord, ProviderHealth, ScoredFund, ValuationResult
 from .portfolio import PortfolioHolding, PortfolioSummary, analyze_portfolio
 from .scoring import rank_funds
 from .valuation import estimate_value
@@ -21,6 +21,7 @@ class ResearchResult:
     valuations: dict[str, ValuationResult]
     portfolio: PortfolioSummary | None
     traces: tuple[AgentTrace, ...]
+    provider_health: tuple[ProviderHealth, ...] = ()
     snapshot_delta: dict | None = None
 
 
@@ -30,6 +31,7 @@ def run_research(
     holdings: list[PortfolioHolding] | None = None,
     as_of: str = "",
     candidate_limit: int = 5,
+    provider_health: tuple[ProviderHealth, ...] = (),
 ) -> ResearchResult:
     traces: list[AgentTrace] = [
         AgentTrace("DataAgent", f"已标准化 {len(funds)} 只基金/ETF。")
@@ -70,4 +72,5 @@ def run_research(
         valuations=valuations,
         portfolio=portfolio,
         traces=tuple(traces),
+        provider_health=provider_health,
     )

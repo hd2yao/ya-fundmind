@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
 
 from .cache import FundCache
-from .models import FundRecord
+from .models import FundRecord, ProviderHealth, ProviderWarning
 from .portfolio import PortfolioHolding
 
 
@@ -41,10 +41,20 @@ def normalize_fund_category(value: object) -> str:
 class FixtureProvider:
     def __init__(self, funds_path: Path | str = Path("data/fixtures/funds.json")):
         self.funds_path = Path(funds_path)
+        self.last_health: ProviderHealth | None = None
 
     def fetch_funds(self, *, as_of: str | None = None) -> list[FundRecord]:
+        started_at = _utc_now()
         payload = json.loads(self.funds_path.read_text(encoding="utf-8"))
-        return [_fund_from_mapping(item, source="fixture") for item in payload]
+        funds = [_fund_from_mapping(item, source="fixture") for item in payload]
+        self.last_health = _build_health(
+            provider="fixture",
+            provider_version=None,
+            started_at=started_at,
+            live_row_count=len(payload),
+            mapped_row_count=len(funds),
+        )
+        return funds
 
 
 class AkshareProvider:
@@ -68,6 +78,7 @@ class AkshareProvider:
         self.cache = cache
         self.allow_stale_cache = allow_stale_cache
         self.cache_ttl_days = cache_ttl_days
+        self.last_health: ProviderHealth | None = None
         if ak_module is not None:
             self._ak = ak_module
         else:
@@ -82,25 +93,54 @@ class AkshareProvider:
     def available(self) -> bool:
         return self._ak is not None
 
+    @property
+    def provider_version(self) -> str | None:
+        if self._ak is None:
+            return None
+        return str(getattr(self._ak, "__version__", "") or "unknown")
+
     def fetch_funds(self, *, as_of: str | None = None) -> list[FundRecord]:
+        started_at = _utc_now()
         resolved_as_of = as_of or date.today().isoformat()
         if self._ak is None:
-            return self._fallback_to_cache("AKShare is not installed", as_of=resolved_as_of)
+            return self._fallback_to_cache(
+                "AKShare is not installed",
+                as_of=resolved_as_of,
+                started_at=started_at,
+            )
         errors: list[str] = []
+        warnings: list[ProviderWarning] = []
+        live_row_count = 0
+        mapped_row_count = 0
+        skipped_row_count = 0
         funds: list[FundRecord] = []
         try:
             df = self._ak.fund_open_fund_rank_em(symbol=self.fund_type)
         except Exception as exc:
-            errors.append(f"fund_open_fund_rank_em: {exc}")
+            message = f"fund_open_fund_rank_em: {exc}"
+            errors.append(message)
+            warnings.append(ProviderWarning(code="live_fetch_error", message=message))
         else:
-            funds.extend(_funds_from_rows(df, _fund_from_akshare_row))
+            result = _funds_from_rows(df, _fund_from_akshare_row, endpoint="fund_open_fund_rank_em")
+            live_row_count += result.live_row_count
+            mapped_row_count += len(result.funds)
+            skipped_row_count += result.skipped_row_count
+            warnings.extend(result.warnings)
+            funds.extend(result.funds)
         if hasattr(self._ak, "fund_etf_spot_em"):
             try:
                 etf_df = self._ak.fund_etf_spot_em()
             except Exception as exc:
-                errors.append(f"fund_etf_spot_em: {exc}")
+                message = f"fund_etf_spot_em: {exc}"
+                errors.append(message)
+                warnings.append(ProviderWarning(code="live_fetch_error", message=message))
             else:
-                funds.extend(_funds_from_rows(etf_df, _fund_from_akshare_etf_row))
+                result = _funds_from_rows(etf_df, _fund_from_akshare_etf_row, endpoint="fund_etf_spot_em")
+                live_row_count += result.live_row_count
+                mapped_row_count += len(result.funds)
+                skipped_row_count += result.skipped_row_count
+                warnings.extend(result.warnings)
+                funds.extend(result.funds)
         updated_at = _utc_now()
         expires_at = updated_at + timedelta(days=self.cache_ttl_days)
         normalized_funds = [
@@ -119,7 +159,12 @@ class AkshareProvider:
             return self._fallback_to_cache(
                 "; ".join(errors) if errors else "AKShare returned no valid fund rows",
                 as_of=resolved_as_of,
+                started_at=started_at,
+                live_row_count=live_row_count,
+                skipped_row_count=skipped_row_count,
+                warnings=tuple(warnings),
             )
+        cache_write_count = 0
         if self.cache is not None and normalized_funds:
             self.cache.upsert_funds(
                 normalized_funds,
@@ -127,10 +172,45 @@ class AkshareProvider:
                 ttl_days=self.cache_ttl_days,
                 now=updated_at,
             )
+            cache_write_count = len(normalized_funds)
+        self.last_health = _build_health(
+            provider="akshare",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=live_row_count,
+            mapped_row_count=mapped_row_count,
+            skipped_row_count=skipped_row_count,
+            cache_write_count=cache_write_count,
+            warnings=tuple(warnings),
+        )
         return normalized_funds
 
-    def _fallback_to_cache(self, reason: str, *, as_of: str | None = None) -> list[FundRecord]:
+    def _fallback_to_cache(
+        self,
+        reason: str,
+        *,
+        as_of: str | None = None,
+        started_at: datetime | None = None,
+        live_row_count: int = 0,
+        skipped_row_count: int = 0,
+        warnings: tuple[ProviderWarning, ...] = (),
+    ) -> list[FundRecord]:
+        started_at = started_at or _utc_now()
         if self.cache is None:
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                live_row_count=live_row_count,
+                skipped_row_count=skipped_row_count,
+                fallback_used=True,
+                fallback_reason=reason,
+                fallback_source=None,
+                warnings=(
+                    *warnings,
+                    ProviderWarning(code="fallback_unavailable", message=reason, severity="error"),
+                ),
+            )
             raise ProviderUnavailable(
                 f"AKShareProvider unavailable and no cache fallback is configured: {reason}"
             )
@@ -138,7 +218,37 @@ class AkshareProvider:
         if not funds and as_of is not None:
             funds = self.cache.load_funds(allow_stale=self.allow_stale_cache)
         if not funds:
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                live_row_count=live_row_count,
+                skipped_row_count=skipped_row_count,
+                fallback_used=True,
+                fallback_reason=reason,
+                fallback_source="cache",
+                warnings=(
+                    *warnings,
+                    ProviderWarning(code="fallback_empty", message=reason, severity="error"),
+                ),
+            )
             raise ProviderUnavailable(f"AKShareProvider unavailable and cache is empty: {reason}")
+        fallback_warning = ProviderWarning(
+            code="fallback_cache",
+            message=f"AKShare live failed; using cache. reason={reason}",
+        )
+        self.last_health = _build_health(
+            provider="akshare",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=live_row_count,
+            mapped_row_count=len(funds),
+            skipped_row_count=skipped_row_count,
+            fallback_used=True,
+            fallback_reason=reason,
+            fallback_source="cache",
+            warnings=(*warnings, fallback_warning),
+        )
         return [
             replace(
                 fund,
@@ -160,6 +270,14 @@ class EastmoneyProvider:
 class TiantianFundProvider:
     def fetch_funds(self, *, as_of: str | None = None) -> list[FundRecord]:
         raise ProviderUnavailable("TiantianFundProvider is reserved for a later data source.")
+
+
+@dataclass(frozen=True)
+class _RowMappingResult:
+    live_row_count: int
+    funds: tuple[FundRecord, ...]
+    skipped_row_count: int
+    warnings: tuple[ProviderWarning, ...]
 
 
 def _to_float(value: object) -> float | None:
@@ -198,14 +316,74 @@ def _utc_now(value: datetime | None = None) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-def _funds_from_rows(df: object, mapper) -> list[FundRecord]:
+def _build_health(
+    *,
+    provider: str,
+    provider_version: str | None,
+    started_at: datetime,
+    live_row_count: int = 0,
+    mapped_row_count: int = 0,
+    skipped_row_count: int = 0,
+    cache_write_count: int = 0,
+    fallback_used: bool = False,
+    fallback_reason: str | None = None,
+    fallback_source: str | None = None,
+    warnings: tuple[ProviderWarning, ...] = (),
+) -> ProviderHealth:
+    finished_at = _utc_now()
+    return ProviderHealth(
+        provider=provider,
+        provider_version=provider_version,
+        started_at=started_at.isoformat(),
+        finished_at=finished_at.isoformat(),
+        duration_ms=max(0, int((finished_at - started_at).total_seconds() * 1000)),
+        live_row_count=live_row_count,
+        mapped_row_count=mapped_row_count,
+        skipped_row_count=skipped_row_count,
+        cache_write_count=cache_write_count,
+        fallback_used=fallback_used,
+        fallback_reason=fallback_reason,
+        fallback_source=fallback_source,
+        warnings=warnings,
+    )
+
+
+def _funds_from_rows(df: object, mapper, *, endpoint: str) -> _RowMappingResult:
     funds: list[FundRecord] = []
-    for _, row in df.iterrows():
+    warnings: list[ProviderWarning] = []
+    live_row_count = 0
+    skipped_row_count = 0
+    for row_index, row in df.iterrows():
+        live_row_count += 1
         try:
-            funds.append(mapper(row))
-        except Exception:
+            fund = mapper(row)
+        except Exception as exc:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="row_skipped",
+                    message=f"{endpoint} row {row_index} skipped: {exc}",
+                    details={"endpoint": endpoint, "row_index": row_index},
+                )
+            )
             continue
-    return funds
+        if not fund.code or not fund.name:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="row_skipped",
+                    message=f"{endpoint} row {row_index} skipped: missing code or name",
+                    details={"endpoint": endpoint, "row_index": row_index},
+                )
+            )
+            continue
+        funds.append(fund)
+    return _RowMappingResult(
+        live_row_count=live_row_count,
+        funds=tuple(funds),
+        skipped_row_count=skipped_row_count,
+        warnings=tuple(warnings),
+    )
 
 
 def _dedupe_funds(funds: list[FundRecord]) -> list[FundRecord]:

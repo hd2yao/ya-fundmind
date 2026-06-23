@@ -2,7 +2,7 @@ from pathlib import Path
 from dataclasses import replace
 
 from fund_agent.agents import run_research
-from fund_agent.models import FundRecord
+from fund_agent.models import FundRecord, ProviderHealth, ProviderWarning
 from fund_agent.providers import FixtureProvider, load_portfolio_file
 from fund_agent.report import render_html, render_markdown
 
@@ -108,3 +108,51 @@ def test_markdown_report_includes_data_freshness_table():
     assert "akshare" in markdown
     assert "2026-06-22" in markdown
     assert "| 510300 | 沪深300ETF | akshare | 2026-06-22 |" in markdown
+
+
+def test_markdown_report_includes_provider_health_and_warnings():
+    health = ProviderHealth(
+        provider="akshare",
+        provider_version="9.9.9",
+        started_at="2026-06-23T00:00:00+00:00",
+        finished_at="2026-06-23T00:00:02+00:00",
+        duration_ms=2000,
+        live_row_count=4,
+        mapped_row_count=2,
+        skipped_row_count=1,
+        cache_write_count=2,
+        fallback_used=True,
+        fallback_reason="network down",
+        fallback_source="cache",
+        watchlist_requested_count=2,
+        watchlist_matched_count=1,
+        watchlist_missing_codes=("999999",),
+        warnings=(
+            ProviderWarning(
+                code="fallback_cache",
+                message="AKShare live failed; using cache.",
+                severity="warning",
+            ),
+        ),
+    )
+    result = run_research(
+        [
+            FundRecord(
+                code="510300",
+                name="沪深300ETF",
+                category="ETF",
+                nav=5.0,
+                source="cache:akshare",
+            )
+        ],
+        as_of="2026-06-23",
+        provider_health=(health,),
+    )
+
+    markdown = render_markdown(result)
+
+    assert "数据源健康状态" in markdown
+    assert "akshare" in markdown
+    assert "fallback_cache" in markdown
+    assert "network down" in markdown
+    assert "999999" in markdown
