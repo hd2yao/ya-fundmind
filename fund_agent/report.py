@@ -326,6 +326,8 @@ def render_json(result: ResearchResult) -> dict:
             "schema_version": SCHEMA_VERSION,
             "disclaimer": DISCLAIMER,
         },
+        "fund_details": [_fund_detail_to_json(item) for item in result.fund_details],
+        "nav_history_summary": result.nav_history_summary or {},
     }
 
 
@@ -368,6 +370,23 @@ def _risk_issues_to_json(result: ResearchResult) -> list[dict]:
         {"code": issue.code, "severity": issue.severity, "message": issue.message}
         for issue in result.portfolio.risk_issues
     ]
+
+
+def _fund_detail_to_json(detail) -> dict:
+    return {
+        "code": detail.code,
+        "name": detail.name,
+        "fund_type": detail.fund_type,
+        "fund_company": detail.fund_company,
+        "fund_manager": detail.fund_manager,
+        "inception_date": detail.inception_date,
+        "scale": detail.scale,
+        "rating": detail.rating,
+        "source": detail.source,
+        "as_of": detail.as_of,
+        "updated_at": detail.updated_at,
+        "metadata": detail.metadata,
+    }
 
 
 def _generated_at() -> str:

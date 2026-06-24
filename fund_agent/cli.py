@@ -9,8 +9,8 @@ from .agents import run_research
 from .cache import FundCache
 from .config import load_portfolio_config, load_provider_config, load_watchlist_config
 from .contract import ContractValidationSummary, validate_contract_file, validate_output_dir
-from .models import ProviderHealth, ProviderWarning
-from .providers import AkshareProvider, FixtureProvider, ProviderUnavailable, load_portfolio_file
+from .models import FundRecord, ProviderHealth, ProviderWarning
+from .providers import AkshareProvider, FixtureProvider, ProviderUnavailable, TiantianFundProvider, load_portfolio_file
 from .report import render_html, render_markdown, write_json_report
 from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
 from .trace import write_provider_trace
@@ -223,6 +223,99 @@ def _run_validate_contract(args) -> int:
     return 0 if summary.ok else 1
 
 
+def _run_enrich_fund(args) -> int:
+    if args.provider != "tiantian":
+        print(f"Unsupported enrichment provider: {args.provider}")
+        return 2
+    provider_config = load_provider_config(args.provider_config)
+    cache = FundCache(args.cache_file)
+    provider = TiantianFundProvider(cache=cache)
+    if not getattr(provider, "available", False):
+        print("TiantianFundProvider is not configured; provide a Tiantian client to run live enrichment.")
+        return 2
+    return _execute_tiantian_enrichment(args, provider, provider_config)
+
+
+def _run_smoke_tiantian(args) -> int:
+    provider_config = load_provider_config(args.provider_config)
+    provider = TiantianFundProvider(cache=FundCache(args.cache_file))
+    if not getattr(provider, "available", False):
+        print("TiantianFundProvider is not configured; real smoke-tiantian was not run.")
+        return 2
+    return _execute_tiantian_enrichment(args, provider, provider_config)
+
+
+def _execute_tiantian_enrichment(args, provider, provider_config) -> int:
+    as_of = args.as_of or date.today().isoformat()
+    try:
+        detail = provider.fetch_fund_detail(args.code, as_of=as_of)
+        detail_health = provider.last_health
+        nav_points = provider.fetch_nav_history(
+            args.code,
+            start_date=getattr(args, "start_date", None),
+            end_date=getattr(args, "end_date", None),
+            as_of=as_of,
+        )
+        nav_health = provider.last_health
+    except ProviderUnavailable as exc:
+        print(f"Tiantian provider unavailable: {exc}")
+        return 2
+    combined_health = _combine_provider_health(detail_health, nav_health)
+    latest_nav = nav_points[-1].unit_nav if nav_points else None
+    fund = FundRecord(
+        code=detail.code,
+        name=detail.name,
+        category=detail.fund_type or "基金",
+        nav=latest_nav,
+        nav_date=nav_points[-1].date if nav_points else None,
+        source=detail.source,
+    )
+    result = run_research(
+        [fund],
+        as_of=as_of,
+        provider_health=(combined_health,) if combined_health is not None else (),
+    )
+    nav_summary = {
+        detail.code: {
+            "count": len(nav_points),
+            "start_date": nav_points[0].date if nav_points else None,
+            "end_date": nav_points[-1].date if nav_points else None,
+            "source": "tiantian",
+        }
+    }
+    result = replace(result, fund_details=(detail,), nav_history_summary=nav_summary)
+    json_path = write_json_report(result, args.output_dir)
+    trace_path = write_provider_trace(
+        result,
+        args.output_dir,
+        retention_days=provider_config.akshare.trace_retention_days,
+        max_trace_files=provider_config.akshare.max_trace_files,
+    )
+    print(f"JSON report: {json_path}")
+    print(f"Provider trace: {trace_path}")
+    print(f"Tiantian detail cache writes: {1 if detail else 0}")
+    print(f"Tiantian nav cache writes: {len(nav_points)}")
+    return 0
+
+
+def _combine_provider_health(*items):
+    health_items = [item for item in items if item is not None]
+    if not health_items:
+        return None
+    first = health_items[0]
+    last = health_items[-1]
+    return replace(
+        last,
+        started_at=first.started_at,
+        live_row_count=sum(item.live_row_count for item in health_items),
+        mapped_row_count=sum(item.mapped_row_count for item in health_items),
+        skipped_row_count=sum(item.skipped_row_count for item in health_items),
+        cache_write_count=sum(item.cache_write_count for item in health_items),
+        endpoints=tuple(endpoint for item in health_items for endpoint in item.endpoints),
+        warnings=tuple(warning for item in health_items for warning in item.warnings),
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fund-agent",
@@ -307,6 +400,27 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--trace", type=Path)
     validate.add_argument("--snapshot", type=Path)
     validate.set_defaults(func=_run_validate_contract)
+
+    enrich = subparsers.add_parser("enrich-fund", help="显式补充单只基金详情和历史净值")
+    enrich.add_argument("--provider", choices=["tiantian"], required=True)
+    enrich.add_argument("--code", required=True)
+    enrich.add_argument("--start-date")
+    enrich.add_argument("--end-date")
+    enrich.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
+    enrich.add_argument("--provider-config", type=Path, default=DEFAULT_PROVIDER_CONFIG)
+    enrich.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    enrich.add_argument("--as-of", default="")
+    enrich.set_defaults(func=_run_enrich_fund)
+
+    smoke_tiantian = subparsers.add_parser("smoke-tiantian", help="可选：使用 Tiantian 真实数据跑 live smoke")
+    smoke_tiantian.add_argument("--code", required=True)
+    smoke_tiantian.add_argument("--start-date")
+    smoke_tiantian.add_argument("--end-date")
+    smoke_tiantian.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
+    smoke_tiantian.add_argument("--provider-config", type=Path, default=DEFAULT_PROVIDER_CONFIG)
+    smoke_tiantian.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    smoke_tiantian.add_argument("--as-of", default="")
+    smoke_tiantian.set_defaults(func=_run_smoke_tiantian)
 
     return parser
 

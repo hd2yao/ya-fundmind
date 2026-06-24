@@ -1,8 +1,9 @@
+from dataclasses import replace
 import json
 from pathlib import Path
 
 from fund_agent.agents import run_research
-from fund_agent.models import FundRecord, ProviderHealth, ProviderWarning
+from fund_agent.models import FundDetail, FundRecord, ProviderHealth, ProviderWarning
 from fund_agent.report import render_json, write_json_report
 
 
@@ -70,3 +71,41 @@ def test_downstream_json_reader_does_not_need_markdown(tmp_path):
     assert first_candidate["code"] == "510300"
     assert payload["valuations"]["510300"]["confidence"]
     assert not (tmp_path / "fund_agent_report.md").exists()
+
+
+def test_json_report_allows_optional_tiantian_enrichment_fields(tmp_path):
+    result = run_research(
+        [FundRecord(code="510300", name="沪深300ETF", category="ETF", nav=5.0)],
+        as_of="2026-06-23",
+    )
+    result = replace(
+        result,
+        fund_details=(
+            FundDetail(
+                code="510300",
+                name="沪深300ETF",
+                fund_type="ETF",
+                fund_company="华泰柏瑞基金",
+                fund_manager="张三",
+                source="tiantian",
+                as_of="2026-06-23",
+            ),
+        ),
+        nav_history_summary={
+            "510300": {
+                "count": 2,
+                "start_date": "2026-06-21",
+                "end_date": "2026-06-22",
+                "source": "tiantian",
+            }
+        },
+    )
+
+    payload = render_json(result)
+    path = write_json_report(result, tmp_path)
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+
+    assert payload["schema_version"] == "1.0"
+    assert payload["fund_details"][0]["code"] == "510300"
+    assert payload["fund_details"][0]["fund_company"] == "华泰柏瑞基金"
+    assert loaded["nav_history_summary"]["510300"]["count"] == 2

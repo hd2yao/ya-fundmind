@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from .models import FundRecord, ProviderHealth, ScoredFund, ValuationResult
+from .models import FundDetail, FundRecord, ProviderHealth, ScoredFund, ValuationResult
 from .portfolio import PortfolioHolding, PortfolioSummary, RiskIssue, analyze_portfolio
 from .scoring import rank_funds
 from .valuation import estimate_value
@@ -23,6 +23,8 @@ class ResearchResult:
     traces: tuple[AgentTrace, ...]
     provider_health: tuple[ProviderHealth, ...] = ()
     snapshot_delta: dict | None = None
+    fund_details: tuple[FundDetail, ...] = ()
+    nav_history_summary: dict | None = None
 
     @property
     def data_quality_grade(self) -> str:

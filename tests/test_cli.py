@@ -1,6 +1,6 @@
 from fund_agent.cli import main
 from fund_agent.cache import FundCache
-from fund_agent.models import FundRecord, ProviderHealth, ProviderWarning
+from fund_agent.models import FundDetail, FundNavPoint, FundRecord, ProviderHealth, ProviderWarning
 
 
 def test_demo_command_writes_markdown_and_html_reports(tmp_path):
@@ -288,3 +288,103 @@ policy:
 
     assert exit_code == 3
     assert (tmp_path / "fund_agent_report.json").exists()
+
+
+def test_enrich_fund_tiantian_writes_cache_trace_and_json(monkeypatch, tmp_path):
+    class MockTiantianProvider:
+        available = True
+
+        def __init__(self, *, cache, **kwargs):
+            self.cache = cache
+            self.last_health = ProviderHealth(
+                provider="tiantian",
+                started_at="2026-06-23T00:00:00+00:00",
+                finished_at="2026-06-23T00:00:01+00:00",
+                duration_ms=1000,
+                live_row_count=3,
+                mapped_row_count=3,
+                cache_write_count=3,
+            )
+
+        def fetch_fund_detail(self, code, *, as_of=None):
+            detail = FundDetail(
+                code=code,
+                name="沪深300ETF",
+                fund_type="ETF",
+                fund_company="华泰柏瑞基金",
+                fund_manager="张三",
+                source="tiantian",
+                as_of=as_of,
+            )
+            self.cache.upsert_fund_details([detail], as_of=as_of)
+            return detail
+
+        def fetch_nav_history(self, code, *, start_date=None, end_date=None, as_of=None):
+            navs = [
+                FundNavPoint(code=code, date="2026-06-21", unit_nav=5.01, source="tiantian"),
+                FundNavPoint(code=code, date="2026-06-22", unit_nav=5.02, source="tiantian"),
+            ]
+            self.cache.upsert_nav_points(navs, as_of=as_of or "2026-06-23")
+            return navs
+
+    monkeypatch.setattr("fund_agent.cli.TiantianFundProvider", MockTiantianProvider)
+
+    exit_code = main(
+        [
+            "enrich-fund",
+            "--provider",
+            "tiantian",
+            "--code",
+            "510300",
+            "--output-dir",
+            str(tmp_path),
+            "--as-of",
+            "2026-06-23",
+        ]
+    )
+
+    assert exit_code == 0
+    assert (tmp_path / "fund_agent_report.json").exists()
+    assert (tmp_path / "traces" / "provider-2026-06-23.json").exists()
+
+
+def test_enrich_fund_tiantian_unavailable_returns_clear_error(monkeypatch, tmp_path, capsys):
+    class MissingTiantianProvider:
+        available = False
+
+        def __init__(self, **kwargs):
+            pass
+
+    monkeypatch.setattr("fund_agent.cli.TiantianFundProvider", MissingTiantianProvider)
+
+    exit_code = main(
+        [
+            "enrich-fund",
+            "--provider",
+            "tiantian",
+            "--code",
+            "510300",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "TiantianFundProvider is not configured" in captured.out
+
+
+def test_smoke_tiantian_unavailable_returns_clear_error(monkeypatch, tmp_path, capsys):
+    class MissingTiantianProvider:
+        available = False
+
+        def __init__(self, **kwargs):
+            pass
+
+    monkeypatch.setattr("fund_agent.cli.TiantianFundProvider", MissingTiantianProvider)
+
+    exit_code = main(["smoke-tiantian", "--code", "510300", "--output-dir", str(tmp_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "TiantianFundProvider is not configured" in captured.out

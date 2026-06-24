@@ -1,0 +1,95 @@
+from fund_agent.cache import FundCache
+from fund_agent.models import FundDetail, FundNavPoint
+from fund_agent.providers import ProviderUnavailable, TiantianFundProvider
+
+
+class FakeTiantianClient:
+    __version__ = "0.1-test"
+
+    def fund_detail(self, code):
+        return {
+            "code": f"SH{code}",
+            "name": "沪深300ETF",
+            "fund_type": "ETF",
+            "fund_company": "华泰柏瑞基金",
+            "fund_manager": "张三",
+            "inception_date": "2012-05-04",
+            "scale": "460.5",
+            "rating": "5",
+        }
+
+    def nav_history(self, code, start_date=None, end_date=None):
+        return [
+            {"date": "2026-06-21", "unit_nav": "5.01", "accumulated_nav": "5.01", "daily_return": "0.12%"},
+            {"date": "", "unit_nav": "--"},
+            {"date": "2026-06-22", "unit_nav": "5.02", "accumulated_nav": "5.02", "daily_return": "0.20%"},
+        ]
+
+
+class MissingFieldClient:
+    def fund_detail(self, code):
+        return {"code": code, "name": "沪深300ETF"}
+
+    def nav_history(self, code, start_date=None, end_date=None):
+        return []
+
+
+def test_tiantian_provider_maps_fund_detail_successfully(tmp_path):
+    provider = TiantianFundProvider(client=FakeTiantianClient(), cache=FundCache(tmp_path / "funds.sqlite"))
+
+    detail = provider.fetch_fund_detail("SH510300", as_of="2026-06-23")
+
+    assert isinstance(detail, FundDetail)
+    assert detail.code == "510300"
+    assert detail.name == "沪深300ETF"
+    assert detail.fund_company == "华泰柏瑞基金"
+    assert detail.fund_manager == "张三"
+    assert detail.scale == 460.5
+    assert detail.rating == "5"
+    assert detail.source == "tiantian"
+    assert detail.metadata["provider"] == "tiantian"
+    assert detail.metadata["updated_at"]
+    assert detail.metadata["expires_at"]
+
+
+def test_tiantian_provider_maps_nav_history_and_skips_bad_rows(tmp_path):
+    provider = TiantianFundProvider(client=FakeTiantianClient(), cache=FundCache(tmp_path / "funds.sqlite"))
+
+    navs = provider.fetch_nav_history("510300", start_date="2026-06-01", end_date="2026-06-23")
+
+    assert [item.date for item in navs] == ["2026-06-21", "2026-06-22"]
+    assert all(isinstance(item, FundNavPoint) for item in navs)
+    assert navs[0].unit_nav == 5.01
+    assert navs[0].daily_return == 0.12
+    assert navs[0].metadata["updated_at"]
+    assert navs[0].metadata["expires_at"]
+    assert provider.last_health is not None
+    assert provider.last_health.provider == "tiantian"
+    assert provider.last_health.live_row_count == 3
+    assert provider.last_health.mapped_row_count == 2
+    assert provider.last_health.skipped_row_count == 1
+    assert any(warning.code == "skipped_rows" for warning in provider.last_health.warnings)
+
+
+def test_tiantian_detail_missing_fields_degrades_safely(tmp_path):
+    provider = TiantianFundProvider(client=MissingFieldClient(), cache=FundCache(tmp_path / "funds.sqlite"))
+
+    detail = provider.fetch_fund_detail("510300", as_of="2026-06-23")
+
+    assert detail.code == "510300"
+    assert detail.name == "沪深300ETF"
+    assert detail.fund_type is None
+    assert detail.fund_company is None
+    assert detail.scale is None
+
+
+def test_tiantian_provider_without_client_is_unavailable(monkeypatch):
+    monkeypatch.delenv("TIANTIAN_API_BASE_URL", raising=False)
+    provider = TiantianFundProvider()
+
+    try:
+        provider.fetch_fund_detail("510300")
+    except ProviderUnavailable as exc:
+        assert "TiantianFundProvider" in str(exc)
+    else:
+        raise AssertionError("expected ProviderUnavailable")

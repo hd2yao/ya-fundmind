@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fund_agent.cache import FundCache
-from fund_agent.models import FundRecord
+from fund_agent.models import FundDetail, FundNavPoint, FundRecord
 
 
 def test_cache_initializes_expected_tables(tmp_path):
@@ -65,3 +65,52 @@ def test_cache_filters_expired_records_unless_stale_allowed(tmp_path):
     assert len(stale) == 1
     assert stale[0].metadata["stale"] is True
     assert stale[0].metadata["expires_at"] < now.isoformat()
+
+
+def test_cache_round_trips_fund_details(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    detail = FundDetail(
+        code="510300",
+        name="沪深300ETF",
+        fund_type="ETF",
+        fund_company="华泰柏瑞基金",
+        fund_manager="张三",
+        inception_date="2012-05-04",
+        scale=460.5,
+        rating="5",
+        source="tiantian",
+        as_of="2026-06-23",
+    )
+
+    cache.upsert_fund_details([detail], as_of="2026-06-23", ttl_days=3)
+    cached = cache.load_fund_details(code="510300", as_of="2026-06-23")
+
+    assert len(cached) == 1
+    assert cached[0].code == "510300"
+    assert cached[0].source == "cache:tiantian"
+    assert cached[0].fund_company == "华泰柏瑞基金"
+    assert cached[0].metadata["stale"] is False
+
+
+def test_cache_round_trips_fund_nav_points(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    navs = [
+        FundNavPoint(
+            code="510300",
+            date="2026-06-21",
+            unit_nav=5.01,
+            accumulated_nav=5.01,
+            daily_return=0.12,
+            source="tiantian",
+        )
+    ]
+
+    cache.upsert_nav_points(navs, as_of="2026-06-23", ttl_days=3)
+    cached = cache.load_nav_points(code="510300")
+
+    assert len(cached) == 1
+    assert cached[0].source == "cache:tiantian"
+    assert cached[0].unit_nav == 5.01
+    assert cached[0].accumulated_nav == 5.01
+    assert cached[0].daily_return == 0.12
+    assert cached[0].metadata["cache_as_of"] == "2026-06-23"

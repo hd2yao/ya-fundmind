@@ -115,3 +115,36 @@ def test_provider_trace_retention_prunes_old_trace_files(tmp_path):
     assert not old_by_age.exists()
     assert not old_by_count.exists()
     assert keep.exists()
+
+
+def test_tiantian_provider_trace_contract(tmp_path):
+    health = ProviderHealth(
+        provider="tiantian",
+        provider_version=None,
+        started_at="2026-06-23T00:00:00+00:00",
+        finished_at="2026-06-23T00:00:01+00:00",
+        duration_ms=1000,
+        live_row_count=2,
+        mapped_row_count=2,
+        cache_write_count=2,
+        endpoints=(
+            ProviderEndpointTrace(
+                endpoint="tiantian_fund_detail",
+                started_at="2026-06-23T00:00:00+00:00",
+                finished_at="2026-06-23T00:00:01+00:00",
+                duration_ms=1000,
+                live_row_count=1,
+                mapped_row_count=1,
+            ),
+        ),
+    )
+    result = run_research(
+        [FundRecord(code="510300", name="沪深300ETF", category="ETF", nav=5.0)],
+        as_of="2026-06-23",
+        provider_health=(health,),
+    )
+
+    payload = json.loads(write_provider_trace(result, tmp_path).read_text(encoding="utf-8"))
+
+    assert payload["providers"][0]["provider"] == "tiantian"
+    assert payload["providers"][0]["endpoints"][0]["endpoint"] == "tiantian_fund_detail"
