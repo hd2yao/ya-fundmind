@@ -2,7 +2,7 @@ from pathlib import Path
 from dataclasses import replace
 
 from fund_agent.agents import run_research
-from fund_agent.models import FundRecord, ProviderHealth, ProviderWarning
+from fund_agent.models import FundDetail, FundRecord, ProviderHealth, ProviderWarning
 from fund_agent.providers import FixtureProvider, load_portfolio_file
 from fund_agent.report import render_html, render_markdown
 
@@ -230,3 +230,44 @@ def test_markdown_report_includes_data_quality_delta_section():
     assert "normal -> warning" in markdown
     assert "akshare" in markdown
     assert "live rows +5" in markdown
+
+
+def test_markdown_report_includes_tiantian_optional_enrichment_section():
+    result = run_research(
+        [FundRecord(code="510300", name="沪深300ETF", category="ETF", nav=5.02)],
+        as_of="2026-06-23",
+    )
+    result = replace(
+        result,
+        fund_details=(
+            FundDetail(
+                code="510300",
+                name="沪深300ETF",
+                fund_company="华泰柏瑞基金",
+                fund_manager="张三",
+                inception_date="2012-05-04",
+                scale=460.5,
+                rating="5",
+                source="tiantian",
+            ),
+        ),
+        nav_history_summary={
+            "510300": {
+                "count": 2,
+                "start_date": "2026-06-21",
+                "end_date": "2026-06-22",
+                "latest_unit_nav": 5.02,
+                "total_return": 0.2,
+                "max_drawdown": 0.0,
+                "volatility": 0.1,
+                "data_quality_grade": "normal",
+            }
+        },
+    )
+
+    markdown = render_markdown(result)
+
+    assert "基金详情补充数据" in markdown
+    assert "华泰柏瑞基金" in markdown
+    assert "历史净值摘要" in markdown
+    assert "5.0200" in markdown

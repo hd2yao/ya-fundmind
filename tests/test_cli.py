@@ -1,3 +1,5 @@
+import json
+
 from fund_agent.cli import main
 from fund_agent.cache import FundCache
 from fund_agent.models import FundDetail, FundNavPoint, FundRecord, ProviderHealth, ProviderWarning
@@ -346,6 +348,10 @@ def test_enrich_fund_tiantian_writes_cache_trace_and_json(monkeypatch, tmp_path)
     assert exit_code == 0
     assert (tmp_path / "fund_agent_report.json").exists()
     assert (tmp_path / "traces" / "provider-2026-06-23.json").exists()
+    payload = json.loads((tmp_path / "fund_agent_report.json").read_text(encoding="utf-8"))
+    summary = payload["nav_history_summary"]["510300"]
+    assert summary["latest_unit_nav"] == 5.02
+    assert "max_drawdown" in summary
 
 
 def test_enrich_fund_tiantian_unavailable_returns_clear_error(monkeypatch, tmp_path, capsys):

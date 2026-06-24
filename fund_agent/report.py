@@ -251,6 +251,45 @@ def render_markdown(result: ResearchResult) -> str:
                     )
                 )
 
+    if result.fund_details or result.nav_history_summary:
+        lines.extend(["", "## 基金详情补充数据", ""])
+        if result.fund_details:
+            lines.extend(
+                [
+                    "| 代码 | 名称 | 基金公司 | 基金经理 | 成立日期 | 规模 | 评级 | 来源 |",
+                    "| --- | --- | --- | --- | --- | ---: | --- | --- |",
+                ]
+            )
+            for detail in result.fund_details:
+                scale = "--" if detail.scale is None else f"{detail.scale:.4f}"
+                lines.append(
+                    f"| {detail.code} | {detail.name} | {detail.fund_company or '--'} | {detail.fund_manager or '--'} | {detail.inception_date or '--'} | {scale} | {detail.rating or '--'} | {detail.source} |"
+                )
+        if result.nav_history_summary:
+            lines.extend(
+                [
+                    "",
+                    "### 历史净值摘要",
+                    "",
+                    "| 代码 | 样本数 | 起始日期 | 截止日期 | 最新单位净值 | 总收益 | 最大回撤 | 波动率 | 数据质量 |",
+                    "| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | --- |",
+                ]
+            )
+            for code, summary in sorted(result.nav_history_summary.items()):
+                lines.append(
+                    "| {code} | {count} | {start} | {end} | {latest} | {total} | {drawdown} | {volatility} | {grade} |".format(
+                        code=code,
+                        count=summary.get("count", 0),
+                        start=summary.get("start_date") or "--",
+                        end=summary.get("end_date") or "--",
+                        latest=_format_optional_number(summary.get("latest_unit_nav")),
+                        total=_format_optional_number(summary.get("total_return")),
+                        drawdown=_format_optional_number(summary.get("max_drawdown")),
+                        volatility=_format_optional_number(summary.get("volatility")),
+                        grade=summary.get("data_quality_grade", "unknown"),
+                    )
+                )
+
     lines.extend(
         [
             "",
@@ -387,6 +426,15 @@ def _fund_detail_to_json(detail) -> dict:
         "updated_at": detail.updated_at,
         "metadata": detail.metadata,
     }
+
+
+def _format_optional_number(value) -> str:
+    if value is None:
+        return "--"
+    try:
+        return f"{float(value):.4f}"
+    except (TypeError, ValueError):
+        return str(value)
 
 
 def _generated_at() -> str:

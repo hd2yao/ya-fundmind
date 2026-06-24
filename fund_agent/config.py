@@ -31,6 +31,15 @@ class AkshareProviderConfig:
 
 
 @dataclass(frozen=True)
+class TiantianProviderConfig:
+    timeout_seconds: float = 20.0
+    retry_count: int = 0
+    retry_backoff_seconds: float = 0.0
+    trace_retention_days: int = 30
+    max_trace_files: int = 100
+
+
+@dataclass(frozen=True)
 class ProviderPolicyConfig:
     fail_on_degraded: bool = False
     fail_on_critical_provider_warning: bool = False
@@ -39,6 +48,7 @@ class ProviderPolicyConfig:
 @dataclass(frozen=True)
 class ProviderConfig:
     akshare: AkshareProviderConfig
+    tiantian: TiantianProviderConfig = TiantianProviderConfig()
     policy: ProviderPolicyConfig = ProviderPolicyConfig()
 
 
@@ -48,6 +58,7 @@ def load_provider_config(path: Path | str) -> ProviderConfig:
         return ProviderConfig(akshare=AkshareProviderConfig())
     payload = _parse_section_yaml(config_path)
     akshare = payload.get("akshare", {})
+    tiantian = payload.get("tiantian", {})
     policy = payload.get("policy", {})
     return ProviderConfig(
         akshare=AkshareProviderConfig(
@@ -57,6 +68,13 @@ def load_provider_config(path: Path | str) -> ProviderConfig:
             verbose=bool(akshare.get("verbose", False)),
             trace_retention_days=int(akshare.get("trace_retention_days", 30) or 30),
             max_trace_files=int(akshare.get("max_trace_files", 100) or 100),
+        ),
+        tiantian=TiantianProviderConfig(
+            timeout_seconds=float(tiantian.get("timeout_seconds", 20.0) or 20.0),
+            retry_count=int(tiantian.get("retry_count", 0) or 0),
+            retry_backoff_seconds=float(tiantian.get("retry_backoff_seconds", 0.0) or 0.0),
+            trace_retention_days=int(tiantian.get("trace_retention_days", 30) or 30),
+            max_trace_files=int(tiantian.get("max_trace_files", 100) or 100),
         ),
         policy=ProviderPolicyConfig(
             fail_on_degraded=bool(policy.get("fail_on_degraded", False)),

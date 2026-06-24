@@ -10,6 +10,7 @@ from .cache import FundCache
 from .config import load_portfolio_config, load_provider_config, load_watchlist_config
 from .contract import ContractValidationSummary, validate_contract_file, validate_output_dir
 from .models import FundRecord, ProviderHealth, ProviderWarning
+from .nav_summary import build_nav_history_summary
 from .providers import AkshareProvider, FixtureProvider, ProviderUnavailable, TiantianFundProvider, load_portfolio_file
 from .report import render_html, render_markdown, write_json_report
 from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
@@ -229,18 +230,28 @@ def _run_enrich_fund(args) -> int:
         return 2
     provider_config = load_provider_config(args.provider_config)
     cache = FundCache(args.cache_file)
-    provider = TiantianFundProvider(cache=cache)
+    provider = TiantianFundProvider(
+        cache=cache,
+        timeout_seconds=provider_config.tiantian.timeout_seconds,
+        retry_count=provider_config.tiantian.retry_count,
+        retry_backoff_seconds=provider_config.tiantian.retry_backoff_seconds,
+    )
     if not getattr(provider, "available", False):
-        print("TiantianFundProvider is not configured; provide a Tiantian client to run live enrichment.")
+        print("TiantianFundProvider is not configured; set TIANTIAN_API_BASE_URL to run live enrichment.")
         return 2
     return _execute_tiantian_enrichment(args, provider, provider_config)
 
 
 def _run_smoke_tiantian(args) -> int:
     provider_config = load_provider_config(args.provider_config)
-    provider = TiantianFundProvider(cache=FundCache(args.cache_file))
+    provider = TiantianFundProvider(
+        cache=FundCache(args.cache_file),
+        timeout_seconds=provider_config.tiantian.timeout_seconds,
+        retry_count=provider_config.tiantian.retry_count,
+        retry_backoff_seconds=provider_config.tiantian.retry_backoff_seconds,
+    )
     if not getattr(provider, "available", False):
-        print("TiantianFundProvider is not configured; real smoke-tiantian was not run.")
+        print("TiantianFundProvider is not configured; set TIANTIAN_API_BASE_URL to run real smoke-tiantian.")
         return 2
     return _execute_tiantian_enrichment(args, provider, provider_config)
 
@@ -275,26 +286,23 @@ def _execute_tiantian_enrichment(args, provider, provider_config) -> int:
         as_of=as_of,
         provider_health=(combined_health,) if combined_health is not None else (),
     )
-    nav_summary = {
-        detail.code: {
-            "count": len(nav_points),
-            "start_date": nav_points[0].date if nav_points else None,
-            "end_date": nav_points[-1].date if nav_points else None,
-            "source": "tiantian",
-        }
-    }
+    nav_summary = {detail.code: build_nav_history_summary(detail.code, nav_points)}
     result = replace(result, fund_details=(detail,), nav_history_summary=nav_summary)
     json_path = write_json_report(result, args.output_dir)
     trace_path = write_provider_trace(
         result,
         args.output_dir,
-        retention_days=provider_config.akshare.trace_retention_days,
-        max_trace_files=provider_config.akshare.max_trace_files,
+        retention_days=provider_config.tiantian.trace_retention_days,
+        max_trace_files=provider_config.tiantian.max_trace_files,
     )
     print(f"JSON report: {json_path}")
     print(f"Provider trace: {trace_path}")
+    print(f"Tiantian detail: {detail.code} {detail.name}")
+    print(f"Tiantian nav rows: {len(nav_points)}")
     print(f"Tiantian detail cache writes: {1 if detail else 0}")
     print(f"Tiantian nav cache writes: {len(nav_points)}")
+    contract_summary = validate_output_dir(args.output_dir)
+    print(f"Contract validation: {'OK' if contract_summary.ok else 'FAIL'}")
     return 0
 
 

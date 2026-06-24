@@ -5,11 +5,13 @@ import contextlib
 import io
 import concurrent.futures
 import os
+import socket
 import time
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
@@ -20,6 +22,12 @@ from .portfolio import PortfolioHolding
 
 class ProviderUnavailable(RuntimeError):
     """Raised when an optional live provider is not available."""
+
+
+class TiantianProviderError(RuntimeError):
+    def __init__(self, code: str, message: str):
+        self.code = code
+        super().__init__(f"{code}: {message}")
 
 
 class FundProvider(Protocol):
@@ -366,8 +374,15 @@ class TiantianFundProvider:
         cache: FundCache | None = None,
         cache_ttl_days: int = 30,
         provider_version: str | None = None,
+        timeout_seconds: float = 20.0,
+        retry_count: int = 0,
+        retry_backoff_seconds: float = 0.0,
     ):
-        self.client = client or _tiantian_client_from_env()
+        self.client = client or _tiantian_client_from_env(
+            timeout_seconds=timeout_seconds,
+            retry_count=retry_count,
+            retry_backoff_seconds=retry_backoff_seconds,
+        )
         self.cache = cache
         self.cache_ttl_days = cache_ttl_days
         self._provider_version = provider_version
@@ -401,7 +416,7 @@ class TiantianFundProvider:
                 fallback_reason="TiantianFundProvider client is not configured",
                 warnings=(
                     ProviderWarning(
-                        code="provider_unavailable",
+                        code="config_missing",
                         message="TiantianFundProvider client is not configured",
                         severity="critical",
                     ),
@@ -412,25 +427,25 @@ class TiantianFundProvider:
         try:
             payload = self.client.fund_detail(resolved_code)
         except Exception as exc:
-            endpoint = _build_endpoint_trace(
-                endpoint="tiantian_fund_detail",
+            code, message = _tiantian_error_info(exc)
+            endpoints = _client_endpoint_traces(
+                self.client,
+                fallback_endpoint="tiantian_fund_detail",
                 started_at=endpoint_started,
-                attempts=1,
-                success=False,
                 error=str(exc),
-                timeout_seconds=None,
             )
             self.last_health = _build_health(
                 provider="tiantian",
                 provider_version=self.provider_version,
                 started_at=started_at,
                 fallback_used=True,
-                fallback_reason=str(exc),
-                endpoints=(endpoint,),
-                warnings=(ProviderWarning(code="live_fetch_error", message=str(exc), severity="critical"),),
+                fallback_reason=f"{code}: {message}",
+                endpoints=endpoints,
+                warnings=(ProviderWarning(code=code, message=message, severity="critical"),),
             )
-            raise ProviderUnavailable(f"TiantianFundProvider detail fetch failed: {exc}") from exc
+            raise ProviderUnavailable(f"TiantianFundProvider detail fetch failed: {code}: {message}") from exc
         detail = _fund_detail_from_tiantian(payload, code=resolved_code, as_of=resolved_as_of)
+        quality_warnings = _fund_detail_quality_warnings(payload)
         updated_at = _utc_now()
         expires_at = updated_at + timedelta(days=self.cache_ttl_days)
         detail = replace(
@@ -449,15 +464,13 @@ class TiantianFundProvider:
         if self.cache is not None:
             self.cache.upsert_fund_details([detail], as_of=resolved_as_of, ttl_days=self.cache_ttl_days, now=updated_at)
             cache_write_count = 1
-        endpoint = _build_endpoint_trace(
-            endpoint="tiantian_fund_detail",
+        endpoints = _client_endpoint_traces(
+            self.client,
+            fallback_endpoint="tiantian_fund_detail",
             started_at=endpoint_started,
-            attempts=1,
-            success=True,
-            error=None,
-            timeout_seconds=None,
+            live_row_count=1,
+            mapped_row_count=1,
         )
-        endpoint = replace(endpoint, live_row_count=1, mapped_row_count=1)
         self.last_health = _build_health(
             provider="tiantian",
             provider_version=self.provider_version,
@@ -465,7 +478,8 @@ class TiantianFundProvider:
             live_row_count=1,
             mapped_row_count=1,
             cache_write_count=cache_write_count,
-            endpoints=(endpoint,),
+            endpoints=endpoints,
+            warnings=tuple(quality_warnings),
         )
         return detail
 
@@ -489,7 +503,7 @@ class TiantianFundProvider:
                 fallback_reason="TiantianFundProvider client is not configured",
                 warnings=(
                     ProviderWarning(
-                        code="provider_unavailable",
+                        code="config_missing",
                         message="TiantianFundProvider client is not configured",
                         severity="critical",
                     ),
@@ -500,24 +514,23 @@ class TiantianFundProvider:
         try:
             payload = self.client.nav_history(resolved_code, start_date=start_date, end_date=end_date)
         except Exception as exc:
-            endpoint = _build_endpoint_trace(
-                endpoint="tiantian_nav_history",
+            code, message = _tiantian_error_info(exc)
+            endpoints = _client_endpoint_traces(
+                self.client,
+                fallback_endpoint="tiantian_nav_history",
                 started_at=endpoint_started,
-                attempts=1,
-                success=False,
                 error=str(exc),
-                timeout_seconds=None,
             )
             self.last_health = _build_health(
                 provider="tiantian",
                 provider_version=self.provider_version,
                 started_at=started_at,
                 fallback_used=True,
-                fallback_reason=str(exc),
-                endpoints=(endpoint,),
-                warnings=(ProviderWarning(code="live_fetch_error", message=str(exc), severity="critical"),),
+                fallback_reason=f"{code}: {message}",
+                endpoints=endpoints,
+                warnings=(ProviderWarning(code=code, message=message, severity="critical"),),
             )
-            raise ProviderUnavailable(f"TiantianFundProvider nav fetch failed: {exc}") from exc
+            raise ProviderUnavailable(f"TiantianFundProvider nav fetch failed: {code}: {message}") from exc
         nav_points, skipped_count, warnings = _nav_points_from_tiantian(payload, code=resolved_code)
         updated_at = _utc_now()
         expires_at = updated_at + timedelta(days=self.cache_ttl_days)
@@ -540,16 +553,10 @@ class TiantianFundProvider:
         if self.cache is not None and nav_points:
             self.cache.upsert_nav_points(nav_points, as_of=resolved_as_of, ttl_days=self.cache_ttl_days, now=updated_at)
             cache_write_count = len(nav_points)
-        endpoint = _build_endpoint_trace(
-            endpoint="tiantian_nav_history",
+        endpoints = _client_endpoint_traces(
+            self.client,
+            fallback_endpoint="tiantian_nav_history",
             started_at=endpoint_started,
-            attempts=1,
-            success=True,
-            error=None,
-            timeout_seconds=None,
-        )
-        endpoint = replace(
-            endpoint,
             live_row_count=len(payload or []),
             mapped_row_count=len(nav_points),
             skipped_row_count=skipped_count,
@@ -562,7 +569,7 @@ class TiantianFundProvider:
             mapped_row_count=len(nav_points),
             skipped_row_count=skipped_count,
             cache_write_count=cache_write_count,
-            endpoints=(endpoint,),
+            endpoints=endpoints,
             warnings=tuple(warnings),
         )
         return nav_points
@@ -849,6 +856,30 @@ def _fund_detail_from_tiantian(payload: object, *, code: str, as_of: str) -> Fun
     )
 
 
+def _fund_detail_quality_warnings(payload: object) -> list[ProviderWarning]:
+    row = payload if hasattr(payload, "get") else {}
+    checks = {
+        "name": ("name", "基金名称", "基金简称"),
+        "fund_company": ("fund_company", "基金公司", "company"),
+        "fund_manager": ("fund_manager", "基金经理", "manager"),
+        "scale": ("scale", "基金规模", "规模"),
+        "rating": ("rating", "评级", "基金评级"),
+        "inception_date": ("inception_date", "成立日期", "成立时间"),
+    }
+    warnings: list[ProviderWarning] = []
+    for field, keys in checks.items():
+        if _first(row, *keys) is None:
+            warnings.append(
+                ProviderWarning(
+                    code=f"detail_missing_{field}",
+                    message=f"Tiantian fund detail missing {field}.",
+                    severity="warning",
+                    details={"field": field, "endpoint": "tiantian_fund_detail"},
+                )
+            )
+    return warnings
+
+
 def _nav_points_from_tiantian(payload: object, *, code: str) -> tuple[list[FundNavPoint], int, list[ProviderWarning]]:
     rows = payload if isinstance(payload, list) else []
     points: list[FundNavPoint] = []
@@ -888,21 +919,113 @@ def _none_if_blank(value: object) -> str | None:
     return text or None
 
 
+def _tiantian_error_info(exc: Exception) -> tuple[str, str]:
+    if isinstance(exc, TiantianProviderError):
+        return exc.code, str(exc).split(": ", 1)[-1]
+    return "mapping_error", str(exc)
+
+
+def _client_endpoint_traces(
+    client,
+    *,
+    fallback_endpoint: str,
+    started_at: datetime,
+    live_row_count: int = 0,
+    mapped_row_count: int = 0,
+    skipped_row_count: int = 0,
+    error: str | None = None,
+) -> tuple[ProviderEndpointTrace, ...]:
+    traces = tuple(getattr(client, "last_endpoint_traces", ()) or ())
+    if traces:
+        if error is None:
+            return tuple(
+                replace(
+                    trace,
+                    live_row_count=trace.live_row_count or live_row_count,
+                    mapped_row_count=trace.mapped_row_count or mapped_row_count,
+                    skipped_row_count=trace.skipped_row_count or skipped_row_count,
+                )
+                for trace in traces
+            )
+        return traces
+    endpoint = _build_endpoint_trace(
+        endpoint=fallback_endpoint,
+        started_at=started_at,
+        attempts=1,
+        success=error is None,
+        error=error,
+        timeout_seconds=None,
+    )
+    return (
+        replace(
+            endpoint,
+            live_row_count=live_row_count,
+            mapped_row_count=mapped_row_count,
+            skipped_row_count=skipped_row_count,
+        ),
+    )
+
+
 class _TiantianHttpClient:
-    def __init__(self, base_url: str, *, timeout_seconds: float = 20.0):
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        timeout_seconds: float = 20.0,
+        retry_count: int = 0,
+        retry_backoff_seconds: float = 0.0,
+        page_size: int = 200,
+        max_pages: int = 200,
+    ):
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.retry_count = retry_count
+        self.retry_backoff_seconds = retry_backoff_seconds
+        self.page_size = page_size
+        self.max_pages = max(1, max_pages)
+        self.last_endpoint_traces: tuple[ProviderEndpointTrace, ...] = ()
 
     def fund_detail(self, code: str):
-        payload = self._get_json("/fundMNDetailInformation", {"FCODE": code})
-        return payload.get("Datas", payload)
+        payload = self._get_json(
+            "tiantian_fund_detail",
+            "/fundMNDetailInformation",
+            {"FCODE": code},
+        )
+        data = _extract_tiantian_data(payload)
+        if _is_empty_tiantian_payload(data):
+            raise TiantianProviderError("empty_response", "Tiantian fund detail returned no data")
+        return data
 
     def nav_history(self, code: str, start_date=None, end_date=None):
-        payload = self._get_json(
-            "/fundMNHisNetList",
-            {"FCODE": code, "pageIndex": 1, "pagesize": 200},
-        )
-        rows = payload.get("Datas", payload if isinstance(payload, list) else [])
+        rows: list[object] = []
+        traces: list[ProviderEndpointTrace] = []
+        page_index = 1
+        total_pages: int | None = None
+        while True:
+            payload = self._get_json(
+                "tiantian_nav_history",
+                "/fundMNHisNetList",
+                {"FCODE": code, "pageIndex": page_index, "pagesize": self.page_size},
+            )
+            page_rows = _extract_tiantian_rows(payload)
+            traces.extend(
+                replace(trace, live_row_count=len(page_rows))
+                for trace in self.last_endpoint_traces
+            )
+            if not page_rows:
+                if page_index == 1:
+                    raise TiantianProviderError("empty_response", "Tiantian nav history returned no rows")
+                break
+            rows.extend(page_rows)
+            total_pages = _extract_total_pages(payload) or total_pages
+            if total_pages is not None and page_index >= total_pages:
+                break
+            if len(page_rows) < self.page_size and total_pages is None:
+                break
+            if page_index >= self.max_pages:
+                break
+            page_index += 1
+        self.last_endpoint_traces = tuple(traces)
         if start_date or end_date:
             rows = [
                 row
@@ -912,18 +1035,134 @@ class _TiantianHttpClient:
             ]
         return rows
 
-    def _get_json(self, path: str, params: dict[str, object]):
+    def _get_json(self, endpoint: str, path: str, params: dict[str, object]):
         url = f"{self.base_url}{path}?{urlencode(params)}"
-        with urlopen(url, timeout=self.timeout_seconds) as response:  # nosec: user-provided base URL
-            return json.loads(response.read().decode("utf-8"))
+        started_at = _utc_now()
+        attempts = 0
+        last_error: TiantianProviderError | None = None
+        for attempt in range(self.retry_count + 1):
+            attempts = attempt + 1
+            try:
+                with urlopen(url, timeout=self.timeout_seconds) as response:  # nosec: user-provided base URL
+                    payload = json.loads(response.read().decode("utf-8"))
+                if not isinstance(payload, (dict, list)):
+                    raise TiantianProviderError("invalid_response", "Tiantian response root is not JSON object/list")
+                self.last_endpoint_traces = (
+                    _build_endpoint_trace(
+                        endpoint=endpoint,
+                        started_at=started_at,
+                        attempts=attempts,
+                        success=True,
+                        error=None,
+                        timeout_seconds=self.timeout_seconds,
+                    ),
+                )
+                return payload
+            except Exception as exc:
+                last_error = _classify_tiantian_exception(exc)
+                if attempt < self.retry_count and self.retry_backoff_seconds > 0:
+                    time.sleep(self.retry_backoff_seconds)
+        self.last_endpoint_traces = (
+            _build_endpoint_trace(
+                endpoint=endpoint,
+                started_at=started_at,
+                attempts=attempts,
+                success=False,
+                error=str(last_error) if last_error else "unknown",
+                timeout_seconds=self.timeout_seconds,
+            ),
+        )
+        raise last_error or TiantianProviderError("connection_error", "unknown Tiantian provider error")
 
 
-def _tiantian_client_from_env():
+def _extract_tiantian_data(payload: object) -> object:
+    if hasattr(payload, "get"):
+        return payload.get("Datas", payload)
+    return payload
+
+
+def _extract_tiantian_rows(payload: object) -> list[object]:
+    data = _extract_tiantian_data(payload)
+    if isinstance(data, list):
+        return data
+    if hasattr(data, "get"):
+        for key in ("LSJZList", "list", "rows", "data"):
+            value = data.get(key)
+            if isinstance(value, list):
+                return value
+    return []
+
+
+def _extract_total_pages(payload: object) -> int | None:
+    candidates = []
+    if hasattr(payload, "get"):
+        candidates.extend(
+            [
+                payload.get("TotalPages"),
+                payload.get("totalPages"),
+                payload.get("pages"),
+                payload.get("total_pages"),
+            ]
+        )
+        data = payload.get("Datas")
+        if hasattr(data, "get"):
+            candidates.extend(
+                [
+                    data.get("TotalPages"),
+                    data.get("totalPages"),
+                    data.get("pages"),
+                    data.get("total_pages"),
+                ]
+            )
+    for value in candidates:
+        try:
+            if value is not None:
+                return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _is_empty_tiantian_payload(data: object) -> bool:
+    if data is None:
+        return True
+    if isinstance(data, (list, dict, str)):
+        return len(data) == 0
+    return False
+
+
+def _classify_tiantian_exception(exc: Exception) -> TiantianProviderError:
+    if isinstance(exc, TiantianProviderError):
+        return exc
+    if isinstance(exc, HTTPError):
+        return TiantianProviderError("http_error", f"HTTP {exc.code}: {exc.reason}")
+    if isinstance(exc, (socket.timeout, TimeoutError)):
+        return TiantianProviderError("timeout", str(exc) or "Tiantian request timed out")
+    if isinstance(exc, URLError):
+        return TiantianProviderError("connection_error", str(exc.reason))
+    if isinstance(exc, json.JSONDecodeError):
+        return TiantianProviderError("invalid_response", str(exc))
+    return TiantianProviderError("connection_error", str(exc))
+
+
+def _tiantian_client_from_env(
+    *,
+    timeout_seconds: float = 20.0,
+    retry_count: int = 0,
+    retry_backoff_seconds: float = 0.0,
+):
     base_url = os.environ.get("TIANTIAN_API_BASE_URL")
     if not base_url:
         return None
-    timeout = _to_float(os.environ.get("TIANTIAN_TIMEOUT_SECONDS")) or 20.0
-    return _TiantianHttpClient(base_url, timeout_seconds=timeout)
+    timeout = _to_float(os.environ.get("TIANTIAN_TIMEOUT_SECONDS")) or timeout_seconds
+    retries = int(_to_float(os.environ.get("TIANTIAN_RETRY_COUNT")) or retry_count)
+    backoff = _to_float(os.environ.get("TIANTIAN_RETRY_BACKOFF_SECONDS")) or retry_backoff_seconds
+    return _TiantianHttpClient(
+        base_url,
+        timeout_seconds=timeout,
+        retry_count=max(0, retries),
+        retry_backoff_seconds=max(0.0, backoff),
+    )
 
 
 def load_portfolio_file(path: Path | str) -> list[PortfolioHolding]:
