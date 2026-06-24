@@ -25,6 +25,34 @@ class FundRecord:
 
 
 @dataclass(frozen=True)
+class FundDetail:
+    code: str
+    name: str
+    fund_type: str | None = None
+    fund_company: str | None = None
+    fund_manager: str | None = None
+    inception_date: str | None = None
+    scale: float | None = None
+    rating: str | None = None
+    source: str = "unknown"
+    as_of: str | None = None
+    updated_at: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class FundNavPoint:
+    code: str
+    date: str
+    unit_nav: float | None = None
+    accumulated_nav: float | None = None
+    daily_return: float | None = None
+    source: str = "unknown"
+    updated_at: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ProviderWarning:
     code: str
     message: str

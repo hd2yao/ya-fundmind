@@ -4,14 +4,17 @@ import json
 import contextlib
 import io
 import concurrent.futures
+import os
 import time
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 from .cache import FundCache
-from .models import FundRecord, ProviderEndpointTrace, ProviderHealth, ProviderWarning
+from .models import FundDetail, FundNavPoint, FundRecord, ProviderEndpointTrace, ProviderHealth, ProviderWarning
 from .portfolio import PortfolioHolding
 
 
@@ -356,8 +359,213 @@ class EastmoneyProvider:
 
 
 class TiantianFundProvider:
+    def __init__(
+        self,
+        *,
+        client=None,
+        cache: FundCache | None = None,
+        cache_ttl_days: int = 30,
+        provider_version: str | None = None,
+    ):
+        self.client = client or _tiantian_client_from_env()
+        self.cache = cache
+        self.cache_ttl_days = cache_ttl_days
+        self._provider_version = provider_version
+        self.last_health: ProviderHealth | None = None
+
+    @property
+    def available(self) -> bool:
+        return self.client is not None
+
+    @property
+    def provider_version(self) -> str | None:
+        if self._provider_version is not None:
+            return self._provider_version
+        if self.client is None:
+            return None
+        return getattr(self.client, "__version__", None)
+
     def fetch_funds(self, *, as_of: str | None = None) -> list[FundRecord]:
-        raise ProviderUnavailable("TiantianFundProvider is reserved for a later data source.")
+        raise ProviderUnavailable("TiantianFundProvider does not provide fund ranking in Phase 2C.")
+
+    def fetch_fund_detail(self, code: str, *, as_of: str | None = None) -> FundDetail:
+        started_at = _utc_now()
+        resolved_code = normalize_fund_code(code)
+        resolved_as_of = as_of or date.today().isoformat()
+        if self.client is None:
+            self.last_health = _build_health(
+                provider="tiantian",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                fallback_used=True,
+                fallback_reason="TiantianFundProvider client is not configured",
+                warnings=(
+                    ProviderWarning(
+                        code="provider_unavailable",
+                        message="TiantianFundProvider client is not configured",
+                        severity="critical",
+                    ),
+                ),
+            )
+            raise ProviderUnavailable("TiantianFundProvider client is not configured.")
+        endpoint_started = _utc_now()
+        try:
+            payload = self.client.fund_detail(resolved_code)
+        except Exception as exc:
+            endpoint = _build_endpoint_trace(
+                endpoint="tiantian_fund_detail",
+                started_at=endpoint_started,
+                attempts=1,
+                success=False,
+                error=str(exc),
+                timeout_seconds=None,
+            )
+            self.last_health = _build_health(
+                provider="tiantian",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                fallback_used=True,
+                fallback_reason=str(exc),
+                endpoints=(endpoint,),
+                warnings=(ProviderWarning(code="live_fetch_error", message=str(exc), severity="critical"),),
+            )
+            raise ProviderUnavailable(f"TiantianFundProvider detail fetch failed: {exc}") from exc
+        detail = _fund_detail_from_tiantian(payload, code=resolved_code, as_of=resolved_as_of)
+        updated_at = _utc_now()
+        expires_at = updated_at + timedelta(days=self.cache_ttl_days)
+        detail = replace(
+            detail,
+            updated_at=updated_at.isoformat(),
+            metadata={
+                **detail.metadata,
+                "provider": "tiantian",
+                "as_of": resolved_as_of,
+                "updated_at": updated_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "stale": False,
+            },
+        )
+        cache_write_count = 0
+        if self.cache is not None:
+            self.cache.upsert_fund_details([detail], as_of=resolved_as_of, ttl_days=self.cache_ttl_days, now=updated_at)
+            cache_write_count = 1
+        endpoint = _build_endpoint_trace(
+            endpoint="tiantian_fund_detail",
+            started_at=endpoint_started,
+            attempts=1,
+            success=True,
+            error=None,
+            timeout_seconds=None,
+        )
+        endpoint = replace(endpoint, live_row_count=1, mapped_row_count=1)
+        self.last_health = _build_health(
+            provider="tiantian",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=1,
+            mapped_row_count=1,
+            cache_write_count=cache_write_count,
+            endpoints=(endpoint,),
+        )
+        return detail
+
+    def fetch_nav_history(
+        self,
+        code: str,
+        *,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        as_of: str | None = None,
+    ) -> list[FundNavPoint]:
+        started_at = _utc_now()
+        resolved_code = normalize_fund_code(code)
+        resolved_as_of = as_of or date.today().isoformat()
+        if self.client is None:
+            self.last_health = _build_health(
+                provider="tiantian",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                fallback_used=True,
+                fallback_reason="TiantianFundProvider client is not configured",
+                warnings=(
+                    ProviderWarning(
+                        code="provider_unavailable",
+                        message="TiantianFundProvider client is not configured",
+                        severity="critical",
+                    ),
+                ),
+            )
+            raise ProviderUnavailable("TiantianFundProvider client is not configured.")
+        endpoint_started = _utc_now()
+        try:
+            payload = self.client.nav_history(resolved_code, start_date=start_date, end_date=end_date)
+        except Exception as exc:
+            endpoint = _build_endpoint_trace(
+                endpoint="tiantian_nav_history",
+                started_at=endpoint_started,
+                attempts=1,
+                success=False,
+                error=str(exc),
+                timeout_seconds=None,
+            )
+            self.last_health = _build_health(
+                provider="tiantian",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                fallback_used=True,
+                fallback_reason=str(exc),
+                endpoints=(endpoint,),
+                warnings=(ProviderWarning(code="live_fetch_error", message=str(exc), severity="critical"),),
+            )
+            raise ProviderUnavailable(f"TiantianFundProvider nav fetch failed: {exc}") from exc
+        nav_points, skipped_count, warnings = _nav_points_from_tiantian(payload, code=resolved_code)
+        updated_at = _utc_now()
+        expires_at = updated_at + timedelta(days=self.cache_ttl_days)
+        nav_points = [
+            replace(
+                point,
+                updated_at=updated_at.isoformat(),
+                metadata={
+                    **point.metadata,
+                    "provider": "tiantian",
+                    "as_of": resolved_as_of,
+                    "updated_at": updated_at.isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "stale": False,
+                },
+            )
+            for point in nav_points
+        ]
+        cache_write_count = 0
+        if self.cache is not None and nav_points:
+            self.cache.upsert_nav_points(nav_points, as_of=resolved_as_of, ttl_days=self.cache_ttl_days, now=updated_at)
+            cache_write_count = len(nav_points)
+        endpoint = _build_endpoint_trace(
+            endpoint="tiantian_nav_history",
+            started_at=endpoint_started,
+            attempts=1,
+            success=True,
+            error=None,
+            timeout_seconds=None,
+        )
+        endpoint = replace(
+            endpoint,
+            live_row_count=len(payload or []),
+            mapped_row_count=len(nav_points),
+            skipped_row_count=skipped_count,
+        )
+        self.last_health = _build_health(
+            provider="tiantian",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=len(payload or []),
+            mapped_row_count=len(nav_points),
+            skipped_row_count=skipped_count,
+            cache_write_count=cache_write_count,
+            endpoints=(endpoint,),
+            warnings=tuple(warnings),
+        )
+        return nav_points
 
 
 @dataclass(frozen=True)
@@ -622,6 +830,100 @@ def _fund_from_akshare_etf_row(row: object) -> FundRecord:
             "discount_rate": _to_float(_first(row, "基金折价率", "discount_rate")),
         },
     )
+
+
+def _fund_detail_from_tiantian(payload: object, *, code: str, as_of: str) -> FundDetail:
+    row = payload if hasattr(payload, "get") else {}
+    return FundDetail(
+        code=normalize_fund_code(_first(row, "code", "基金代码", "fund_code") or code),
+        name=normalize_fund_name(_first(row, "name", "基金名称", "基金简称") or code),
+        fund_type=_none_if_blank(_first(row, "fund_type", "基金类型", "type")),
+        fund_company=_none_if_blank(_first(row, "fund_company", "基金公司", "company")),
+        fund_manager=_none_if_blank(_first(row, "fund_manager", "基金经理", "manager")),
+        inception_date=_date_text(_first(row, "inception_date", "成立日期", "成立时间")),
+        scale=_to_float(_first(row, "scale", "基金规模", "规模")),
+        rating=_none_if_blank(_first(row, "rating", "评级", "基金评级")),
+        source="tiantian",
+        as_of=as_of,
+        metadata={"raw_keys": sorted(str(key) for key in row.keys()) if hasattr(row, "keys") else []},
+    )
+
+
+def _nav_points_from_tiantian(payload: object, *, code: str) -> tuple[list[FundNavPoint], int, list[ProviderWarning]]:
+    rows = payload if isinstance(payload, list) else []
+    points: list[FundNavPoint] = []
+    warnings: list[ProviderWarning] = []
+    skipped = 0
+    for row_index, row in enumerate(rows):
+        try:
+            date_text = _date_text(_first(row, "date", "净值日期", "FSRQ"))
+            if not date_text:
+                raise ValueError("missing date")
+            points.append(
+                FundNavPoint(
+                    code=code,
+                    date=date_text,
+                    unit_nav=_to_float(_first(row, "unit_nav", "单位净值", "DWJZ")),
+                    accumulated_nav=_to_float(_first(row, "accumulated_nav", "累计净值", "LJJZ")),
+                    daily_return=_to_float(_first(row, "daily_return", "日增长率", "JZZZL")),
+                    source="tiantian",
+                    metadata={"row_index": row_index},
+                )
+            )
+        except Exception as exc:
+            skipped += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=f"tiantian_nav_history row {row_index} skipped: {exc}",
+                    severity="warning",
+                    details={"endpoint": "tiantian_nav_history", "row_index": row_index},
+                )
+            )
+    return points, skipped, warnings
+
+
+def _none_if_blank(value: object) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+class _TiantianHttpClient:
+    def __init__(self, base_url: str, *, timeout_seconds: float = 20.0):
+        self.base_url = base_url.rstrip("/")
+        self.timeout_seconds = timeout_seconds
+
+    def fund_detail(self, code: str):
+        payload = self._get_json("/fundMNDetailInformation", {"FCODE": code})
+        return payload.get("Datas", payload)
+
+    def nav_history(self, code: str, start_date=None, end_date=None):
+        payload = self._get_json(
+            "/fundMNHisNetList",
+            {"FCODE": code, "pageIndex": 1, "pagesize": 200},
+        )
+        rows = payload.get("Datas", payload if isinstance(payload, list) else [])
+        if start_date or end_date:
+            rows = [
+                row
+                for row in rows
+                if (not start_date or str(row.get("FSRQ", "")) >= start_date)
+                and (not end_date or str(row.get("FSRQ", "")) <= end_date)
+            ]
+        return rows
+
+    def _get_json(self, path: str, params: dict[str, object]):
+        url = f"{self.base_url}{path}?{urlencode(params)}"
+        with urlopen(url, timeout=self.timeout_seconds) as response:  # nosec: user-provided base URL
+            return json.loads(response.read().decode("utf-8"))
+
+
+def _tiantian_client_from_env():
+    base_url = os.environ.get("TIANTIAN_API_BASE_URL")
+    if not base_url:
+        return None
+    timeout = _to_float(os.environ.get("TIANTIAN_TIMEOUT_SECONDS")) or 20.0
+    return _TiantianHttpClient(base_url, timeout_seconds=timeout)
 
 
 def load_portfolio_file(path: Path | str) -> list[PortfolioHolding]:

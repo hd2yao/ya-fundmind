@@ -92,6 +92,26 @@ def test_missing_core_field_fails_contract_validation(tmp_path):
     assert any("data_quality_grade" in error for error in result.errors)
 
 
+def test_json_report_with_optional_tiantian_fields_still_validates(tmp_path):
+    path = write_json_report(_result(), tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["fund_details"] = [
+        {
+            "code": "510300",
+            "name": "沪深300ETF",
+            "source": "tiantian",
+        }
+    ]
+    payload["nav_history_summary"] = {
+        "510300": {"count": 2, "source": "tiantian"}
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = validate_contract_file(path, "report")
+
+    assert result.ok is True
+
+
 def test_validate_output_dir_checks_all_known_outputs(tmp_path):
     result = _result()
     write_json_report(result, tmp_path)
