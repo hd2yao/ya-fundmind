@@ -133,6 +133,8 @@ def test_tiantian_provider_trace_contract(tmp_path):
                 started_at="2026-06-23T00:00:00+00:00",
                 finished_at="2026-06-23T00:00:01+00:00",
                 duration_ms=1000,
+                attempts=2,
+                timeout_seconds=20,
                 live_row_count=1,
                 mapped_row_count=1,
             ),
@@ -148,3 +150,5 @@ def test_tiantian_provider_trace_contract(tmp_path):
 
     assert payload["providers"][0]["provider"] == "tiantian"
     assert payload["providers"][0]["endpoints"][0]["endpoint"] == "tiantian_fund_detail"
+    assert payload["providers"][0]["endpoints"][0]["attempts"] == 2
+    assert payload["providers"][0]["endpoints"][0]["timeout_seconds"] == 20

@@ -16,12 +16,19 @@ akshare:
 policy:
   fail_on_degraded: true
   fail_on_critical_provider_warning: true
+tiantian:
+  timeout_seconds: 9
+  retry_count: 1
+  retry_backoff_seconds: 0.25
+  trace_retention_days: 7
+  max_trace_files: 10
 """,
         encoding="utf-8",
     )
 
     provider_config = load_provider_config(config)
     settings = provider_config.akshare
+    tiantian = provider_config.tiantian
 
     assert settings.timeout_seconds == 12
     assert settings.retry_count == 2
@@ -29,6 +36,11 @@ policy:
     assert settings.verbose is True
     assert settings.trace_retention_days == 14
     assert settings.max_trace_files == 20
+    assert tiantian.timeout_seconds == 9
+    assert tiantian.retry_count == 1
+    assert tiantian.retry_backoff_seconds == 0.25
+    assert tiantian.trace_retention_days == 7
+    assert tiantian.max_trace_files == 10
     assert provider_config.policy.fail_on_degraded is True
     assert provider_config.policy.fail_on_critical_provider_warning is True
 
