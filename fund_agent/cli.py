@@ -8,6 +8,7 @@ from pathlib import Path
 from .agents import run_research
 from .cache import FundCache
 from .config import load_portfolio_config, load_provider_config, load_watchlist_config
+from .contract import ContractValidationSummary, validate_contract_file, validate_output_dir
 from .models import ProviderHealth, ProviderWarning
 from .providers import AkshareProvider, FixtureProvider, ProviderUnavailable, load_portfolio_file
 from .report import render_html, render_markdown, write_json_report
@@ -198,6 +199,30 @@ def _run_smoke_akshare(args) -> int:
     return _run_report(args)
 
 
+def _run_validate_contract(args) -> int:
+    results = []
+    if args.report:
+        results.append(validate_contract_file(args.report, "report"))
+    if args.trace:
+        results.append(validate_contract_file(args.trace, "trace"))
+    if args.snapshot:
+        results.append(validate_contract_file(args.snapshot, "snapshot"))
+    if not results:
+        results = list(validate_output_dir(args.output_dir).results)
+    summary = ContractValidationSummary(results=tuple(results))
+    if not summary.results:
+        print("Contract validation failed: no output JSON files found.")
+        return 1
+    for result in summary.results:
+        status = "OK" if result.ok else "FAIL"
+        print(f"{status} {result.contract_type}: {result.path}")
+        for warning in result.warnings:
+            print(f"  warning: {warning}")
+        for error in result.errors:
+            print(f"  error: {error}")
+    return 0 if summary.ok else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fund-agent",
@@ -275,6 +300,13 @@ def build_parser() -> argparse.ArgumentParser:
         default_provider="akshare",
     )
     smoke.set_defaults(func=_run_smoke_akshare)
+
+    validate = subparsers.add_parser("validate-contract", help="校验 JSON report/trace/snapshot 输出契约")
+    validate.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    validate.add_argument("--report", type=Path)
+    validate.add_argument("--trace", type=Path)
+    validate.add_argument("--snapshot", type=Path)
+    validate.set_defaults(func=_run_validate_contract)
 
     return parser
 
