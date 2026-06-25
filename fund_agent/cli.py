@@ -20,7 +20,9 @@ from .providers import (
     normalize_fund_code,
 )
 from .report import render_html, render_markdown, write_json_report
+from .signal_experiment import evaluate_tiantian_signals_file
 from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
+from .tiantian_diagnostics import build_tiantian_cache_diagnostics, write_tiantian_cache_diagnostics
 from .trace import write_provider_trace
 
 
@@ -279,6 +281,31 @@ def _run_smoke_tiantian(args) -> int:
         print("TiantianFundProvider is not configured; set TIANTIAN_API_BASE_URL to run real smoke-tiantian.")
         return 2
     return _execute_tiantian_enrichment(args, provider, provider_config, nav_windows=nav_windows)
+
+
+def _run_diagnose_tiantian_cache(args) -> int:
+    cache = FundCache(args.cache_file)
+    payload = build_tiantian_cache_diagnostics(cache, code=args.code, as_of=args.as_of or None)
+    path = write_tiantian_cache_diagnostics(payload, args.output_dir)
+    print(f"Tiantian cache diagnostics: {path}")
+    print(
+        "detail={detail} nav={nav} nav_points={count} latest_nav_date={latest}".format(
+            detail=payload["detail_cache_status"],
+            nav=payload["nav_cache_status"],
+            count=payload["nav_points_count"],
+            latest=payload["latest_nav_date"] or "--",
+        )
+    )
+    if payload["detail_cache_status"] == "miss" or payload["nav_cache_status"] == "miss":
+        print(f"Tiantian cache miss for {payload['code']}.")
+        return 2
+    return 0
+
+
+def _run_experiment_tiantian_signals(args) -> int:
+    path = evaluate_tiantian_signals_file(args.input, args.output)
+    print(f"Tiantian signal experiment: {path}")
+    return 0
 
 
 def _execute_tiantian_enrichment(args, provider, provider_config, *, nav_windows: tuple[str, ...]) -> int:
@@ -595,6 +622,18 @@ def build_parser() -> argparse.ArgumentParser:
     smoke_tiantian.add_argument("--as-of", default="")
     smoke_tiantian.add_argument("--nav-windows", default="1m,3m,6m")
     smoke_tiantian.set_defaults(func=_run_smoke_tiantian)
+
+    diagnose_cache = subparsers.add_parser("diagnose-tiantian-cache", help="只读本地 cache，诊断 Tiantian enrichment fallback 可用性")
+    diagnose_cache.add_argument("--code", required=True)
+    diagnose_cache.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
+    diagnose_cache.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    diagnose_cache.add_argument("--as-of", default="")
+    diagnose_cache.set_defaults(func=_run_diagnose_tiantian_cache)
+
+    experiment = subparsers.add_parser("experiment-tiantian-signals", help="评估 Tiantian 字段未来进入评分/风险的候选资格")
+    experiment.add_argument("--input", type=Path, required=True)
+    experiment.add_argument("--output", type=Path, default=Path("outputs/tiantian_signal_experiment.json"))
+    experiment.set_defaults(func=_run_experiment_tiantian_signals)
 
     return parser
 

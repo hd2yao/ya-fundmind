@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines how Tiantian enrichment data may be considered for future scoring and risk work. Phase 2E does not connect Tiantian data to the scoring model or the risk main logic.
+This document defines how Tiantian enrichment data may be considered for future scoring and risk work. Phase 2F does not connect Tiantian data to the scoring model or the risk main logic.
 
 Downstream code should read structured JSON fields only:
 
@@ -41,13 +41,19 @@ Fund manager and company fields can be useful for manual research, but using the
 
 ## Minimum Sample Requirements
 
+NAV windows use valid NAV point counts, not calendar-day approximations:
+
+- `1m`: requires 20 valid NAV points.
+- `3m`: requires 60 valid NAV points.
+- `6m`: requires 120 valid NAV points.
+- `1y`: requires 240 valid NAV points.
+- `all`: may be used only for descriptive context unless a minimum window is also satisfied.
+
 Before NAV windows can enter scoring or risk:
 
-- `1m`: at least 15 valid NAV points.
-- `3m`: at least 45 valid NAV points.
-- `6m`: at least 90 valid NAV points.
-- `1y`: at least 180 valid NAV points.
-- `all`: may be used only for descriptive context unless a minimum window is also satisfied.
+- `metadata.window_mode` must be `"nav_points"`.
+- `metadata.actual_points` must be greater than or equal to `metadata.required_points`.
+- `data_quality_grade` must be `normal`.
 
 Any window with `data_quality_grade = "degraded"` must be excluded from scoring and main risk logic.
 
@@ -83,12 +89,24 @@ Recommended handling:
 - Missing critical NAV windows: mark the window `degraded`.
 - Stale cache: require manual review before using the field in automated downstream logic.
 
-## Why Phase 2E Does Not Connect Scoring or Risk
+## Experiment Command
 
-Phase 2E is a data-enrichment stabilization phase. It adds:
+Phase 2F adds an offline experiment command:
+
+```bash
+python -m fund_agent.cli experiment-tiantian-signals --input outputs/fund_agent_report.json --output outputs/tiantian_signal_experiment.json
+```
+
+The command may classify fields as `eligible_signals`, `excluded_signals`, or display-only fields. This output is advisory and must not be treated as a production score or risk result.
+
+## Why Phase 2F Does Not Connect Scoring or Risk
+
+Phase 2F is still a data-enrichment and experiment-harness phase. It adds:
 
 - NAV windows
 - explicit Tiantian cache fallback
+- cache diagnostics
+- signal experiment output
 - trace metadata for fallback and windows
 - machine-readable optional output fields
 
