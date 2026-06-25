@@ -47,6 +47,14 @@ Endpoint records include `endpoint`, `started_at`, `finished_at`, `duration_ms`,
 
 Future versions may add provider-specific metadata. Consumers should ignore unknown fields and must not assume every provider has endpoint traces. Fixture provider traces may have an empty `endpoints` array.
 
+Current v1 optional Tiantian enrichment fields may include:
+
+- `cache_read_count`
+- `windows_requested`
+- `windows_generated`
+
+These fields are diagnostic extensions for explicit Tiantian enrichment and cache fallback. Consumers must not require them for all providers.
+
 ## Compatibility
 
 - v1 readers should require the top-level metadata and `providers`.

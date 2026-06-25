@@ -97,6 +97,15 @@ def test_json_report_allows_optional_tiantian_enrichment_fields(tmp_path):
                 "start_date": "2026-06-21",
                 "end_date": "2026-06-22",
                 "source": "tiantian",
+                "windows": {
+                    "1m": {
+                        "count": 2,
+                        "total_return": 0.2,
+                        "max_drawdown": 0.0,
+                        "volatility": 0.1,
+                        "data_quality_grade": "warning",
+                    }
+                },
             }
         },
     )
@@ -109,3 +118,4 @@ def test_json_report_allows_optional_tiantian_enrichment_fields(tmp_path):
     assert payload["fund_details"][0]["code"] == "510300"
     assert payload["fund_details"][0]["fund_company"] == "华泰柏瑞基金"
     assert loaded["nav_history_summary"]["510300"]["count"] == 2
+    assert loaded["nav_history_summary"]["510300"]["windows"]["1m"]["data_quality_grade"] == "warning"

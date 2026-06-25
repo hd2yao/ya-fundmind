@@ -1,5 +1,7 @@
 import json
 
+from datetime import datetime, timezone
+
 from fund_agent.cli import main
 from fund_agent.cache import FundCache
 from fund_agent.models import FundDetail, FundNavPoint, FundRecord, ProviderHealth, ProviderWarning
@@ -325,6 +327,7 @@ def test_enrich_fund_tiantian_writes_cache_trace_and_json(monkeypatch, tmp_path)
             navs = [
                 FundNavPoint(code=code, date="2026-06-21", unit_nav=5.01, source="tiantian"),
                 FundNavPoint(code=code, date="2026-06-22", unit_nav=5.02, source="tiantian"),
+                FundNavPoint(code=code, date="2026-06-23", unit_nav=5.03, source="tiantian"),
             ]
             self.cache.upsert_nav_points(navs, as_of=as_of or "2026-06-23")
             return navs
@@ -342,6 +345,8 @@ def test_enrich_fund_tiantian_writes_cache_trace_and_json(monkeypatch, tmp_path)
             str(tmp_path),
             "--as-of",
             "2026-06-23",
+            "--nav-windows",
+            "1m,3m,all",
         ]
     )
 
@@ -350,8 +355,171 @@ def test_enrich_fund_tiantian_writes_cache_trace_and_json(monkeypatch, tmp_path)
     assert (tmp_path / "traces" / "provider-2026-06-23.json").exists()
     payload = json.loads((tmp_path / "fund_agent_report.json").read_text(encoding="utf-8"))
     summary = payload["nav_history_summary"]["510300"]
-    assert summary["latest_unit_nav"] == 5.02
+    assert summary["latest_unit_nav"] == 5.03
     assert "max_drawdown" in summary
+    assert set(summary["windows"]) == {"1m", "3m", "all"}
+    trace = json.loads((tmp_path / "traces" / "provider-2026-06-23.json").read_text(encoding="utf-8"))
+    assert trace["providers"][0]["windows_requested"] == ["1m", "3m", "all"]
+    assert trace["providers"][0]["windows_generated"] == ["1m", "3m", "all"]
+
+
+def test_enrich_fund_rejects_invalid_nav_window(tmp_path, capsys):
+    exit_code = main(
+        [
+            "enrich-fund",
+            "--provider",
+            "tiantian",
+            "--code",
+            "510300",
+            "--output-dir",
+            str(tmp_path),
+            "--nav-windows",
+            "1m,bad",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "Unsupported nav window" in captured.out
+
+
+def test_enrich_fund_allow_cache_uses_tiantian_cache_when_live_unavailable(monkeypatch, tmp_path):
+    cache_file = tmp_path / "funds.sqlite"
+    cache = FundCache(cache_file)
+    cache.upsert_fund_details(
+        [
+            FundDetail(
+                code="510300",
+                name="沪深300ETF",
+                fund_type="ETF",
+                source="tiantian",
+                as_of="2026-06-23",
+            )
+        ],
+        as_of="2026-06-23",
+        ttl_days=30,
+        now=datetime(2026, 6, 23, tzinfo=timezone.utc),
+    )
+    cache.upsert_nav_points(
+        [
+            FundNavPoint(code="510300", date="2026-06-21", unit_nav=5.01, source="tiantian"),
+            FundNavPoint(code="510300", date="2026-06-23", unit_nav=5.03, source="tiantian"),
+        ],
+        as_of="2026-06-23",
+        ttl_days=30,
+        now=datetime(2026, 6, 23, tzinfo=timezone.utc),
+    )
+
+    class MissingTiantianProvider:
+        available = False
+
+        def __init__(self, **kwargs):
+            pass
+
+    monkeypatch.setattr("fund_agent.cli.TiantianFundProvider", MissingTiantianProvider)
+
+    exit_code = main(
+        [
+            "enrich-fund",
+            "--provider",
+            "tiantian",
+            "--code",
+            "510300",
+            "--cache-file",
+            str(cache_file),
+            "--output-dir",
+            str(tmp_path),
+            "--as-of",
+            "2026-06-23",
+            "--allow-cache",
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads((tmp_path / "fund_agent_report.json").read_text(encoding="utf-8"))
+    assert payload["fund_details"][0]["source"] == "cache:tiantian"
+    assert payload["nav_history_summary"]["510300"]["source"] == "cache:tiantian"
+    trace = json.loads((tmp_path / "traces" / "provider-2026-06-23.json").read_text(encoding="utf-8"))
+    provider = trace["providers"][0]
+    assert provider["fallback_used"] is True
+    assert provider["fallback_source"] == "cache:tiantian"
+    assert provider["cache_read_count"] == 3
+
+
+def test_enrich_fund_allow_cache_marks_stale_cache(monkeypatch, tmp_path):
+    cache_file = tmp_path / "funds.sqlite"
+    cache = FundCache(cache_file)
+    old_now = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    cache.upsert_fund_details(
+        [FundDetail(code="510300", name="沪深300ETF", fund_type="ETF", source="tiantian")],
+        as_of="2026-06-23",
+        ttl_days=-1,
+        now=old_now,
+    )
+    cache.upsert_nav_points(
+        [FundNavPoint(code="510300", date="2026-06-23", unit_nav=5.03, source="tiantian")],
+        as_of="2026-06-23",
+        ttl_days=-1,
+        now=old_now,
+    )
+
+    class MissingTiantianProvider:
+        available = False
+
+        def __init__(self, **kwargs):
+            pass
+
+    monkeypatch.setattr("fund_agent.cli.TiantianFundProvider", MissingTiantianProvider)
+
+    exit_code = main(
+        [
+            "enrich-fund",
+            "--provider",
+            "tiantian",
+            "--code",
+            "510300",
+            "--cache-file",
+            str(cache_file),
+            "--output-dir",
+            str(tmp_path),
+            "--as-of",
+            "2026-06-23",
+            "--allow-cache",
+        ]
+    )
+
+    assert exit_code == 0
+    trace = json.loads((tmp_path / "traces" / "provider-2026-06-23.json").read_text(encoding="utf-8"))
+    assert any(warning["code"] == "stale_cache" for warning in trace["providers"][0]["warnings"])
+
+
+def test_enrich_fund_allow_cache_miss_returns_clear_error(monkeypatch, tmp_path, capsys):
+    class MissingTiantianProvider:
+        available = False
+
+        def __init__(self, **kwargs):
+            pass
+
+    monkeypatch.setattr("fund_agent.cli.TiantianFundProvider", MissingTiantianProvider)
+
+    exit_code = main(
+        [
+            "enrich-fund",
+            "--provider",
+            "tiantian",
+            "--code",
+            "510300",
+            "--cache-file",
+            str(tmp_path / "funds.sqlite"),
+            "--output-dir",
+            str(tmp_path),
+            "--allow-cache",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "Tiantian cache fallback missed" in captured.out
 
 
 def test_enrich_fund_tiantian_unavailable_returns_clear_error(monkeypatch, tmp_path, capsys):

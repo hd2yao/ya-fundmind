@@ -114,3 +114,29 @@ def test_cache_round_trips_fund_nav_points(tmp_path):
     assert cached[0].accumulated_nav == 5.01
     assert cached[0].daily_return == 0.12
     assert cached[0].metadata["cache_as_of"] == "2026-06-23"
+
+
+def test_tiantian_cache_stale_metadata_is_available_for_fallback(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    old_now = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    current_now = datetime(2026, 6, 23, tzinfo=timezone.utc)
+    cache.upsert_fund_details(
+        [FundDetail(code="510300", name="沪深300ETF", source="tiantian")],
+        as_of="2026-06-23",
+        ttl_days=-1,
+        now=old_now,
+    )
+    cache.upsert_nav_points(
+        [FundNavPoint(code="510300", date="2026-06-23", unit_nav=5.03, source="tiantian")],
+        as_of="2026-06-23",
+        ttl_days=-1,
+        now=old_now,
+    )
+
+    details = cache.load_fund_details(code="510300", as_of="2026-06-23", allow_stale=True, now=current_now)
+    navs = cache.load_nav_points(code="510300", allow_stale=True, now=current_now)
+
+    assert details[0].source == "cache:tiantian"
+    assert navs[0].source == "cache:tiantian"
+    assert details[0].metadata["stale"] is True
+    assert navs[0].metadata["stale"] is True

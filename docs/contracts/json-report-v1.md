@@ -32,6 +32,13 @@ The JSON report is the primary machine-readable research output for downstream A
 
 Consumers must treat unknown fields as optional extension fields. Future minor versions may add optional fields at the top level or inside nested objects.
 
+Current v1 optional Tiantian enrichment fields include:
+
+- `fund_details`
+- `nav_history_summary`
+
+`nav_history_summary` may contain a nested `windows` object keyed by window name such as `1m`, `3m`, `6m`, `1y`, and `all`. These are optional observation fields and do not imply any scoring or risk-model input.
+
 ## Field Notes
 
 - `provider_health` uses the provider health shape documented in `provider-trace-v1.md`.
