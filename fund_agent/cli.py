@@ -25,6 +25,7 @@ from .signal_candidates import (
     generate_signal_candidates_file,
     write_batch_signal_experiment,
 )
+from .signal_explanation import explain_signal_candidates_file
 from .signal_experiment import evaluate_tiantian_signals_file
 from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
 from .tiantian_diagnostics import build_tiantian_cache_diagnostics, write_tiantian_cache_diagnostics
@@ -323,6 +324,18 @@ def _run_batch_signal_experiment(args) -> int:
     result = batch_signal_experiment(input_dir=args.input_dir, snapshot_dir=args.snapshot_dir)
     path = write_batch_signal_experiment(result, args.output)
     print(f"Signal batch report: {path}")
+    return 0
+
+
+def _run_explain_signal_candidates(args) -> int:
+    markdown_path, json_path = explain_signal_candidates_file(
+        args.input,
+        args.output,
+        json_output=args.json_output,
+    )
+    print(f"Signal candidate explanation: {markdown_path}")
+    if json_path is not None:
+        print(f"Signal candidate explanation JSON: {json_path}")
     return 0
 
 
@@ -663,6 +676,12 @@ def build_parser() -> argparse.ArgumentParser:
     batch.add_argument("--snapshot-dir", type=Path)
     batch.add_argument("--output", type=Path, default=Path("outputs/signal_batch_report.json"))
     batch.set_defaults(func=_run_batch_signal_experiment)
+
+    explain = subparsers.add_parser("explain-signal-candidates", help="生成候选信号解释报告，不修改主评分/风险")
+    explain.add_argument("--input", type=Path, required=True)
+    explain.add_argument("--output", type=Path, default=Path("outputs/signal_candidates_explained.md"))
+    explain.add_argument("--json-output", type=Path)
+    explain.set_defaults(func=_run_explain_signal_candidates)
 
     return parser
 

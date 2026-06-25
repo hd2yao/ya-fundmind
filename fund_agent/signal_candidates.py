@@ -39,11 +39,18 @@ def generate_signal_candidates(report_payload: dict) -> dict:
 
 
 def generate_signal_candidates_file(input_path: Path | str, output_path: Path | str) -> Path:
-    payload = json.loads(Path(input_path).read_text(encoding="utf-8"))
+    input_file = Path(input_path)
+    payload = json.loads(input_file.read_text(encoding="utf-8"))
     result = generate_signal_candidates(payload)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    _write_matching_snapshot_signal_summary(
+        input_file=input_file,
+        output_file=output,
+        report_payload=payload,
+        candidate_payload=result,
+    )
     return output
 
 
@@ -68,36 +75,86 @@ def batch_signal_experiment(*, input_dir: Path | str | None = None, snapshot_dir
     files = sorted(directory.glob("*.json"))
     signal_type_counts: Counter[str] = Counter()
     reason_counts: Counter[str] = Counter()
+    category_stats: dict[str, Counter[str]] = {}
+    source_stats: dict[str, Counter[str]] = {}
+    signal_stats: dict[str, Counter[str]] = {}
+    trend: list[dict[str, Any]] = []
+    warnings: list[dict[str, str]] = []
     eligible_count = 0
     excluded_count = 0
     display_only_count = 0
     processed = 0
     for path in files:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            warnings.append({"file": path.name, "message": f"invalid JSON: {exc}"})
+            continue
         if "eligible_signals" in payload or "excluded_signals" in payload:
             candidate_payload = payload
         elif "signal_quality_summary" in payload:
             summary = payload["signal_quality_summary"]
-            eligible_count += int(summary.get("eligible_count", 0))
-            excluded_count += int(summary.get("excluded_count", 0))
-            display_only_count += int(summary.get("display_only_count", 0))
+            file_eligible = int(summary.get("eligible_count", 0))
+            file_excluded = int(summary.get("excluded_count", 0))
+            file_display = int(summary.get("display_only_count", 0))
+            eligible_count += file_eligible
+            excluded_count += file_excluded
+            display_only_count += file_display
             reason_counts.update(summary.get("top_exclusion_reasons", {}))
+            trend.append(
+                {
+                    "file": path.name,
+                    "as_of": payload.get("as_of"),
+                    "eligible_count": file_eligible,
+                    "excluded_count": file_excluded,
+                    "display_only_count": file_display,
+                    "data_quality_grade": payload.get("data_quality_grade"),
+                }
+            )
             processed += 1
             continue
         else:
-            candidate_payload = generate_signal_candidates(payload)
+            if _looks_like_report_payload(payload):
+                candidate_payload = generate_signal_candidates(payload)
+            else:
+                warnings.append({"file": path.name, "message": "missing signal candidate or report fields; skipped"})
+                processed += 1
+                trend.append(
+                    {
+                        "file": path.name,
+                        "as_of": payload.get("as_of"),
+                        "eligible_count": 0,
+                        "excluded_count": 0,
+                        "display_only_count": 0,
+                        "data_quality_grade": payload.get("data_quality_grade"),
+                    }
+                )
+                continue
         processed += 1
+        file_eligible = len(candidate_payload.get("eligible_signals", []))
+        file_excluded = len(candidate_payload.get("excluded_signals", []))
+        file_display = len(candidate_payload.get("display_only_signals", []))
         for item in candidate_payload.get("eligible_signals", []):
             eligible_count += 1
-            signal_type_counts[item.get("category", "unknown")] += 1
+            _record_signal(item, "eligible", signal_type_counts, category_stats, source_stats, signal_stats)
         for item in candidate_payload.get("excluded_signals", []):
             excluded_count += 1
-            signal_type_counts[item.get("category", "unknown")] += 1
+            _record_signal(item, "excluded", signal_type_counts, category_stats, source_stats, signal_stats)
             if item.get("excluded_reason"):
                 reason_counts[item["excluded_reason"]] += 1
         for item in candidate_payload.get("display_only_signals", []):
             display_only_count += 1
-            signal_type_counts[item.get("category", "display_only")] += 1
+            _record_signal(item, "display_only", signal_type_counts, category_stats, source_stats, signal_stats)
+        trend.append(
+            {
+                "file": path.name,
+                "as_of": candidate_payload.get("as_of") or payload.get("as_of"),
+                "eligible_count": file_eligible,
+                "excluded_count": file_excluded,
+                "display_only_count": file_display,
+                "data_quality_grade": payload.get("data_quality_grade"),
+            }
+        )
     total = eligible_count + excluded_count + display_only_count
     return {
         "files_processed": processed,
@@ -107,6 +164,24 @@ def batch_signal_experiment(*, input_dir: Path | str | None = None, snapshot_dir
         "display_only_count": display_only_count,
         "eligible_ratio": None if total == 0 else round(eligible_count / total, 4),
         "excluded_ratio": None if total == 0 else round(excluded_count / total, 4),
+        "by_category": _stats_dict(category_stats),
+        "by_source": _stats_dict(source_stats),
+        "by_signal_id": _signal_stats_dict(signal_stats),
+        "top_exclusion_reasons": dict(reason_counts.most_common(10)),
+        "signal_presence_count": {
+            signal_id: int(stats.get("presence", 0))
+            for signal_id, stats in sorted(signal_stats.items())
+        },
+        "signal_eligible_count": {
+            signal_id: int(stats.get("eligible", 0))
+            for signal_id, stats in sorted(signal_stats.items())
+        },
+        "signal_eligible_rate": {
+            signal_id: _rate(int(stats.get("eligible", 0)), int(stats.get("presence", 0)))
+            for signal_id, stats in sorted(signal_stats.items())
+        },
+        "signal_quality_trend": trend,
+        "warnings": warnings,
         "signal_type_counts": dict(signal_type_counts),
         "excluded_reason_distribution": dict(reason_counts),
     }
@@ -117,6 +192,100 @@ def write_batch_signal_experiment(result: dict, output_path: Path | str) -> Path
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     return output
+
+
+def _write_matching_snapshot_signal_summary(
+    *,
+    input_file: Path,
+    output_file: Path,
+    report_payload: dict,
+    candidate_payload: dict,
+) -> None:
+    as_of = report_payload.get("as_of")
+    if not as_of:
+        return
+    snapshot_path = input_file.parent / "snapshots" / f"{as_of}.json"
+    if not snapshot_path.exists():
+        return
+    snapshot_payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    summary = signal_quality_summary(candidate_payload)
+    summary["generated_from"] = str(output_file)
+    snapshot_payload["signal_quality_summary"] = summary
+    snapshot_path.write_text(
+        json.dumps(snapshot_payload, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+def _looks_like_report_payload(payload: dict) -> bool:
+    return any(
+        key in payload
+        for key in (
+            "candidates",
+            "valuations",
+            "fund_details",
+            "nav_history_summary",
+            "provider_health",
+        )
+    )
+
+
+def _record_signal(
+    item: dict,
+    state: str,
+    signal_type_counts: Counter[str],
+    category_stats: dict[str, Counter[str]],
+    source_stats: dict[str, Counter[str]],
+    signal_stats: dict[str, Counter[str]],
+) -> None:
+    category = str(item.get("category") or "unknown")
+    source = str(item.get("source") or "unknown")
+    signal_id = str(item.get("signal_id") or "unknown")
+    signal_type_counts[category] += 1
+    _counter_for(category_stats, category)[state] += 1
+    _counter_for(category_stats, category)["total"] += 1
+    _counter_for(source_stats, source)[state] += 1
+    _counter_for(source_stats, source)["total"] += 1
+    _counter_for(signal_stats, signal_id)["presence"] += 1
+    _counter_for(signal_stats, signal_id)[state] += 1
+
+
+def _counter_for(stats: dict[str, Counter[str]], key: str) -> Counter[str]:
+    if key not in stats:
+        stats[key] = Counter()
+    return stats[key]
+
+
+def _stats_dict(stats: dict[str, Counter[str]]) -> dict[str, dict[str, Any]]:
+    return {
+        key: {
+            "total_signals": int(counter.get("total", 0)),
+            "eligible_count": int(counter.get("eligible", 0)),
+            "excluded_count": int(counter.get("excluded", 0)),
+            "display_only_count": int(counter.get("display_only", 0)),
+            "eligible_ratio": _rate(int(counter.get("eligible", 0)), int(counter.get("total", 0))),
+        }
+        for key, counter in sorted(stats.items())
+    }
+
+
+def _signal_stats_dict(stats: dict[str, Counter[str]]) -> dict[str, dict[str, Any]]:
+    return {
+        key: {
+            "signal_presence_count": int(counter.get("presence", 0)),
+            "signal_eligible_count": int(counter.get("eligible", 0)),
+            "signal_eligible_rate": _rate(int(counter.get("eligible", 0)), int(counter.get("presence", 0))),
+            "excluded_count": int(counter.get("excluded", 0)),
+            "display_only_count": int(counter.get("display_only", 0)),
+        }
+        for key, counter in sorted(stats.items())
+    }
+
+
+def _rate(numerator: int, denominator: int) -> float | None:
+    if denominator == 0:
+        return None
+    return round(numerator / denominator, 4)
 
 
 def _tiantian_candidates(report_payload: dict) -> list[SignalCandidate]:

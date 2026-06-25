@@ -1,7 +1,7 @@
 import json
 
 from fund_agent.models import SignalCandidate
-from fund_agent.signal_candidates import generate_signal_candidates
+from fund_agent.signal_candidates import generate_signal_candidates, generate_signal_candidates_file
 
 
 def _report_payload():
@@ -143,3 +143,34 @@ def test_generate_signal_candidates_summary_counts():
         + result["summary"]["display_only_count"]
     )
     assert result["required_regression_tests"]
+
+
+def test_generate_signal_candidates_file_updates_matching_snapshot_summary(tmp_path):
+    report = tmp_path / "fund_agent_report.json"
+    report.write_text(json.dumps(_report_payload()), encoding="utf-8")
+    snapshot_dir = tmp_path / "snapshots"
+    snapshot_dir.mkdir()
+    snapshot = snapshot_dir / "2026-06-23.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "generated_at": "2026-06-23T00:00:00+00:00",
+                "generator": "fund_agent",
+                "as_of": "2026-06-23",
+                "candidates": {},
+                "valuations": {},
+                "portfolio": None,
+                "provider_health": [],
+                "data_quality_grade": "normal",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    output = generate_signal_candidates_file(report, tmp_path / "signal_candidates.json")
+
+    candidate_payload = json.loads(output.read_text(encoding="utf-8"))
+    snapshot_payload = json.loads(snapshot.read_text(encoding="utf-8"))
+    assert snapshot_payload["signal_quality_summary"]["total_signals"] == candidate_payload["summary"]["total_signals"]
+    assert snapshot_payload["signal_quality_summary"]["generated_from"] == str(output)
