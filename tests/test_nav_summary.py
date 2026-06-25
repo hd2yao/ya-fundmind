@@ -32,11 +32,8 @@ def test_nav_history_summary_degrades_empty_or_sparse_history():
 
 def test_nav_history_summary_generates_requested_windows():
     points = [
-        FundNavPoint(code="510300", date="2025-06-23", unit_nav=0.9, accumulated_nav=0.9, source="tiantian"),
-        FundNavPoint(code="510300", date="2025-12-23", unit_nav=1.0, accumulated_nav=1.0, source="tiantian"),
-        FundNavPoint(code="510300", date="2026-03-23", unit_nav=1.1, accumulated_nav=1.1, source="tiantian"),
-        FundNavPoint(code="510300", date="2026-05-23", unit_nav=1.2, accumulated_nav=1.2, source="tiantian"),
-        FundNavPoint(code="510300", date="2026-06-23", unit_nav=1.25, accumulated_nav=1.25, source="tiantian"),
+        FundNavPoint(code="510300", date=f"2026-01-{(idx % 28) + 1:02d}", unit_nav=1.0 + idx / 1000, source="tiantian")
+        for idx in range(250)
     ]
 
     summary = build_nav_history_windows_summary(
@@ -47,11 +44,14 @@ def test_nav_history_summary_generates_requested_windows():
     )
 
     assert set(summary["windows"]) == {"1m", "3m", "6m", "1y", "all"}
-    assert summary["windows"]["1m"]["start_date"] == "2026-05-23"
-    assert summary["windows"]["3m"]["start_date"] == "2026-03-23"
-    assert summary["windows"]["6m"]["start_date"] == "2025-12-23"
-    assert summary["windows"]["1y"]["start_date"] == "2025-06-23"
-    assert summary["windows"]["all"]["count"] == 5
+    assert summary["windows"]["1m"]["count"] == 20
+    assert summary["windows"]["3m"]["count"] == 60
+    assert summary["windows"]["6m"]["count"] == 120
+    assert summary["windows"]["1y"]["count"] == 240
+    assert summary["windows"]["all"]["count"] == 250
+    assert summary["windows"]["1m"]["metadata"]["required_points"] == 20
+    assert summary["windows"]["1m"]["metadata"]["actual_points"] == 20
+    assert summary["windows"]["1m"]["metadata"]["window_mode"] == "nav_points"
     assert summary["windows_requested"] == ["1m", "3m", "6m", "1y", "all"]
 
 

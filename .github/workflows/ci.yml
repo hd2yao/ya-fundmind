@@ -11,6 +11,10 @@ on:
         description: "Run optional AKShare live smoke test"
         required: false
         default: "false"
+      run_tiantian_smoke:
+        description: "Run optional Tiantian live smoke test"
+        required: false
+        default: "false"
 
 jobs:
   test:
@@ -50,3 +54,32 @@ jobs:
 
       - name: Run optional AKShare smoke
         run: python -m fund_agent.cli smoke-akshare --watchlist-file configs/watchlist.yaml --portfolio-config configs/portfolio.yaml --output-dir outputs
+
+  tiantian-smoke:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_tiantian_smoke == 'true'
+    runs-on: ubuntu-latest
+    env:
+      TIANTIAN_API_BASE_URL: ${{ secrets.TIANTIAN_API_BASE_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check Tiantian base URL
+        run: |
+          if [ -z "$TIANTIAN_API_BASE_URL" ]; then
+            echo "TIANTIAN_API_BASE_URL secret is not configured; skipping Tiantian smoke."
+            exit 0
+          fi
+
+      - name: Run optional Tiantian smoke
+        if: env.TIANTIAN_API_BASE_URL != ''
+        run: python -m fund_agent.cli smoke-tiantian --code 510300 --output-dir outputs
+
+      - name: Validate Tiantian smoke contracts
+        if: env.TIANTIAN_API_BASE_URL != ''
+        run: python -m fund_agent.cli validate-contract --output-dir outputs

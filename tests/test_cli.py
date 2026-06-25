@@ -1,6 +1,7 @@
 import json
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fund_agent.cli import main
 from fund_agent.cache import FundCache
@@ -562,3 +563,11 @@ def test_smoke_tiantian_unavailable_returns_clear_error(monkeypatch, tmp_path, c
     captured = capsys.readouterr()
     assert exit_code == 2
     assert "TiantianFundProvider is not configured" in captured.out
+
+
+def test_ci_workflow_has_manual_tiantian_smoke_job():
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "run_tiantian_smoke" in workflow
+    assert "TIANTIAN_API_BASE_URL" in workflow
+    assert "smoke-tiantian" in workflow

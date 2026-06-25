@@ -7,11 +7,11 @@ from .models import FundNavPoint
 
 SUPPORTED_NAV_WINDOWS = ("1m", "3m", "6m", "1y", "all")
 DEFAULT_NAV_WINDOWS = ("1m", "3m", "6m")
-_WINDOW_DAYS = {
-    "1m": 31,
-    "3m": 93,
-    "6m": 186,
-    "1y": 366,
+REQUIRED_NAV_POINTS_BY_WINDOW = {
+    "1m": 20,
+    "3m": 60,
+    "6m": 120,
+    "1y": 240,
 }
 
 
@@ -89,9 +89,19 @@ def build_nav_history_windows_summary(
             code,
             _points_for_window(ordered, window=window, anchor_date=anchor_date),
         )
-        metadata = summary.get("metadata", {})
+        required_points = REQUIRED_NAV_POINTS_BY_WINDOW.get(window, len(_points_for_window(ordered, window=window)))
+        metadata = {
+            **summary.get("metadata", {}),
+            "required_points": required_points,
+            "actual_points": summary.get("count", 0),
+            "window_mode": "nav_points",
+        }
+        summary = {**summary, "metadata": metadata}
         if summary.get("data_quality_grade") == "normal" and metadata.get("annualized_return_unstable"):
             summary = {**summary, "data_quality_grade": "warning"}
+        if window != "all" and summary.get("count", 0) < required_points:
+            grade = "degraded" if summary.get("count", 0) < 2 else "warning"
+            summary = {**summary, "data_quality_grade": grade}
         window_summaries[window] = summary
     return {
         **base,
@@ -170,28 +180,13 @@ def _points_for_window(
     points: list[FundNavPoint],
     *,
     window: str,
-    anchor_date: str | None,
+    anchor_date: str | None = None,
 ) -> list[FundNavPoint]:
-    if window == "all" or not anchor_date:
+    valid_points = [point for point in points if point.unit_nav is not None and point.unit_nav > 0]
+    if window == "all":
         return points
-    try:
-        anchor = date.fromisoformat(anchor_date)
-    except ValueError:
-        return points
-    cutoff_ordinal = anchor.toordinal() - _WINDOW_DAYS[window]
-    selected = []
-    for point in points:
-        point_ordinal = _date_ordinal(point.date)
-        if point_ordinal is not None and point_ordinal >= cutoff_ordinal:
-            selected.append(point)
-    return selected
-
-
-def _date_ordinal(value: str) -> int | None:
-    try:
-        return date.fromisoformat(value).toordinal()
-    except ValueError:
-        return None
+    required_points = REQUIRED_NAV_POINTS_BY_WINDOW[window]
+    return valid_points[-required_points:]
 
 
 def _summary_metadata(points: list[FundNavPoint], start_date: str, end_date: str) -> dict:
