@@ -127,6 +127,11 @@ def test_tiantian_provider_trace_contract(tmp_path):
         live_row_count=2,
         mapped_row_count=2,
         cache_write_count=2,
+        cache_read_count=3,
+        metadata={
+            "windows_requested": ["1m", "3m"],
+            "windows_generated": ["1m"],
+        },
         endpoints=(
             ProviderEndpointTrace(
                 endpoint="tiantian_fund_detail",
@@ -152,3 +157,6 @@ def test_tiantian_provider_trace_contract(tmp_path):
     assert payload["providers"][0]["endpoints"][0]["endpoint"] == "tiantian_fund_detail"
     assert payload["providers"][0]["endpoints"][0]["attempts"] == 2
     assert payload["providers"][0]["endpoints"][0]["timeout_seconds"] == 20
+    assert payload["providers"][0]["cache_read_count"] == 3
+    assert payload["providers"][0]["windows_requested"] == ["1m", "3m"]
+    assert payload["providers"][0]["windows_generated"] == ["1m"]

@@ -76,6 +76,7 @@ def _provider_health_to_dict(item) -> dict[str, Any]:
         "live_row_count": item.live_row_count,
         "mapped_row_count": item.mapped_row_count,
         "skipped_row_count": item.skipped_row_count,
+        "cache_read_count": item.cache_read_count,
         "cache_write_count": item.cache_write_count,
         "fallback_used": item.fallback_used,
         "fallback_reason": item.fallback_reason,
@@ -108,7 +109,16 @@ def _provider_health_to_dict(item) -> dict[str, Any]:
             }
             for endpoint in item.endpoints
         ],
+        **_provider_metadata_fields(item.metadata),
     }
+
+
+def _provider_metadata_fields(metadata: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "windows_requested",
+        "windows_generated",
+    }
+    return {key: value for key, value in metadata.items() if key in allowed}
 
 
 def write_snapshot(result: ResearchResult, output_dir: Path | str) -> Path:

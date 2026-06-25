@@ -78,6 +78,7 @@ class ProviderHealth:
     live_row_count: int = 0
     mapped_row_count: int = 0
     skipped_row_count: int = 0
+    cache_read_count: int = 0
     cache_write_count: int = 0
     fallback_used: bool = False
     fallback_reason: str | None = None
@@ -87,6 +88,7 @@ class ProviderHealth:
     watchlist_missing_codes: tuple[str, ...] = ()
     warnings: tuple[ProviderWarning, ...] = ()
     endpoints: tuple[ProviderEndpointTrace, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def has_critical_warnings(self) -> bool:

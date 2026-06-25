@@ -103,13 +103,49 @@ def test_json_report_with_optional_tiantian_fields_still_validates(tmp_path):
         }
     ]
     payload["nav_history_summary"] = {
-        "510300": {"count": 2, "source": "tiantian"}
+        "510300": {
+            "count": 2,
+            "source": "tiantian",
+            "windows": {
+                "1m": {
+                    "count": 2,
+                    "source": "tiantian",
+                    "data_quality_grade": "warning",
+                }
+            },
+        }
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     result = validate_contract_file(path, "report")
 
     assert result.ok is True
+
+
+def test_provider_trace_with_tiantian_cache_window_extensions_still_validates(tmp_path):
+    health = ProviderHealth(
+        provider="tiantian",
+        started_at="2026-06-23T00:00:00+00:00",
+        finished_at="2026-06-23T00:00:01+00:00",
+        duration_ms=1000,
+        cache_read_count=3,
+        fallback_used=True,
+        fallback_source="cache:tiantian",
+        metadata={
+            "windows_requested": ["1m", "3m"],
+            "windows_generated": ["1m", "3m"],
+        },
+    )
+    result = run_research(
+        [FundRecord(code="510300", name="沪深300ETF", category="ETF", nav=5.0)],
+        as_of="2026-06-23",
+        provider_health=(health,),
+    )
+    path = write_provider_trace(result, tmp_path)
+
+    validation = validate_contract_file(path, "trace")
+
+    assert validation.ok is True
 
 
 def test_validate_output_dir_checks_all_known_outputs(tmp_path):

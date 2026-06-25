@@ -5,6 +5,15 @@ from math import sqrt
 
 from .models import FundNavPoint
 
+SUPPORTED_NAV_WINDOWS = ("1m", "3m", "6m", "1y", "all")
+DEFAULT_NAV_WINDOWS = ("1m", "3m", "6m")
+_WINDOW_DAYS = {
+    "1m": 31,
+    "3m": 93,
+    "6m": 186,
+    "1y": 366,
+}
+
 
 def build_nav_history_summary(code: str, points: list[FundNavPoint] | tuple[FundNavPoint, ...]) -> dict:
     ordered = sorted((point for point in points if point.code == code), key=lambda item: item.date)
@@ -59,7 +68,46 @@ def build_nav_history_summary(code: str, points: list[FundNavPoint] | tuple[Fund
         "missing_days": missing_days,
         "source": latest.source or "tiantian",
         "data_quality_grade": grade,
+        "metadata": _summary_metadata(ordered, start_date, end_date),
     }
+
+
+def build_nav_history_windows_summary(
+    code: str,
+    points: list[FundNavPoint] | tuple[FundNavPoint, ...],
+    *,
+    windows: tuple[str, ...] = DEFAULT_NAV_WINDOWS,
+    as_of: str | None = None,
+) -> dict:
+    normalized_windows = tuple(_normalize_window(window) for window in windows)
+    ordered = sorted((point for point in points if point.code == code), key=lambda item: item.date)
+    anchor_date = as_of or (ordered[-1].date if ordered else None)
+    base = build_nav_history_summary(code, ordered)
+    window_summaries = {}
+    for window in normalized_windows:
+        summary = build_nav_history_summary(
+            code,
+            _points_for_window(ordered, window=window, anchor_date=anchor_date),
+        )
+        metadata = summary.get("metadata", {})
+        if summary.get("data_quality_grade") == "normal" and metadata.get("annualized_return_unstable"):
+            summary = {**summary, "data_quality_grade": "warning"}
+        window_summaries[window] = summary
+    return {
+        **base,
+        "windows_requested": list(normalized_windows),
+        "windows_generated": list(window_summaries.keys()),
+        "windows": window_summaries,
+    }
+
+
+def parse_nav_windows(value: str | None) -> tuple[str, ...]:
+    if value is None or not str(value).strip():
+        return DEFAULT_NAV_WINDOWS
+    windows = tuple(item.strip().lower() for item in str(value).split(",") if item.strip())
+    if not windows:
+        return DEFAULT_NAV_WINDOWS
+    return tuple(_normalize_window(window) for window in windows)
 
 
 def _daily_returns(points: list[FundNavPoint]) -> list[float]:
@@ -109,3 +157,47 @@ def _days_between(start_date: str, end_date: str) -> int | None:
         return (date.fromisoformat(end_date) - date.fromisoformat(start_date)).days
     except ValueError:
         return None
+
+
+def _normalize_window(window: str) -> str:
+    normalized = str(window).strip().lower()
+    if normalized not in SUPPORTED_NAV_WINDOWS:
+        raise ValueError(f"Unsupported nav window: {window}. Supported windows: {', '.join(SUPPORTED_NAV_WINDOWS)}")
+    return normalized
+
+
+def _points_for_window(
+    points: list[FundNavPoint],
+    *,
+    window: str,
+    anchor_date: str | None,
+) -> list[FundNavPoint]:
+    if window == "all" or not anchor_date:
+        return points
+    try:
+        anchor = date.fromisoformat(anchor_date)
+    except ValueError:
+        return points
+    cutoff_ordinal = anchor.toordinal() - _WINDOW_DAYS[window]
+    selected = []
+    for point in points:
+        point_ordinal = _date_ordinal(point.date)
+        if point_ordinal is not None and point_ordinal >= cutoff_ordinal:
+            selected.append(point)
+    return selected
+
+
+def _date_ordinal(value: str) -> int | None:
+    try:
+        return date.fromisoformat(value).toordinal()
+    except ValueError:
+        return None
+
+
+def _summary_metadata(points: list[FundNavPoint], start_date: str, end_date: str) -> dict:
+    days = _days_between(start_date, end_date)
+    unstable = days is None or days < 30 or len(points) < 20
+    metadata = {"annualized_return_unstable": unstable}
+    if unstable:
+        metadata["annualized_return_note"] = "短样本年化收益不稳定，仅用于观察。"
+    return metadata

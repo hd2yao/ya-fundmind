@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from .agents import run_research
@@ -10,8 +10,15 @@ from .cache import FundCache
 from .config import load_portfolio_config, load_provider_config, load_watchlist_config
 from .contract import ContractValidationSummary, validate_contract_file, validate_output_dir
 from .models import FundRecord, ProviderHealth, ProviderWarning
-from .nav_summary import build_nav_history_summary
-from .providers import AkshareProvider, FixtureProvider, ProviderUnavailable, TiantianFundProvider, load_portfolio_file
+from .nav_summary import build_nav_history_windows_summary, parse_nav_windows
+from .providers import (
+    AkshareProvider,
+    FixtureProvider,
+    ProviderUnavailable,
+    TiantianFundProvider,
+    load_portfolio_file,
+    normalize_fund_code,
+)
 from .report import render_html, render_markdown, write_json_report
 from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
 from .trace import write_provider_trace
@@ -228,6 +235,11 @@ def _run_enrich_fund(args) -> int:
     if args.provider != "tiantian":
         print(f"Unsupported enrichment provider: {args.provider}")
         return 2
+    try:
+        nav_windows = parse_nav_windows(args.nav_windows)
+    except ValueError as exc:
+        print(str(exc))
+        return 2
     provider_config = load_provider_config(args.provider_config)
     cache = FundCache(args.cache_file)
     provider = TiantianFundProvider(
@@ -237,13 +249,26 @@ def _run_enrich_fund(args) -> int:
         retry_backoff_seconds=provider_config.tiantian.retry_backoff_seconds,
     )
     if not getattr(provider, "available", False):
+        if args.allow_cache:
+            return _execute_tiantian_cache_fallback(
+                args,
+                cache,
+                provider_config,
+                nav_windows=nav_windows,
+                reason="TiantianFundProvider client is not configured",
+            )
         print("TiantianFundProvider is not configured; set TIANTIAN_API_BASE_URL to run live enrichment.")
         return 2
-    return _execute_tiantian_enrichment(args, provider, provider_config)
+    return _execute_tiantian_enrichment(args, provider, provider_config, nav_windows=nav_windows)
 
 
 def _run_smoke_tiantian(args) -> int:
     provider_config = load_provider_config(args.provider_config)
+    try:
+        nav_windows = parse_nav_windows(getattr(args, "nav_windows", None))
+    except ValueError as exc:
+        print(str(exc))
+        return 2
     provider = TiantianFundProvider(
         cache=FundCache(args.cache_file),
         timeout_seconds=provider_config.tiantian.timeout_seconds,
@@ -253,10 +278,10 @@ def _run_smoke_tiantian(args) -> int:
     if not getattr(provider, "available", False):
         print("TiantianFundProvider is not configured; set TIANTIAN_API_BASE_URL to run real smoke-tiantian.")
         return 2
-    return _execute_tiantian_enrichment(args, provider, provider_config)
+    return _execute_tiantian_enrichment(args, provider, provider_config, nav_windows=nav_windows)
 
 
-def _execute_tiantian_enrichment(args, provider, provider_config) -> int:
+def _execute_tiantian_enrichment(args, provider, provider_config, *, nav_windows: tuple[str, ...]) -> int:
     as_of = args.as_of or date.today().isoformat()
     try:
         detail = provider.fetch_fund_detail(args.code, as_of=as_of)
@@ -269,10 +294,19 @@ def _execute_tiantian_enrichment(args, provider, provider_config) -> int:
         )
         nav_health = provider.last_health
     except ProviderUnavailable as exc:
+        if getattr(args, "allow_cache", False):
+            return _execute_tiantian_cache_fallback(
+                args,
+                provider.cache,
+                provider_config,
+                nav_windows=nav_windows,
+                reason=str(exc),
+            )
         print(f"Tiantian provider unavailable: {exc}")
         return 2
     combined_health = _combine_provider_health(detail_health, nav_health)
     latest_nav = nav_points[-1].unit_nav if nav_points else None
+    latest_nav_metadata = nav_points[-1].metadata if nav_points else {}
     fund = FundRecord(
         code=detail.code,
         name=detail.name,
@@ -280,13 +314,29 @@ def _execute_tiantian_enrichment(args, provider, provider_config) -> int:
         nav=latest_nav,
         nav_date=nav_points[-1].date if nav_points else None,
         source=detail.source,
+        metadata={
+            **detail.metadata,
+            "updated_at": latest_nav_metadata.get("updated_at", detail.metadata.get("updated_at")),
+            "expires_at": latest_nav_metadata.get("expires_at", detail.metadata.get("expires_at")),
+            "stale": bool(detail.metadata.get("stale") or latest_nav_metadata.get("stale")),
+        },
     )
     result = run_research(
         [fund],
         as_of=as_of,
         provider_health=(combined_health,) if combined_health is not None else (),
     )
-    nav_summary = {detail.code: build_nav_history_summary(detail.code, nav_points)}
+    nav_summary = {
+        detail.code: build_nav_history_windows_summary(
+            detail.code,
+            nav_points,
+            windows=nav_windows,
+            as_of=as_of,
+        )
+    }
+    if combined_health is not None:
+        combined_health = _with_window_health(combined_health, nav_summary[detail.code])
+        result = replace(result, provider_health=(combined_health,))
     result = replace(result, fund_details=(detail,), nav_history_summary=nav_summary)
     json_path = write_json_report(result, args.output_dir)
     trace_path = write_provider_trace(
@@ -306,6 +356,102 @@ def _execute_tiantian_enrichment(args, provider, provider_config) -> int:
     return 0
 
 
+def _execute_tiantian_cache_fallback(args, cache: FundCache, provider_config, *, nav_windows: tuple[str, ...], reason: str) -> int:
+    as_of = args.as_of or date.today().isoformat()
+    code = normalize_fund_code(args.code)
+    details = [
+        item for item in cache.load_fund_details(code=code, as_of=as_of, allow_stale=True)
+        if item.source == "cache:tiantian"
+    ]
+    if not details:
+        details = [
+            item for item in cache.load_fund_details(code=code, allow_stale=True)
+            if item.source == "cache:tiantian"
+        ]
+    nav_points = [
+        item for item in cache.load_nav_points(
+            code=code,
+            start_date=getattr(args, "start_date", None),
+            end_date=getattr(args, "end_date", None),
+            allow_stale=True,
+        )
+        if item.source == "cache:tiantian"
+    ]
+    if not details or not nav_points:
+        print(f"Tiantian cache fallback missed for {code}; no cached fund detail or nav history.")
+        return 2
+    detail = details[-1]
+    stale_items = [
+        item for item in (*details, *nav_points)
+        if item.metadata.get("stale")
+    ]
+    warnings = [
+        ProviderWarning(
+            code="live_fallback",
+            message=f"Tiantian live unavailable; using cache. reason={reason}",
+            severity="warning",
+        )
+    ]
+    if stale_items:
+        warnings.append(
+            ProviderWarning(
+                code="stale_cache",
+                message=f"Tiantian cache fallback used {len(stale_items)} stale records.",
+                severity="warning",
+            )
+        )
+    nav_summary = {
+        detail.code: build_nav_history_windows_summary(
+            detail.code,
+            nav_points,
+            windows=nav_windows,
+            as_of=as_of,
+        )
+    }
+    health = ProviderHealth(
+        provider="tiantian",
+        provider_version=None,
+        started_at=_utc_now_iso(),
+        finished_at=_utc_now_iso(),
+        duration_ms=0,
+        mapped_row_count=1 + len(nav_points),
+        cache_read_count=1 + len(nav_points),
+        fallback_used=True,
+        fallback_reason=reason,
+        fallback_source="cache:tiantian",
+        warnings=tuple(warnings),
+        metadata={
+            "windows_requested": list(nav_windows),
+            "windows_generated": list(nav_summary[detail.code]["windows"].keys()),
+        },
+    )
+    latest_nav = nav_points[-1].unit_nav if nav_points else None
+    fund = FundRecord(
+        code=detail.code,
+        name=detail.name,
+        category=detail.fund_type or "基金",
+        nav=latest_nav,
+        nav_date=nav_points[-1].date if nav_points else None,
+        source=detail.source,
+    )
+    result = run_research([fund], as_of=as_of, provider_health=(health,))
+    result = replace(result, fund_details=(detail,), nav_history_summary=nav_summary)
+    json_path = write_json_report(result, args.output_dir)
+    trace_path = write_provider_trace(
+        result,
+        args.output_dir,
+        retention_days=provider_config.tiantian.trace_retention_days,
+        max_trace_files=provider_config.tiantian.max_trace_files,
+    )
+    print(f"JSON report: {json_path}")
+    print(f"Provider trace: {trace_path}")
+    print(f"Tiantian cache fallback: {detail.code} {detail.name}")
+    print(f"Tiantian cache reads: {health.cache_read_count}")
+    contract_summary = validate_output_dir(args.output_dir)
+    print(f"Contract validation: {'OK' if contract_summary.ok else 'FAIL'}")
+    return 0
+
+
 def _combine_provider_health(*items):
     health_items = [item for item in items if item is not None]
     if not health_items:
@@ -318,10 +464,27 @@ def _combine_provider_health(*items):
         live_row_count=sum(item.live_row_count for item in health_items),
         mapped_row_count=sum(item.mapped_row_count for item in health_items),
         skipped_row_count=sum(item.skipped_row_count for item in health_items),
+        cache_read_count=sum(item.cache_read_count for item in health_items),
         cache_write_count=sum(item.cache_write_count for item in health_items),
         endpoints=tuple(endpoint for item in health_items for endpoint in item.endpoints),
         warnings=tuple(warning for item in health_items for warning in item.warnings),
+        metadata={key: value for item in health_items for key, value in item.metadata.items()},
     )
+
+
+def _with_window_health(health: ProviderHealth, summary: dict) -> ProviderHealth:
+    return replace(
+        health,
+        metadata={
+            **health.metadata,
+            "windows_requested": list(summary.get("windows_requested", [])),
+            "windows_generated": list(summary.get("windows", {}).keys()),
+        },
+    )
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -418,6 +581,8 @@ def build_parser() -> argparse.ArgumentParser:
     enrich.add_argument("--provider-config", type=Path, default=DEFAULT_PROVIDER_CONFIG)
     enrich.add_argument("--output-dir", type=Path, default=Path("outputs"))
     enrich.add_argument("--as-of", default="")
+    enrich.add_argument("--nav-windows", default="1m,3m,6m")
+    enrich.add_argument("--allow-cache", action="store_true")
     enrich.set_defaults(func=_run_enrich_fund)
 
     smoke_tiantian = subparsers.add_parser("smoke-tiantian", help="可选：使用 Tiantian 真实数据跑 live smoke")
@@ -428,6 +593,7 @@ def build_parser() -> argparse.ArgumentParser:
     smoke_tiantian.add_argument("--provider-config", type=Path, default=DEFAULT_PROVIDER_CONFIG)
     smoke_tiantian.add_argument("--output-dir", type=Path, default=Path("outputs"))
     smoke_tiantian.add_argument("--as-of", default="")
+    smoke_tiantian.add_argument("--nav-windows", default="1m,3m,6m")
     smoke_tiantian.set_defaults(func=_run_smoke_tiantian)
 
     return parser
