@@ -29,6 +29,7 @@ Snapshots store one run's compact machine-readable state for historical comparis
 - Future versions may add new delta inputs.
 - Nested provider health may omit provider-specific fields.
 - Legacy snapshots before v1 may lack `schema_version`, `generated_at`, `generator`, `provider_health`, or `data_quality_grade`.
+- `signal_quality_summary` may be present when signal candidate experiments are generated. It is optional and must not be required by v1 readers.
 
 ## Field Notes
 

@@ -20,6 +20,11 @@ from .providers import (
     normalize_fund_code,
 )
 from .report import render_html, render_markdown, write_json_report
+from .signal_candidates import (
+    batch_signal_experiment,
+    generate_signal_candidates_file,
+    write_batch_signal_experiment,
+)
 from .signal_experiment import evaluate_tiantian_signals_file
 from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
 from .tiantian_diagnostics import build_tiantian_cache_diagnostics, write_tiantian_cache_diagnostics
@@ -305,6 +310,19 @@ def _run_diagnose_tiantian_cache(args) -> int:
 def _run_experiment_tiantian_signals(args) -> int:
     path = evaluate_tiantian_signals_file(args.input, args.output)
     print(f"Tiantian signal experiment: {path}")
+    return 0
+
+
+def _run_generate_signal_candidates(args) -> int:
+    path = generate_signal_candidates_file(args.input, args.output)
+    print(f"Signal candidates: {path}")
+    return 0
+
+
+def _run_batch_signal_experiment(args) -> int:
+    result = batch_signal_experiment(input_dir=args.input_dir, snapshot_dir=args.snapshot_dir)
+    path = write_batch_signal_experiment(result, args.output)
+    print(f"Signal batch report: {path}")
     return 0
 
 
@@ -634,6 +652,17 @@ def build_parser() -> argparse.ArgumentParser:
     experiment.add_argument("--input", type=Path, required=True)
     experiment.add_argument("--output", type=Path, default=Path("outputs/tiantian_signal_experiment.json"))
     experiment.set_defaults(func=_run_experiment_tiantian_signals)
+
+    signals = subparsers.add_parser("generate-signal-candidates", help="生成投研信号候选层 JSON，不修改主评分/风险")
+    signals.add_argument("--input", type=Path, required=True)
+    signals.add_argument("--output", type=Path, default=Path("outputs/signal_candidates.json"))
+    signals.set_defaults(func=_run_generate_signal_candidates)
+
+    batch = subparsers.add_parser("batch-signal-experiment", help="批量统计 signal candidate JSON 或 report/snapshot JSON")
+    batch.add_argument("--input-dir", type=Path)
+    batch.add_argument("--snapshot-dir", type=Path)
+    batch.add_argument("--output", type=Path, default=Path("outputs/signal_batch_report.json"))
+    batch.set_defaults(func=_run_batch_signal_experiment)
 
     return parser
 

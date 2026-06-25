@@ -571,3 +571,30 @@ def test_ci_workflow_has_manual_tiantian_smoke_job():
     assert "run_tiantian_smoke" in workflow
     assert "TIANTIAN_API_BASE_URL" in workflow
     assert "smoke-tiantian" in workflow
+
+
+def test_generate_signal_candidates_cli_writes_output(tmp_path):
+    report = tmp_path / "fund_agent_report.json"
+    report.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "as_of": "2026-06-23",
+                "data_quality_grade": "normal",
+                "provider_health": [],
+                "candidates": [{"code": "510300", "name": "沪深300ETF", "category": "ETF"}],
+                "valuations": {"510300": {"confidence": "High"}},
+                "nav_history_summary": {},
+                "fund_details": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "signal_candidates.json"
+
+    exit_code = main(["generate-signal-candidates", "--input", str(report), "--output", str(output)])
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert exit_code == 0
+    assert "eligible_signals" in payload
+    assert payload["summary"]["total_signals"] >= 1

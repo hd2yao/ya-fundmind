@@ -104,3 +104,4 @@ def test_experiment_tiantian_signals_cli_writes_output(tmp_path):
     assert payload["eligible_signals"]
     assert payload["excluded_signals"]
     assert payload["required_regression_tests"]
+    assert (tmp_path / "signal_candidates.json").exists()
