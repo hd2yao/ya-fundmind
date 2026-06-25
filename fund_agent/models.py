@@ -53,6 +53,21 @@ class FundNavPoint:
 
 
 @dataclass(frozen=True)
+class SignalCandidate:
+    signal_id: str
+    source: str
+    code: str
+    category: str
+    value: Any
+    direction: str
+    quality_grade: str
+    eligible: bool
+    excluded_reason: str | None
+    evidence: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ProviderWarning:
     code: str
     message: str

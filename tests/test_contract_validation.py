@@ -148,6 +148,25 @@ def test_provider_trace_with_tiantian_cache_window_extensions_still_validates(tm
     assert validation.ok is True
 
 
+def test_snapshot_with_optional_signal_quality_summary_still_validates(tmp_path):
+    path = write_snapshot(_result(), tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["signal_quality_summary"] = {
+        "total_signals": 3,
+        "eligible_count": 1,
+        "excluded_count": 1,
+        "degraded_count": 1,
+        "warning_count": 0,
+        "display_only_count": 1,
+        "top_exclusion_reasons": {"degraded_window": 1},
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = validate_contract_file(path, "snapshot")
+
+    assert result.ok is True
+
+
 def test_validate_output_dir_checks_all_known_outputs(tmp_path):
     result = _result()
     write_json_report(result, tmp_path)

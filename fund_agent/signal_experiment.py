@@ -3,19 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .signal_candidates import REQUIRED_REGRESSION_TESTS, generate_signal_candidates
+
 
 DISPLAY_ONLY_FIELDS = ("fund_manager", "fund_company", "inception_date")
-REQUIRED_REGRESSION_TESTS = (
-    "AKShare/fixture daily reports remain stable.",
-    "Missing Tiantian fields never improve score.",
-    "Stale Tiantian cache never silently improves score.",
-    "Degraded NAV windows are excluded.",
-    "Short-sample annualized return is excluded.",
-    "Snapshot deltas explain any future score/risk behavior change.",
-)
 
 
 def evaluate_tiantian_signals(report_payload: dict) -> dict:
+    candidate_payload = generate_signal_candidates(report_payload)
     eligible: list[dict] = []
     excluded: list[dict] = []
     warnings: list[dict] = []
@@ -79,17 +74,31 @@ def evaluate_tiantian_signals(report_payload: dict) -> dict:
         "excluded_signals": excluded,
         "exclusion_reasons": sorted({item["reason"] for item in excluded}),
         "display_only_fields": display_only,
+        "signal_candidates": candidate_payload,
         "required_regression_tests": list(REQUIRED_REGRESSION_TESTS),
         "warnings": warnings,
     }
 
 
-def evaluate_tiantian_signals_file(input_path: Path | str, output_path: Path | str) -> Path:
+def evaluate_tiantian_signals_file(
+    input_path: Path | str,
+    output_path: Path | str,
+    *,
+    signal_candidates_output: Path | str | None = None,
+) -> Path:
     payload = json.loads(Path(input_path).read_text(encoding="utf-8"))
     result = evaluate_tiantian_signals(payload)
     resolved_output = Path(output_path)
     resolved_output.parent.mkdir(parents=True, exist_ok=True)
     resolved_output.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    if signal_candidates_output is not None:
+        signal_output = Path(signal_candidates_output)
+    else:
+        signal_output = resolved_output.with_name("signal_candidates.json")
+    signal_output.write_text(
+        json.dumps(result["signal_candidates"], ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     return resolved_output
 
 
