@@ -598,3 +598,41 @@ def test_generate_signal_candidates_cli_writes_output(tmp_path):
     assert exit_code == 0
     assert "eligible_signals" in payload
     assert payload["summary"]["total_signals"] >= 1
+
+
+def test_batch_signal_experiment_cli_can_write_stability_report(tmp_path):
+    input_dir = tmp_path / "history"
+    input_dir.mkdir()
+    (input_dir / "signal_candidates.json").write_text(
+        json.dumps(
+            {
+                "eligible_signals": [{"signal_id": "sig-a", "source": "tiantian", "category": "return"}],
+                "excluded_signals": [
+                    {
+                        "signal_id": "sig-b",
+                        "source": "tiantian",
+                        "category": "data_quality",
+                        "excluded_reason": "degraded_window",
+                    }
+                ],
+                "display_only_signals": [],
+                "summary": {"total_signals": 2, "eligible_count": 1, "excluded_count": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "signal_stability_report.json"
+
+    exit_code = main(
+        [
+            "batch-signal-experiment",
+            "--input-dir",
+            str(input_dir),
+            "--output",
+            str(output),
+        ]
+    )
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert exit_code == 0
+    assert payload["by_signal_id"]["sig-a"]["signal_eligible_rate"] == 1.0

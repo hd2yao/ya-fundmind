@@ -191,3 +191,26 @@ def test_compare_snapshots_reports_data_quality_and_provider_deltas():
     assert provider_delta["provider_cache_writes_delta"] == 4
     assert provider_delta["warning_count_delta"] == 1
     assert provider_delta["fallback_changed"] is True
+
+
+def test_snapshot_with_optional_signal_quality_summary_compares_compatibly():
+    previous = {
+        "as_of": "2026-06-22",
+        "candidates": {},
+        "valuations": {},
+    }
+    current = snapshot_from_result(_result("2026-06-23"))
+    current["signal_quality_summary"] = {
+        "total_signals": 3,
+        "eligible_count": 1,
+        "excluded_count": 1,
+        "display_only_count": 1,
+        "degraded_count": 1,
+        "warning_count": 0,
+        "top_exclusion_reasons": {"degraded_window": 1},
+        "generated_from": "outputs/signal_candidates.json",
+    }
+
+    delta = compare_snapshots(previous, current)
+
+    assert delta is not None
