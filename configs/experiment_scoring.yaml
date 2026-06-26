@@ -1,0 +1,10 @@
+enable_return_signal: true
+enable_drawdown_signal: true
+enable_volatility_signal: true
+enable_liquidity_signal: true
+enable_rating_signal: true
+max_score_adjustment: 1.0
+min_signal_confidence: 0.0
+exclude_warning_windows: true
+exclude_degraded_windows: true
+exclude_stale_cache: true

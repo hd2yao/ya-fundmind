@@ -52,6 +52,39 @@ class ProviderConfig:
     policy: ProviderPolicyConfig = ProviderPolicyConfig()
 
 
+@dataclass(frozen=True)
+class ExperimentScoringFileConfig:
+    enable_return_signal: bool = True
+    enable_drawdown_signal: bool = True
+    enable_volatility_signal: bool = True
+    enable_liquidity_signal: bool = True
+    enable_rating_signal: bool = True
+    max_score_adjustment: float = 1.0
+    min_signal_confidence: float = 0.0
+    exclude_warning_windows: bool = True
+    exclude_degraded_windows: bool = True
+    exclude_stale_cache: bool = True
+
+
+def load_experiment_scoring_config(path: Path | str) -> ExperimentScoringFileConfig:
+    config_path = Path(path)
+    if not config_path.exists():
+        return ExperimentScoringFileConfig()
+    payload = _parse_simple_yaml(config_path)
+    return ExperimentScoringFileConfig(
+        enable_return_signal=bool(payload.get("enable_return_signal", True)),
+        enable_drawdown_signal=bool(payload.get("enable_drawdown_signal", True)),
+        enable_volatility_signal=bool(payload.get("enable_volatility_signal", True)),
+        enable_liquidity_signal=bool(payload.get("enable_liquidity_signal", True)),
+        enable_rating_signal=bool(payload.get("enable_rating_signal", True)),
+        max_score_adjustment=float(payload.get("max_score_adjustment", 1.0) or 1.0),
+        min_signal_confidence=float(payload.get("min_signal_confidence", 0.0) or 0.0),
+        exclude_warning_windows=bool(payload.get("exclude_warning_windows", True)),
+        exclude_degraded_windows=bool(payload.get("exclude_degraded_windows", True)),
+        exclude_stale_cache=bool(payload.get("exclude_stale_cache", True)),
+    )
+
+
 def load_provider_config(path: Path | str) -> ProviderConfig:
     config_path = Path(path)
     if not config_path.exists():
