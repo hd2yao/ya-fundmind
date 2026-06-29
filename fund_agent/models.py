@@ -68,6 +68,29 @@ class SignalCandidate:
 
 
 @dataclass(frozen=True)
+class ExperimentScoreResult:
+    code: str
+    base_score: float | None
+    experiment_score: float | None
+    score_delta: float
+    applied_signals: tuple[dict[str, Any], ...] = ()
+    excluded_signals: tuple[dict[str, Any], ...] = ()
+    confidence: str = "low"
+    warnings: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ExperimentRiskIssue:
+    code: str
+    issue_type: str
+    severity: str
+    source_signal: str
+    reason: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ProviderWarning:
     code: str
     message: str

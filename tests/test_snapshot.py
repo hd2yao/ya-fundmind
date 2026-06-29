@@ -214,3 +214,25 @@ def test_snapshot_with_optional_signal_quality_summary_compares_compatibly():
     delta = compare_snapshots(previous, current)
 
     assert delta is not None
+
+
+def test_snapshot_with_optional_experiment_score_summary_compares_compatibly():
+    previous = {
+        "as_of": "2026-06-22",
+        "candidates": {},
+        "valuations": {},
+    }
+    current = snapshot_from_result(_result("2026-06-23"))
+    current["experiment_score_summary"] = {
+        "total_funds": 2,
+        "adjusted_count": 1,
+        "unchanged_count": 1,
+        "avg_score_delta": 0.15,
+        "max_score_delta": 0.3,
+        "applied_signal_count": 2,
+        "excluded_signal_count": 1,
+    }
+
+    delta = compare_snapshots(previous, current)
+
+    assert delta is not None

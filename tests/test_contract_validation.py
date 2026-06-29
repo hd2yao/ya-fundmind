@@ -167,6 +167,25 @@ def test_snapshot_with_optional_signal_quality_summary_still_validates(tmp_path)
     assert result.ok is True
 
 
+def test_snapshot_with_optional_experiment_score_summary_still_validates(tmp_path):
+    path = write_snapshot(_result(), tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["experiment_score_summary"] = {
+        "total_funds": 1,
+        "adjusted_count": 1,
+        "unchanged_count": 0,
+        "avg_score_delta": 0.2,
+        "max_score_delta": 0.2,
+        "applied_signal_count": 1,
+        "excluded_signal_count": 0,
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = validate_contract_file(path, "snapshot")
+
+    assert result.ok is True
+
+
 def test_validate_output_dir_checks_all_known_outputs(tmp_path):
     result = _result()
     write_json_report(result, tmp_path)

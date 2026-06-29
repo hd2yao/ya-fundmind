@@ -7,8 +7,14 @@ from pathlib import Path
 
 from .agents import run_research
 from .cache import FundCache
-from .config import load_portfolio_config, load_provider_config, load_watchlist_config
+from .config import (
+    load_experiment_scoring_config,
+    load_portfolio_config,
+    load_provider_config,
+    load_watchlist_config,
+)
 from .contract import ContractValidationSummary, validate_contract_file, validate_output_dir
+from .experiment_scoring import explain_experiment_scoring_file, run_experiment_scoring_file
 from .models import FundRecord, ProviderHealth, ProviderWarning
 from .nav_summary import build_nav_history_windows_summary, parse_nav_windows
 from .providers import (
@@ -37,6 +43,7 @@ DEFAULT_PORTFOLIO_FILE = Path("data/portfolio.example.json")
 DEFAULT_WATCHLIST_FILE = Path("configs/watchlist.yaml")
 DEFAULT_PORTFOLIO_CONFIG = Path("configs/portfolio.yaml")
 DEFAULT_PROVIDER_CONFIG = Path("configs/providers.yaml")
+DEFAULT_EXPERIMENT_SCORING_CONFIG = Path("configs/experiment_scoring.yaml")
 DEFAULT_CACHE_FILE = Path("data/cache/funds.sqlite")
 
 
@@ -336,6 +343,24 @@ def _run_explain_signal_candidates(args) -> int:
     print(f"Signal candidate explanation: {markdown_path}")
     if json_path is not None:
         print(f"Signal candidate explanation JSON: {json_path}")
+    return 0
+
+
+def _run_experiment_scoring(args) -> int:
+    config = load_experiment_scoring_config(args.config)
+    path = run_experiment_scoring_file(
+        report_path=args.report,
+        signals_path=args.signals,
+        config=config,
+        output_path=args.output,
+    )
+    print(f"Experiment scoring report: {path}")
+    return 0
+
+
+def _run_explain_experiment_scoring(args) -> int:
+    path = explain_experiment_scoring_file(args.input, args.output)
+    print(f"Experiment scoring explanation: {path}")
     return 0
 
 
@@ -682,6 +707,18 @@ def build_parser() -> argparse.ArgumentParser:
     explain.add_argument("--output", type=Path, default=Path("outputs/signal_candidates_explained.md"))
     explain.add_argument("--json-output", type=Path)
     explain.set_defaults(func=_run_explain_signal_candidates)
+
+    exp_score = subparsers.add_parser("experiment-scoring", help="独立实验评分/风险沙箱，不修改主评分/风险")
+    exp_score.add_argument("--report", type=Path, required=True)
+    exp_score.add_argument("--signals", type=Path, required=True)
+    exp_score.add_argument("--config", type=Path, default=DEFAULT_EXPERIMENT_SCORING_CONFIG)
+    exp_score.add_argument("--output", type=Path, default=Path("outputs/experiment_scoring_report.json"))
+    exp_score.set_defaults(func=_run_experiment_scoring)
+
+    exp_explain = subparsers.add_parser("explain-experiment-scoring", help="解释实验评分/风险沙箱输出")
+    exp_explain.add_argument("--input", type=Path, required=True)
+    exp_explain.add_argument("--output", type=Path, default=Path("outputs/experiment_scoring_explained.md"))
+    exp_explain.set_defaults(func=_run_explain_experiment_scoring)
 
     return parser
 
