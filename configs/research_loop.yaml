@@ -1,0 +1,10 @@
+default_days: 7
+run_dir_pattern: outputs/runs/{as_of}
+continue_on_step_failure: true
+copy_artifacts: true
+include_markdown_reports: true
+include_json_reports: true
+fail_on_contract_error: true
+fail_on_daily_error: true
+fail_on_experiment_error: false
+fail_on_readiness_error: false
