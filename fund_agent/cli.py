@@ -14,7 +14,13 @@ from .config import (
     load_watchlist_config,
 )
 from .contract import ContractValidationSummary, validate_contract_file, validate_output_dir
-from .experiment_scoring import explain_experiment_scoring_file, run_experiment_scoring_file
+from .experiment_scoring import (
+    compare_experiment_baseline_file,
+    explain_experiment_baseline_file,
+    explain_experiment_scoring_file,
+    run_experiment_config_sensitivity_file,
+    run_experiment_scoring_file,
+)
 from .models import FundRecord, ProviderHealth, ProviderWarning
 from .nav_summary import build_nav_history_windows_summary, parse_nav_windows
 from .providers import (
@@ -361,6 +367,34 @@ def _run_experiment_scoring(args) -> int:
 def _run_explain_experiment_scoring(args) -> int:
     path = explain_experiment_scoring_file(args.input, args.output)
     print(f"Experiment scoring explanation: {path}")
+    return 0
+
+
+def _run_compare_experiment_baseline(args) -> int:
+    path = compare_experiment_baseline_file(
+        report_path=args.report,
+        experiment_path=args.experiment,
+        output_path=args.output,
+    )
+    print(f"Experiment baseline comparison: {path}")
+    return 0
+
+
+def _run_explain_experiment_baseline(args) -> int:
+    path = explain_experiment_baseline_file(args.input, args.output)
+    print(f"Experiment baseline review: {path}")
+    return 0
+
+
+def _run_experiment_config_sensitivity(args) -> int:
+    config = load_experiment_scoring_config(args.config)
+    path = run_experiment_config_sensitivity_file(
+        report_path=args.report,
+        signals_path=args.signals,
+        config=config,
+        output_path=args.output,
+    )
+    print(f"Experiment config sensitivity: {path}")
     return 0
 
 
@@ -719,6 +753,24 @@ def build_parser() -> argparse.ArgumentParser:
     exp_explain.add_argument("--input", type=Path, required=True)
     exp_explain.add_argument("--output", type=Path, default=Path("outputs/experiment_scoring_explained.md"))
     exp_explain.set_defaults(func=_run_explain_experiment_scoring)
+
+    exp_compare = subparsers.add_parser("compare-experiment-baseline", help="对照主分数和实验分数，不修改主报告")
+    exp_compare.add_argument("--report", type=Path, required=True)
+    exp_compare.add_argument("--experiment", type=Path, required=True)
+    exp_compare.add_argument("--output", type=Path, default=Path("outputs/experiment_baseline_comparison.json"))
+    exp_compare.set_defaults(func=_run_compare_experiment_baseline)
+
+    exp_baseline_explain = subparsers.add_parser("explain-experiment-baseline", help="生成实验基线人工审核 Markdown")
+    exp_baseline_explain.add_argument("--input", type=Path, required=True)
+    exp_baseline_explain.add_argument("--output", type=Path, default=Path("outputs/experiment_baseline_review.md"))
+    exp_baseline_explain.set_defaults(func=_run_explain_experiment_baseline)
+
+    exp_sensitivity = subparsers.add_parser("experiment-config-sensitivity", help="轻量检查实验评分配置敏感性")
+    exp_sensitivity.add_argument("--report", type=Path, required=True)
+    exp_sensitivity.add_argument("--signals", type=Path, required=True)
+    exp_sensitivity.add_argument("--config", type=Path, default=DEFAULT_EXPERIMENT_SCORING_CONFIG)
+    exp_sensitivity.add_argument("--output", type=Path, default=Path("outputs/experiment_config_sensitivity.json"))
+    exp_sensitivity.set_defaults(func=_run_experiment_config_sensitivity)
 
     return parser
 

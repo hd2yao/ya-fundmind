@@ -129,3 +129,51 @@ def test_explain_experiment_scoring_cli_writes_markdown(tmp_path):
     assert exit_code == 0
     assert "实验评分总览" in markdown
     assert "不能进入主模型" in markdown
+
+
+def test_compare_and_sensitivity_cli_write_outputs(tmp_path):
+    report, signals, config = _write_inputs(tmp_path)
+    experiment = tmp_path / "experiment_scoring_report.json"
+    comparison = tmp_path / "experiment_baseline_comparison.json"
+    sensitivity = tmp_path / "experiment_config_sensitivity.json"
+
+    assert main(
+        [
+            "experiment-scoring",
+            "--report",
+            str(report),
+            "--signals",
+            str(signals),
+            "--config",
+            str(config),
+            "--output",
+            str(experiment),
+        ]
+    ) == 0
+    assert main(
+        [
+            "compare-experiment-baseline",
+            "--report",
+            str(report),
+            "--experiment",
+            str(experiment),
+            "--output",
+            str(comparison),
+        ]
+    ) == 0
+    assert main(
+        [
+            "experiment-config-sensitivity",
+            "--report",
+            str(report),
+            "--signals",
+            str(signals),
+            "--config",
+            str(config),
+            "--output",
+            str(sensitivity),
+        ]
+    ) == 0
+
+    assert json.loads(comparison.read_text(encoding="utf-8"))["total_funds"] == 1
+    assert json.loads(sensitivity.read_text(encoding="utf-8"))["variants"]

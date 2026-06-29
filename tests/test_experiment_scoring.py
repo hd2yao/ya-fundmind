@@ -198,3 +198,44 @@ def test_provider_level_signal_without_code_does_not_create_blank_score_row():
 
     assert {item["code"] for item in result["experiment_scores"]} == {"510300", "000001"}
     assert result["excluded_signal_summary"]["by_signal_id"]["fixture:provider:data_quality"] == 1
+
+
+def test_zero_applied_signals_include_exclusion_diagnostics():
+    signals = {
+        "eligible_signals": [
+            {
+                "signal_id": "bad:warning",
+                "source": "tiantian",
+                "code": "510300",
+                "category": "return",
+                "value": 1.0,
+                "quality_grade": "warning",
+                "eligible": True,
+            },
+            {
+                "signal_id": "bad:stale",
+                "source": "cache:tiantian",
+                "code": "510300",
+                "category": "return",
+                "value": 1.0,
+                "quality_grade": "normal",
+                "eligible": True,
+                "metadata": {"stale": True},
+            },
+        ],
+        "excluded_signals": [],
+        "display_only_signals": [],
+    }
+
+    result = run_experiment_scoring(
+        report_payload=_report_payload(),
+        signals_payload=signals,
+        config=ExperimentScoringConfig(),
+    )
+
+    diagnostics = result["exclusion_diagnostics"]
+    assert result["applied_signal_summary"]["total"] == 0
+    assert diagnostics["excluded_by_reason"]["warning_data_blocked"] == 1
+    assert diagnostics["excluded_by_stale_cache"] == 1
+    assert diagnostics["primary_reason"] in {"warning_data_blocked", "stale_cache_blocked"}
+    assert any("applied signals = 0" in warning["message"] for warning in result["warnings"])
