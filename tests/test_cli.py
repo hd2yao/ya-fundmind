@@ -636,3 +636,99 @@ def test_batch_signal_experiment_cli_can_write_stability_report(tmp_path):
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert exit_code == 0
     assert payload["by_signal_id"]["sig-a"]["signal_eligible_rate"] == 1.0
+
+
+def test_signal_readiness_and_promotion_cli_write_outputs(tmp_path):
+    signals = tmp_path / "signal_candidates.json"
+    signals.write_text(
+        json.dumps(
+            {
+                "eligible_signals": [
+                    {
+                        "signal_id": "tiantian:510300:return:1m:total_return",
+                        "source": "tiantian",
+                        "category": "return",
+                        "quality_grade": "normal",
+                        "eligible": True,
+                    }
+                ],
+                "excluded_signals": [],
+                "display_only_signals": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    stability = tmp_path / "signal_stability_report.json"
+    stability.write_text(
+        json.dumps(
+            {
+                "by_signal_id": {
+                    "tiantian:510300:return:1m:total_return": {
+                        "signal_presence_count": 5,
+                        "signal_eligible_count": 4,
+                        "signal_eligible_rate": 0.8,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    baseline = tmp_path / "experiment_baseline_comparison.json"
+    baseline.write_text(json.dumps({"exclusion_diagnostics": {"excluded_by_reason": {}}}), encoding="utf-8")
+    sensitivity = tmp_path / "experiment_config_sensitivity.json"
+    sensitivity.write_text(json.dumps({"sensitivity_summary": {"over_sensitive": False}}), encoding="utf-8")
+    thresholds = tmp_path / "thresholds.yaml"
+    thresholds.write_text(
+        """
+candidates:
+  - signal_id_pattern: "tiantian:*:return:*"
+    category: return
+    source: tiantian
+    direction_hypothesis: positive
+    min_required_points: 20
+    required_quality_grade: normal
+    exclude_if_stale: true
+    exclude_if_warning: true
+    exclude_if_degraded: true
+    max_score_adjustment_candidate: 0.5
+    risk_gate_candidate: false
+    review_status: proposed
+""",
+        encoding="utf-8",
+    )
+    review_output = tmp_path / "signal_readiness_review.json"
+
+    exit_code = main(
+        [
+            "review-signal-readiness",
+            "--signals",
+            str(signals),
+            "--stability",
+            str(stability),
+            "--baseline",
+            str(baseline),
+            "--sensitivity",
+            str(sensitivity),
+            "--thresholds",
+            str(thresholds),
+            "--output",
+            str(review_output),
+        ]
+    )
+
+    proposal = tmp_path / "signal_promotion_proposal.md"
+    proposal_exit = main(
+        [
+            "generate-signal-promotion-proposal",
+            "--review",
+            str(review_output),
+            "--output",
+            str(proposal),
+        ]
+    )
+
+    assert exit_code == 0
+    assert proposal_exit == 0
+    assert review_output.exists()
+    assert (tmp_path / "manual_review_queue.json").exists()
+    assert "是否建议进入主模型：no" in proposal.read_text(encoding="utf-8")
