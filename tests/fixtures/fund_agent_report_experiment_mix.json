@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "as_of": "2026-06-23",
+  "candidates": [
+    {
+      "code": "510300",
+      "name": "沪深300ETF",
+      "score": 8.0
+    },
+    {
+      "code": "000001",
+      "name": "缺字段基金",
+      "score": 6.0
+    }
+  ],
+  "risk_issues": [
+    {
+      "code": "510300",
+      "severity": "Low",
+      "message": "main risk remains separate"
+    }
+  ]
+}

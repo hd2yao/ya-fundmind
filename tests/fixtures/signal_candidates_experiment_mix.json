@@ -1,0 +1,121 @@
+{
+  "eligible_signals": [
+    {
+      "signal_id": "tiantian:510300:return:1m:total_return",
+      "source": "tiantian",
+      "code": "510300",
+      "category": "return",
+      "value": 1.5,
+      "direction": "positive",
+      "quality_grade": "normal",
+      "eligible": true,
+      "metadata": {
+        "window": "1m"
+      }
+    },
+    {
+      "signal_id": "tiantian:510300:drawdown:1m:max_drawdown",
+      "source": "tiantian",
+      "code": "510300",
+      "category": "drawdown",
+      "value": -12.0,
+      "direction": "negative",
+      "quality_grade": "normal",
+      "eligible": true,
+      "metadata": {
+        "window": "1m"
+      }
+    },
+    {
+      "signal_id": "tiantian:510300:volatility:1m:volatility",
+      "source": "tiantian",
+      "code": "510300",
+      "category": "volatility",
+      "value": 18.0,
+      "direction": "negative",
+      "quality_grade": "normal",
+      "eligible": true,
+      "metadata": {
+        "window": "1m"
+      }
+    },
+    {
+      "signal_id": "tiantian:510300:return:3m:warning",
+      "source": "tiantian",
+      "code": "510300",
+      "category": "return",
+      "value": 2.0,
+      "direction": "positive",
+      "quality_grade": "warning",
+      "eligible": true,
+      "metadata": {
+        "window": "3m"
+      }
+    },
+    {
+      "signal_id": "tiantian:510300:return:6m:degraded",
+      "source": "tiantian",
+      "code": "510300",
+      "category": "return",
+      "value": 3.0,
+      "direction": "positive",
+      "quality_grade": "degraded",
+      "eligible": true,
+      "metadata": {
+        "window": "6m"
+      }
+    },
+    {
+      "signal_id": "tiantian:510300:return:1y:annualized_return",
+      "source": "tiantian",
+      "code": "510300",
+      "category": "return",
+      "value": 12.0,
+      "direction": "positive",
+      "quality_grade": "normal",
+      "eligible": true,
+      "metadata": {
+        "annualized_return_unstable": true
+      }
+    },
+    {
+      "signal_id": "tiantian:510300:return:stale",
+      "source": "cache:tiantian",
+      "code": "510300",
+      "category": "return",
+      "value": 1.0,
+      "direction": "positive",
+      "quality_grade": "normal",
+      "eligible": true,
+      "metadata": {
+        "stale": true
+      }
+    },
+    {
+      "signal_id": "tiantian:000001:return:1m:missing",
+      "source": "tiantian",
+      "code": "000001",
+      "category": "return",
+      "value": null,
+      "direction": "positive",
+      "quality_grade": "normal",
+      "eligible": true,
+      "metadata": {
+        "window": "1m"
+      }
+    }
+  ],
+  "excluded_signals": [],
+  "display_only_signals": [
+    {
+      "signal_id": "tiantian:510300:display_only:fund_manager",
+      "source": "tiantian",
+      "code": "510300",
+      "category": "display_only",
+      "value": "张三",
+      "quality_grade": "normal",
+      "eligible": false,
+      "excluded_reason": "display_only"
+    }
+  ]
+}
