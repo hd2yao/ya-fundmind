@@ -27,6 +27,7 @@ from .experiment_scoring import (
 from .long_horizon import evaluate_long_horizon_stability, write_long_horizon_stability
 from .models import FundRecord, ProviderHealth, ProviderWarning
 from .nav_summary import build_nav_history_windows_summary, parse_nav_windows
+from .ops import build_ops_status, write_latest_summary, write_ops_status
 from .providers import (
     AkshareProvider,
     FixtureProvider,
@@ -695,6 +696,24 @@ def _run_evaluate_long_horizon_stability(args) -> int:
     return 0
 
 
+def _run_ops_status(args) -> int:
+    if args.write_latest_summary:
+        latest = write_latest_summary(args.output_dir)
+        print(f"Latest summary: {latest}")
+    status = build_ops_status(args.output_dir)
+    if args.json_output:
+        path = write_ops_status(status, args.json_output)
+        print(f"Ops status JSON: {path}")
+    print(
+        "Ops status: {status} latest_run={run} dashboard={dashboard}".format(
+            status=status["overall_status"],
+            run=(status.get("latest_run") or {}).get("as_of") or "--",
+            dashboard=status["artifacts"]["dashboard_index"]["exists"],
+        )
+    )
+    return 0 if status["overall_status"] in {"ok", "warning"} else 1
+
+
 def _raise_if_contract_invalid(output_dir: Path) -> int:
     summary = validate_output_dir(output_dir)
     if not summary.results:
@@ -1084,6 +1103,12 @@ def build_parser() -> argparse.ArgumentParser:
     long_horizon.add_argument("--days", type=int, default=30)
     long_horizon.add_argument("--output", type=Path, default=Path("outputs/long_horizon_stability.json"))
     long_horizon.set_defaults(func=_run_evaluate_long_horizon_stability)
+
+    ops_status = subparsers.add_parser("ops-status", help="查看本地 daily ops 运行状态，并可写 latest_summary.md")
+    ops_status.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    ops_status.add_argument("--json-output", type=Path)
+    ops_status.add_argument("--write-latest-summary", action="store_true")
+    ops_status.set_defaults(func=_run_ops_status)
 
     smoke = subparsers.add_parser("smoke-akshare", help="可选：使用 AKShare 真实数据跑 live smoke")
     add_report_args(
