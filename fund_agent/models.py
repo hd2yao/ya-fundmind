@@ -91,6 +91,26 @@ class ExperimentRiskIssue:
 
 
 @dataclass(frozen=True)
+class SignalReviewItem:
+    signal_id: str
+    source: str
+    category: str
+    direction_hypothesis: str
+    observed_count: int
+    eligible_count: int
+    excluded_count: int
+    eligible_rate: float | None
+    top_exclusion_reasons: dict[str, int] = field(default_factory=dict)
+    stability_grade: str = "unknown"
+    config_sensitivity_grade: str = "unknown"
+    data_quality_gate: str = "unknown"
+    recommended_status: str = "needs_review"
+    manual_review_required: bool = True
+    evidence: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ProviderWarning:
     code: str
     message: str

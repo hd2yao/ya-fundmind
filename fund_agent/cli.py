@@ -39,6 +39,10 @@ from .signal_candidates import (
 )
 from .signal_explanation import explain_signal_candidates_file
 from .signal_experiment import evaluate_tiantian_signals_file
+from .signal_review import (
+    generate_signal_promotion_proposal_file,
+    review_signal_readiness_file,
+)
 from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
 from .tiantian_diagnostics import build_tiantian_cache_diagnostics, write_tiantian_cache_diagnostics
 from .trace import write_provider_trace
@@ -50,6 +54,7 @@ DEFAULT_WATCHLIST_FILE = Path("configs/watchlist.yaml")
 DEFAULT_PORTFOLIO_CONFIG = Path("configs/portfolio.yaml")
 DEFAULT_PROVIDER_CONFIG = Path("configs/providers.yaml")
 DEFAULT_EXPERIMENT_SCORING_CONFIG = Path("configs/experiment_scoring.yaml")
+DEFAULT_SIGNAL_THRESHOLD_CONFIG = Path("configs/signal_threshold_candidates.yaml")
 DEFAULT_CACHE_FILE = Path("data/cache/funds.sqlite")
 
 
@@ -395,6 +400,29 @@ def _run_experiment_config_sensitivity(args) -> int:
         output_path=args.output,
     )
     print(f"Experiment config sensitivity: {path}")
+    return 0
+
+
+def _run_review_signal_readiness(args) -> int:
+    path = review_signal_readiness_file(
+        signals_path=args.signals,
+        stability_path=args.stability,
+        baseline_path=args.baseline,
+        sensitivity_path=args.sensitivity,
+        thresholds_path=args.thresholds,
+        output_path=args.output,
+    )
+    print(f"Signal readiness review: {path}")
+    print(f"Manual review queue: {path.parent / 'manual_review_queue.json'}")
+    return 0
+
+
+def _run_generate_signal_promotion_proposal(args) -> int:
+    path = generate_signal_promotion_proposal_file(
+        review_path=args.review,
+        output_path=args.output,
+    )
+    print(f"Signal promotion proposal: {path}")
     return 0
 
 
@@ -771,6 +799,20 @@ def build_parser() -> argparse.ArgumentParser:
     exp_sensitivity.add_argument("--config", type=Path, default=DEFAULT_EXPERIMENT_SCORING_CONFIG)
     exp_sensitivity.add_argument("--output", type=Path, default=Path("outputs/experiment_config_sensitivity.json"))
     exp_sensitivity.set_defaults(func=_run_experiment_config_sensitivity)
+
+    readiness = subparsers.add_parser("review-signal-readiness", help="生成信号阈值候选和人工审批闸门输出")
+    readiness.add_argument("--signals", type=Path, required=True)
+    readiness.add_argument("--stability", type=Path, required=True)
+    readiness.add_argument("--baseline", type=Path, required=True)
+    readiness.add_argument("--sensitivity", type=Path, required=True)
+    readiness.add_argument("--thresholds", type=Path, default=DEFAULT_SIGNAL_THRESHOLD_CONFIG)
+    readiness.add_argument("--output", type=Path, default=Path("outputs/signal_readiness_review.json"))
+    readiness.set_defaults(func=_run_review_signal_readiness)
+
+    proposal = subparsers.add_parser("generate-signal-promotion-proposal", help="生成信号 promotion proposal Markdown")
+    proposal.add_argument("--review", type=Path, required=True)
+    proposal.add_argument("--output", type=Path, default=Path("docs/reviews/signal_promotion_proposal.md"))
+    proposal.set_defaults(func=_run_generate_signal_promotion_proposal)
 
     return parser
 

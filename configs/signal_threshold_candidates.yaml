@@ -1,0 +1,49 @@
+candidates:
+  - signal_id_pattern: "tiantian:*:return:*:total_return"
+    category: return
+    source: tiantian
+    direction_hypothesis: positive
+    min_required_points: 20
+    required_quality_grade: normal
+    exclude_if_stale: true
+    exclude_if_warning: true
+    exclude_if_degraded: true
+    max_score_adjustment_candidate: 0.5
+    risk_gate_candidate: false
+    review_status: proposed
+  - signal_id_pattern: "tiantian:*:drawdown:*:max_drawdown"
+    category: drawdown
+    source: tiantian
+    direction_hypothesis: negative
+    min_required_points: 20
+    required_quality_grade: normal
+    exclude_if_stale: true
+    exclude_if_warning: true
+    exclude_if_degraded: true
+    max_score_adjustment_candidate: 0.5
+    risk_gate_candidate: true
+    review_status: proposed
+  - signal_id_pattern: "tiantian:*:volatility:*:volatility"
+    category: volatility
+    source: tiantian
+    direction_hypothesis: negative
+    min_required_points: 20
+    required_quality_grade: normal
+    exclude_if_stale: true
+    exclude_if_warning: true
+    exclude_if_degraded: true
+    max_score_adjustment_candidate: 0.4
+    risk_gate_candidate: true
+    review_status: proposed
+  - signal_id_pattern: "akshare:*:display_only:*"
+    category: display_only
+    source: akshare
+    direction_hypothesis: neutral
+    min_required_points: 0
+    required_quality_grade: normal
+    exclude_if_stale: true
+    exclude_if_warning: true
+    exclude_if_degraded: true
+    max_score_adjustment_candidate: 0.0
+    risk_gate_candidate: false
+    review_status: rejected
