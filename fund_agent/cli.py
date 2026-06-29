@@ -16,6 +16,7 @@ from .config import (
     load_watchlist_config,
 )
 from .contract import ContractValidationSummary, validate_contract_file, validate_output_dir
+from .evidence_dashboard import generate_evidence_dashboard
 from .experiment_scoring import (
     compare_experiment_baseline_file,
     explain_experiment_baseline_file,
@@ -23,6 +24,7 @@ from .experiment_scoring import (
     run_experiment_config_sensitivity_file,
     run_experiment_scoring_file,
 )
+from .long_horizon import evaluate_long_horizon_stability, write_long_horizon_stability
 from .models import FundRecord, ProviderHealth, ProviderWarning
 from .nav_summary import build_nav_history_windows_summary, parse_nav_windows
 from .providers import (
@@ -40,6 +42,7 @@ from .research_loop import (
     write_daily_research_summary,
     write_run_bundle,
 )
+from .review_state import list_review_state, summarize_review_state, update_review_state
 from .signal_candidates import (
     batch_signal_experiment,
     generate_signal_candidates_file,
@@ -64,6 +67,7 @@ DEFAULT_PROVIDER_CONFIG = Path("configs/providers.yaml")
 DEFAULT_EXPERIMENT_SCORING_CONFIG = Path("configs/experiment_scoring.yaml")
 DEFAULT_SIGNAL_THRESHOLD_CONFIG = Path("configs/signal_threshold_candidates.yaml")
 DEFAULT_RESEARCH_LOOP_CONFIG = Path("configs/research_loop.yaml")
+DEFAULT_REVIEW_STATE_FILE = Path("outputs/manual_review_state.json")
 DEFAULT_CACHE_FILE = Path("data/cache/funds.sqlite")
 
 
@@ -618,9 +622,76 @@ def _run_weekly_research(args) -> int:
         output_path=args.output,
         json_output_path=args.json_output,
         days=args.days,
+        review_state_path=args.review_state,
     )
     print(f"Weekly research summary: {markdown_path}")
     print(f"Weekly research JSON: {json_path}")
+    return 0
+
+
+def _run_update_review_state(args) -> int:
+    try:
+        item = update_review_state(
+            state_path=args.state,
+            review_id=args.review_id,
+            signal_id=args.signal_id,
+            status=args.status,
+            reviewer=args.reviewer,
+            note=args.note,
+            evidence_refs=args.evidence_ref or None,
+        )
+    except ValueError as exc:
+        print(str(exc))
+        return 2
+    print(f"Review state updated: {item['review_id']} status={item['status']}")
+    return 0
+
+
+def _run_list_review_state(args) -> int:
+    items = list_review_state(args.state)
+    summary = summarize_review_state(items)
+    if args.summary_output:
+        args.summary_output.parent.mkdir(parents=True, exist_ok=True)
+        args.summary_output.write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+    print(
+        "Review state: total={total} approved_count={approved} rejected_count={rejected} needs_more_data_count={needs} unresolved_count={unresolved}".format(
+            total=summary["total_review_items"],
+            approved=summary["approved_count"],
+            rejected=summary["rejected_count"],
+            needs=summary["needs_more_data_count"],
+            unresolved=summary["unresolved_count"],
+        )
+    )
+    for item in items:
+        print(f"- {item.get('review_id')}: {item.get('signal_id')} status={item.get('status')} note={item.get('note', '')}")
+    return 0
+
+
+def _run_generate_evidence_dashboard(args) -> int:
+    path = generate_evidence_dashboard(
+        runs_dir=args.runs_dir,
+        review_state_path=args.review_state,
+        output_dir=args.output_dir,
+        days=args.days,
+    )
+    print(f"Evidence dashboard manifest: {path}")
+    return 0
+
+
+def _run_evaluate_long_horizon_stability(args) -> int:
+    result = evaluate_long_horizon_stability(runs_dir=args.runs_dir, days=args.days)
+    path = write_long_horizon_stability(result, args.output)
+    print(f"Long-horizon stability: {path}")
+    print(
+        "runs_processed={runs} enough_history={enough} blockers={blockers}".format(
+            runs=result["runs_processed"],
+            enough=result["enough_history"],
+            blockers=",".join(result["blockers"]) or "none",
+        )
+    )
     return 0
 
 
@@ -973,7 +1044,46 @@ def build_parser() -> argparse.ArgumentParser:
     weekly_research.add_argument("--output", type=Path, default=Path("outputs/weekly_research_summary.md"))
     weekly_research.add_argument("--json-output", type=Path, default=Path("outputs/weekly_research_summary.json"))
     weekly_research.add_argument("--days", type=int, default=7)
+    weekly_research.add_argument("--review-state", type=Path, default=DEFAULT_REVIEW_STATE_FILE)
     weekly_research.set_defaults(func=_run_weekly_research)
+
+    update_review = subparsers.add_parser("update-review-state", help="新增或更新人工审核状态，不修改阈值配置或主模型")
+    update_review.add_argument("--review-id", required=True)
+    update_review.add_argument(
+        "--status",
+        required=True,
+        choices=[
+            "open",
+            "approved_for_more_experiment",
+            "rejected",
+            "needs_more_data",
+            "approved_for_main_candidate",
+        ],
+    )
+    update_review.add_argument("--note", default="")
+    update_review.add_argument("--reviewer", default="")
+    update_review.add_argument("--signal-id")
+    update_review.add_argument("--evidence-ref", action="append")
+    update_review.add_argument("--state", type=Path, default=DEFAULT_REVIEW_STATE_FILE)
+    update_review.set_defaults(func=_run_update_review_state)
+
+    list_review = subparsers.add_parser("list-review-state", help="查看人工审核状态摘要")
+    list_review.add_argument("--state", type=Path, default=DEFAULT_REVIEW_STATE_FILE)
+    list_review.add_argument("--summary-output", type=Path)
+    list_review.set_defaults(func=_run_list_review_state)
+
+    dashboard = subparsers.add_parser("generate-evidence-dashboard", help="从 JSON 证据包生成静态 dashboard")
+    dashboard.add_argument("--runs-dir", type=Path, default=Path("outputs/runs"))
+    dashboard.add_argument("--review-state", type=Path, default=DEFAULT_REVIEW_STATE_FILE)
+    dashboard.add_argument("--output-dir", type=Path, default=Path("outputs/dashboard"))
+    dashboard.add_argument("--days", type=int, default=30)
+    dashboard.set_defaults(func=_run_generate_evidence_dashboard)
+
+    long_horizon = subparsers.add_parser("evaluate-long-horizon-stability", help="评估长周期信号稳定性门槛，不修改主模型")
+    long_horizon.add_argument("--runs-dir", type=Path, default=Path("outputs/runs"))
+    long_horizon.add_argument("--days", type=int, default=30)
+    long_horizon.add_argument("--output", type=Path, default=Path("outputs/long_horizon_stability.json"))
+    long_horizon.set_defaults(func=_run_evaluate_long_horizon_stability)
 
     smoke = subparsers.add_parser("smoke-akshare", help="可选：使用 AKShare 真实数据跑 live smoke")
     add_report_args(

@@ -282,10 +282,16 @@ def run_weekly_research(
     output_path: Path | str,
     json_output_path: Path | str,
     days: int = 7,
+    review_state_path: Path | str | None = None,
 ) -> tuple[Path, Path, dict[str, Any]]:
     root = Path(runs_dir)
     run_dirs = _recent_run_dirs(root, days)
-    payload = build_weekly_research_summary(run_dirs=run_dirs, runs_dir=root, days=days)
+    payload = build_weekly_research_summary(
+        run_dirs=run_dirs,
+        runs_dir=root,
+        days=days,
+        review_state_path=review_state_path,
+    )
     json_output = Path(json_output_path)
     markdown_output = Path(output_path)
     json_output.parent.mkdir(parents=True, exist_ok=True)
@@ -295,7 +301,13 @@ def run_weekly_research(
     return markdown_output, json_output, payload
 
 
-def build_weekly_research_summary(*, run_dirs: list[Path], runs_dir: Path, days: int) -> dict[str, Any]:
+def build_weekly_research_summary(
+    *,
+    run_dirs: list[Path],
+    runs_dir: Path,
+    days: int,
+    review_state_path: Path | str | None = None,
+) -> dict[str, Any]:
     summaries = [_load_json(path / "daily_research_summary.json") for path in run_dirs]
     summaries = [item for item in summaries if item]
     missing_runs = _missing_run_dates(run_dirs, days)
@@ -307,6 +319,7 @@ def build_weekly_research_summary(*, run_dirs: list[Path], runs_dir: Path, days:
         for key in ("recommended_for_experiment_count", "needs_more_data_count", "rejected_or_blocked_count"):
             readiness_status[key] += int(readiness.get(key, 0) or 0)
     queue_summary = aggregate_manual_review_queues(run_dirs)
+    state_summary = _review_state_summary(review_state_path)
     return {
         "runs_processed": len(summaries),
         "missing_runs": missing_runs,
@@ -329,6 +342,7 @@ def build_weekly_research_summary(*, run_dirs: list[Path], runs_dir: Path, days:
         ],
         "readiness_status_trend": dict(readiness_status),
         "manual_review_queue_summary": queue_summary,
+        "manual_review_state_summary": state_summary,
         "recurring_blockers": [reason for reason, count in reason_counts.items() if count > 1],
         "recommendations_for_next_week": [
             "继续积累 daily-research 证据文件。",
@@ -342,6 +356,7 @@ def build_weekly_research_summary(*, run_dirs: list[Path], runs_dir: Path, days:
 
 def render_weekly_research_markdown(payload: dict[str, Any]) -> str:
     queue = payload.get("manual_review_queue_summary") or {}
+    state = payload.get("manual_review_state_summary") or {}
     lines = [
         "# Weekly Research Summary",
         "",
@@ -353,6 +368,7 @@ def render_weekly_research_markdown(payload: dict[str, Any]) -> str:
         "",
         f"- total_review_items: {queue.get('total_review_items', 0)}",
         f"- repeated_review_items: {', '.join(queue.get('repeated_review_items') or []) or 'none'}",
+        f"- manual_review_state: approved={state.get('approved_count', 0)} rejected={state.get('rejected_count', 0)} needs_more_data={state.get('needs_more_data_count', 0)} unresolved={state.get('unresolved_count', 0)}",
         "",
         "## Recurring Blockers",
         "",
@@ -392,6 +408,33 @@ def aggregate_manual_review_queues(run_dirs: list[Path]) -> dict[str, Any]:
         "repeated_review_items": sorted(signal for signal, count in by_signal.items() if count > 1),
         "unresolved_items": unresolved,
     }
+
+
+def _review_state_summary(review_state_path: Path | str | None) -> dict[str, Any]:
+    if review_state_path is None:
+        return {
+            "total_review_items": 0,
+            "by_status": {},
+            "approved_count": 0,
+            "rejected_count": 0,
+            "needs_more_data_count": 0,
+            "unresolved_count": 0,
+            "signals_with_human_notes": [],
+        }
+    try:
+        from .review_state import list_review_state, summarize_review_state
+
+        return summarize_review_state(list_review_state(review_state_path))
+    except Exception:
+        return {
+            "total_review_items": 0,
+            "by_status": {},
+            "approved_count": 0,
+            "rejected_count": 0,
+            "needs_more_data_count": 0,
+            "unresolved_count": 0,
+            "signals_with_human_notes": [],
+        }
 
 
 def _manual_queue_summary(payload: Any) -> dict[str, Any]:

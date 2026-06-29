@@ -1,0 +1,203 @@
+from __future__ import annotations
+
+import html
+import json
+from datetime import date, timedelta
+from pathlib import Path
+from typing import Any
+
+from .research_loop import aggregate_manual_review_queues
+from .review_state import list_review_state, summarize_review_state
+
+
+PAGES = ("index.html", "runs.html", "signals.html", "review.html", "data_quality.html")
+
+
+def generate_evidence_dashboard(
+    *,
+    runs_dir: Path | str,
+    review_state_path: Path | str,
+    output_dir: Path | str,
+    days: int = 30,
+) -> Path:
+    run_dirs = _recent_run_dirs(Path(runs_dir), days)
+    summaries = [_load_json(path / "daily_research_summary.json") for path in run_dirs]
+    summaries = [item for item in summaries if item]
+    review_items = list_review_state(review_state_path)
+    queue_summary = aggregate_manual_review_queues(run_dirs)
+    state_summary = summarize_review_state(review_items)
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    context = {
+        "run_dirs": run_dirs,
+        "summaries": summaries,
+        "review_items": review_items,
+        "queue_summary": queue_summary,
+        "state_summary": state_summary,
+    }
+    _write_page(output / "index.html", "Evidence Dashboard", _index_body(context))
+    _write_page(output / "runs.html", "Runs", _runs_body(context))
+    _write_page(output / "signals.html", "Signals", _signals_body(context))
+    _write_page(output / "review.html", "Manual Review", _review_body(context))
+    _write_page(output / "data_quality.html", "Data Quality", _data_quality_body(context))
+    manifest = {
+        "schema_version": "1.0",
+        "generator": "fund_agent",
+        "not_production_model": True,
+        "runs_processed": len(summaries),
+        "pages": list(PAGES),
+    }
+    manifest_path = output / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    return manifest_path
+
+
+def _write_page(path: Path, title: str, body: str) -> None:
+    path.write_text(
+        "\n".join(
+            [
+                "<!doctype html>",
+                "<html><head><meta charset=\"utf-8\"><title>{}</title></head>".format(html.escape(title)),
+                "<body>",
+                "<nav><a href=\"index.html\">Index</a> <a href=\"runs.html\">Runs</a> <a href=\"signals.html\">Signals</a> <a href=\"review.html\">Review</a> <a href=\"data_quality.html\">Data Quality</a></nav>",
+                "<p><strong>not_production_model=true</strong></p>",
+                body,
+                "</body></html>",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def _index_body(context: dict[str, Any]) -> str:
+    summaries = context["summaries"]
+    latest = summaries[-1] if summaries else {}
+    return """
+<h1>Evidence Dashboard</h1>
+<ul>
+  <li>runs_processed: {runs}</li>
+  <li>latest_status: {status}</li>
+  <li>data_quality: {quality}</li>
+  <li>applied_signals: {applied}</li>
+  <li>recommend_main_model: no</li>
+</ul>
+""".format(
+        runs=len(summaries),
+        status=html.escape(str(latest.get("status", "unknown"))),
+        quality=html.escape(str(latest.get("data_quality_grade", "unknown"))),
+        applied=html.escape(str((latest.get("experiment_scoring") or {}).get("applied_signal_count", 0))),
+    )
+
+
+def _runs_body(context: dict[str, Any]) -> str:
+    rows = []
+    for summary in context["summaries"]:
+        steps = ", ".join(
+            f"{step.get('step_name')}={step.get('status')}"
+            for step in summary.get("steps") or []
+        )
+        rows.append(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                html.escape(str(summary.get("as_of"))),
+                html.escape(str(summary.get("status"))),
+                html.escape(", ".join(summary.get("missing_artifacts") or [])),
+                html.escape(steps),
+            )
+        )
+    return "<h1>Runs</h1><table><tr><th>Date</th><th>Status</th><th>Missing artifacts</th><th>Steps</th></tr>{}</table>".format(
+        "".join(rows)
+    )
+
+
+def _signals_body(context: dict[str, Any]) -> str:
+    rows = []
+    reasons: dict[str, int] = {}
+    for summary in context["summaries"]:
+        signals = summary.get("signal_candidates") or {}
+        experiment = summary.get("experiment_scoring") or {}
+        for reason, count in (experiment.get("top_exclusion_reasons") or {}).items():
+            reasons[reason] = reasons.get(reason, 0) + int(count or 0)
+        rows.append(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                html.escape(str(summary.get("as_of"))),
+                signals.get("eligible_count", 0),
+                signals.get("excluded_count", 0),
+                signals.get("display_only_count", 0),
+                experiment.get("applied_signal_count", 0),
+            )
+        )
+    reason_items = "".join(f"<li>{html.escape(str(k))}: {v}</li>" for k, v in sorted(reasons.items()))
+    return "<h1>Signals</h1><table><tr><th>Date</th><th>Eligible</th><th>Excluded</th><th>Display-only</th><th>Applied</th></tr>{}</table><h2>Recurring blockers</h2><ul>{}</ul>".format(
+        "".join(rows), reason_items
+    )
+
+
+def _review_body(context: dict[str, Any]) -> str:
+    state = context["state_summary"]
+    queue = context["queue_summary"]
+    rows = []
+    for item in context["review_items"]:
+        rows.append(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                html.escape(str(item.get("review_id"))),
+                html.escape(str(item.get("signal_id"))),
+                html.escape(str(item.get("status"))),
+                html.escape(str(item.get("note", ""))),
+            )
+        )
+    return """
+<h1>Review</h1>
+<p>manual_queue_total: {queue_total}</p>
+<p>manual_review_state: approved={approved} rejected={rejected} needs_more_data={needs}</p>
+<table><tr><th>Review ID</th><th>Signal</th><th>Status</th><th>Note</th></tr>{rows}</table>
+""".format(
+        queue_total=queue.get("total_review_items", 0),
+        approved=state.get("approved_count", 0),
+        rejected=state.get("rejected_count", 0),
+        needs=state.get("needs_more_data_count", 0),
+        rows="".join(rows),
+    )
+
+
+def _data_quality_body(context: dict[str, Any]) -> str:
+    rows = []
+    for summary in context["summaries"]:
+        source = summary.get("data_source") or {}
+        warnings = summary.get("provider_warnings") or {}
+        rows.append(
+            "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                html.escape(str(summary.get("as_of"))),
+                html.escape(str(summary.get("data_quality_grade"))),
+                html.escape(str(source.get("provider_warning_count", warnings.get("total", 0)))),
+            )
+        )
+    return "<h1>Data Quality</h1><table><tr><th>Date</th><th>Grade</th><th>Provider warnings</th></tr>{}</table>".format(
+        "".join(rows)
+    )
+
+
+def _recent_run_dirs(runs_dir: Path, days: int) -> list[Path]:
+    if not runs_dir.exists():
+        return []
+    candidates = sorted(path for path in runs_dir.iterdir() if path.is_dir() and _parse_date(path.name))
+    if not candidates:
+        return []
+    end = _parse_date(candidates[-1].name) or date.today()
+    start = end - timedelta(days=max(days, 1) - 1)
+    return [path for path in candidates if start <= (_parse_date(path.name) or start - timedelta(days=1)) <= end]
+
+
+def _parse_date(value: str) -> date | None:
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
