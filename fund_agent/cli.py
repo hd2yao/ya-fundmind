@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
+import json
+from dataclasses import asdict, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from .config import (
     load_experiment_scoring_config,
     load_portfolio_config,
     load_provider_config,
+    load_research_loop_config,
     load_watchlist_config,
 )
 from .contract import ContractValidationSummary, validate_contract_file, validate_output_dir
@@ -32,6 +34,12 @@ from .providers import (
     normalize_fund_code,
 )
 from .report import render_html, render_markdown, write_json_report
+from .research_loop import (
+    execute_research_step,
+    run_weekly_research,
+    write_daily_research_summary,
+    write_run_bundle,
+)
 from .signal_candidates import (
     batch_signal_experiment,
     generate_signal_candidates_file,
@@ -55,6 +63,7 @@ DEFAULT_PORTFOLIO_CONFIG = Path("configs/portfolio.yaml")
 DEFAULT_PROVIDER_CONFIG = Path("configs/providers.yaml")
 DEFAULT_EXPERIMENT_SCORING_CONFIG = Path("configs/experiment_scoring.yaml")
 DEFAULT_SIGNAL_THRESHOLD_CONFIG = Path("configs/signal_threshold_candidates.yaml")
+DEFAULT_RESEARCH_LOOP_CONFIG = Path("configs/research_loop.yaml")
 DEFAULT_CACHE_FILE = Path("data/cache/funds.sqlite")
 
 
@@ -426,6 +435,252 @@ def _run_generate_signal_promotion_proposal(args) -> int:
     return 0
 
 
+def _run_daily_research(args) -> int:
+    as_of = args.as_of or date.today().isoformat()
+    started_at = _utc_now_iso()
+    started_dt = datetime.now(timezone.utc)
+    loop_config = load_research_loop_config(args.research_loop_config)
+    output_dir = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    experiment_config = load_experiment_scoring_config(args.experiment_config)
+    run_dir = _resolve_research_run_dir(output_dir, as_of, loop_config.run_dir_pattern)
+    steps = []
+
+    def add_step(step_name, action, *, outputs=(), critical=False):
+        result = execute_research_step(step_name, action, output_paths=tuple(outputs))
+        steps.append(result)
+        if result.status == "failed" and critical and not loop_config.continue_on_step_failure:
+            raise RuntimeError(result.error_message or f"{step_name} failed")
+        return result
+
+    try:
+        add_step(
+            "daily",
+            lambda: _run_report(args),
+            outputs=(
+                output_dir / "fund_agent_report.md",
+                output_dir / "fund_agent_report.html",
+                output_dir / "fund_agent_report.json",
+                output_dir / "snapshots" / f"{as_of}.json",
+                output_dir / "traces" / f"provider-{as_of}.json",
+            ),
+            critical=loop_config.fail_on_daily_error,
+        )
+        add_step(
+            "validate_contract",
+            lambda: _raise_if_contract_invalid(output_dir),
+            critical=loop_config.fail_on_contract_error,
+        )
+        add_step(
+            "generate_signal_candidates",
+            lambda: generate_signal_candidates_file(
+                output_dir / "fund_agent_report.json",
+                output_dir / "signal_candidates.json",
+            )
+            and 0,
+            outputs=(output_dir / "signal_candidates.json",),
+            critical=loop_config.fail_on_experiment_error,
+        )
+        add_step(
+            "experiment_scoring",
+            lambda: run_experiment_scoring_file(
+                report_path=output_dir / "fund_agent_report.json",
+                signals_path=output_dir / "signal_candidates.json",
+                config=experiment_config,
+                output_path=output_dir / "experiment_scoring_report.json",
+            )
+            and 0,
+            outputs=(output_dir / "experiment_scoring_report.json",),
+            critical=loop_config.fail_on_experiment_error,
+        )
+        add_step(
+            "explain_experiment_scoring",
+            lambda: explain_experiment_scoring_file(
+                output_dir / "experiment_scoring_report.json",
+                output_dir / "experiment_scoring_explained.md",
+            )
+            and 0,
+            outputs=(output_dir / "experiment_scoring_explained.md",),
+            critical=loop_config.fail_on_experiment_error,
+        )
+        add_step(
+            "compare_experiment_baseline",
+            lambda: compare_experiment_baseline_file(
+                report_path=output_dir / "fund_agent_report.json",
+                experiment_path=output_dir / "experiment_scoring_report.json",
+                output_path=output_dir / "experiment_baseline_comparison.json",
+            )
+            and 0,
+            outputs=(output_dir / "experiment_baseline_comparison.json",),
+            critical=loop_config.fail_on_experiment_error,
+        )
+        add_step(
+            "experiment_config_sensitivity",
+            lambda: run_experiment_config_sensitivity_file(
+                report_path=output_dir / "fund_agent_report.json",
+                signals_path=output_dir / "signal_candidates.json",
+                config=experiment_config,
+                output_path=output_dir / "experiment_config_sensitivity.json",
+            )
+            and 0,
+            outputs=(output_dir / "experiment_config_sensitivity.json",),
+            critical=loop_config.fail_on_experiment_error,
+        )
+        add_step(
+            "review_signal_readiness",
+            lambda: review_signal_readiness_file(
+                signals_path=output_dir / "signal_candidates.json",
+                stability_path=output_dir / "signal_stability_report.json",
+                baseline_path=output_dir / "experiment_baseline_comparison.json",
+                sensitivity_path=output_dir / "experiment_config_sensitivity.json",
+                thresholds_path=args.thresholds,
+                output_path=output_dir / "signal_readiness_review.json",
+            )
+            and 0,
+            outputs=(output_dir / "signal_readiness_review.json", output_dir / "manual_review_queue.json"),
+            critical=loop_config.fail_on_readiness_error,
+        )
+        add_step(
+            "generate_signal_promotion_proposal",
+            lambda: generate_signal_promotion_proposal_file(
+                review_path=output_dir / "signal_readiness_review.json",
+                output_path=output_dir / "signal_promotion_proposal.md",
+            )
+            and 0,
+            outputs=(output_dir / "signal_promotion_proposal.md",),
+            critical=loop_config.fail_on_readiness_error,
+        )
+    except RuntimeError as exc:
+        print(f"Daily research stopped: {exc}")
+
+    finished_at = _utc_now_iso()
+    duration_ms = int((datetime.now(timezone.utc) - started_dt).total_seconds() * 1000)
+    status = _daily_research_status(steps, loop_config)
+    write_daily_research_summary(
+        output_dir=output_dir,
+        as_of=as_of,
+        steps=tuple(steps),
+        started_at=started_at,
+        finished_at=finished_at,
+        duration_ms=duration_ms,
+        status=status,
+        missing_artifacts=[],
+    )
+    bundle = None
+    missing_artifacts = []
+    if loop_config.copy_artifacts:
+        bundle = write_run_bundle(
+            output_dir=output_dir,
+            as_of=as_of,
+            run_dir=run_dir,
+            include_markdown_reports=loop_config.include_markdown_reports,
+            include_json_reports=loop_config.include_json_reports,
+        )
+        missing_artifacts = list(bundle.missing_artifacts)
+    write_daily_research_summary(
+        output_dir=output_dir,
+        as_of=as_of,
+        steps=tuple(steps),
+        started_at=started_at,
+        finished_at=finished_at,
+        duration_ms=duration_ms,
+        status=status,
+        missing_artifacts=missing_artifacts,
+    )
+    if loop_config.copy_artifacts:
+        bundle = write_run_bundle(
+            output_dir=output_dir,
+            as_of=as_of,
+            run_dir=run_dir,
+            include_markdown_reports=loop_config.include_markdown_reports,
+            include_json_reports=loop_config.include_json_reports,
+        )
+    else:
+        run_dir.mkdir(parents=True, exist_ok=True)
+    _write_run_metadata(
+        run_dir,
+        as_of=as_of,
+        started_at=started_at,
+        finished_at=finished_at,
+        duration_ms=duration_ms,
+        steps=steps,
+        status=status,
+    )
+    print(f"Daily research summary: {output_dir / 'daily_research_summary.md'}")
+    print(f"Daily research JSON: {output_dir / 'daily_research_summary.json'}")
+    print(f"Run bundle: {run_dir}")
+    return 0 if status == "success" else 1
+
+
+def _run_weekly_research(args) -> int:
+    markdown_path, json_path, _payload = run_weekly_research(
+        runs_dir=args.runs_dir,
+        output_path=args.output,
+        json_output_path=args.json_output,
+        days=args.days,
+    )
+    print(f"Weekly research summary: {markdown_path}")
+    print(f"Weekly research JSON: {json_path}")
+    return 0
+
+
+def _raise_if_contract_invalid(output_dir: Path) -> int:
+    summary = validate_output_dir(output_dir)
+    if not summary.results:
+        raise RuntimeError("no contract files found")
+    if not summary.ok:
+        errors = [
+            f"{result.contract_type}:{'; '.join(result.errors)}"
+            for result in summary.results
+            if not result.ok
+        ]
+        raise RuntimeError("contract validation failed: " + " | ".join(errors))
+    return 0
+
+
+def _daily_research_status(steps, loop_config) -> str:
+    critical = set()
+    if loop_config.fail_on_daily_error:
+        critical.add("daily")
+    if loop_config.fail_on_contract_error:
+        critical.add("validate_contract")
+    if loop_config.fail_on_experiment_error:
+        critical.update(
+            {
+                "generate_signal_candidates",
+                "experiment_scoring",
+                "explain_experiment_scoring",
+                "compare_experiment_baseline",
+                "experiment_config_sensitivity",
+            }
+        )
+    if loop_config.fail_on_readiness_error:
+        critical.update({"review_signal_readiness", "generate_signal_promotion_proposal"})
+    return "failed" if any(step.step_name in critical and step.status == "failed" for step in steps) else "success"
+
+
+def _write_run_metadata(run_dir: Path, *, as_of: str, started_at: str, finished_at: str, duration_ms: int, steps, status: str) -> None:
+    payload = {
+        "as_of": as_of,
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "duration_ms": duration_ms,
+        "steps": [asdict(step) for step in steps],
+        "status": status,
+    }
+    (run_dir / "run_metadata.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+def _resolve_research_run_dir(output_dir: Path, as_of: str, pattern: str) -> Path:
+    default_pattern = "outputs/runs/{as_of}"
+    if pattern == default_pattern:
+        return output_dir / "runs" / as_of
+    return Path(pattern.format(as_of=as_of, output_dir=str(output_dir)))
+
+
 def _execute_tiantian_enrichment(args, provider, provider_config, *, nav_windows: tuple[str, ...]) -> int:
     as_of = args.as_of or date.today().isoformat()
     try:
@@ -699,6 +954,26 @@ def build_parser() -> argparse.ArgumentParser:
         default_provider="fixture",
     )
     daily.set_defaults(func=_run_report)
+
+    daily_research = subparsers.add_parser("daily-research", help="串联每日研究证据闭环，不修改主评分/风险")
+    add_report_args(
+        daily_research,
+        include_portfolio=True,
+        default_watchlist=DEFAULT_WATCHLIST_FILE,
+        default_portfolio_config=DEFAULT_PORTFOLIO_CONFIG,
+        default_provider="fixture",
+    )
+    daily_research.add_argument("--experiment-config", type=Path, default=DEFAULT_EXPERIMENT_SCORING_CONFIG)
+    daily_research.add_argument("--thresholds", type=Path, default=DEFAULT_SIGNAL_THRESHOLD_CONFIG)
+    daily_research.add_argument("--research-loop-config", type=Path, default=DEFAULT_RESEARCH_LOOP_CONFIG)
+    daily_research.set_defaults(func=_run_daily_research)
+
+    weekly_research = subparsers.add_parser("weekly-research", help="聚合 daily-research run bundle，生成每周证据摘要")
+    weekly_research.add_argument("--runs-dir", type=Path, default=Path("outputs/runs"))
+    weekly_research.add_argument("--output", type=Path, default=Path("outputs/weekly_research_summary.md"))
+    weekly_research.add_argument("--json-output", type=Path, default=Path("outputs/weekly_research_summary.json"))
+    weekly_research.add_argument("--days", type=int, default=7)
+    weekly_research.set_defaults(func=_run_weekly_research)
 
     smoke = subparsers.add_parser("smoke-akshare", help="可选：使用 AKShare 真实数据跑 live smoke")
     add_report_args(

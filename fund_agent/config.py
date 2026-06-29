@@ -66,6 +66,39 @@ class ExperimentScoringFileConfig:
     exclude_stale_cache: bool = True
 
 
+@dataclass(frozen=True)
+class ResearchLoopConfig:
+    default_days: int = 7
+    run_dir_pattern: str = "outputs/runs/{as_of}"
+    continue_on_step_failure: bool = True
+    copy_artifacts: bool = True
+    include_markdown_reports: bool = True
+    include_json_reports: bool = True
+    fail_on_contract_error: bool = True
+    fail_on_daily_error: bool = True
+    fail_on_experiment_error: bool = False
+    fail_on_readiness_error: bool = False
+
+
+def load_research_loop_config(path: Path | str) -> ResearchLoopConfig:
+    config_path = Path(path)
+    if not config_path.exists():
+        return ResearchLoopConfig()
+    payload = _parse_simple_yaml(config_path)
+    return ResearchLoopConfig(
+        default_days=int(payload.get("default_days", 7) or 7),
+        run_dir_pattern=str(payload.get("run_dir_pattern", "outputs/runs/{as_of}")),
+        continue_on_step_failure=bool(payload.get("continue_on_step_failure", True)),
+        copy_artifacts=bool(payload.get("copy_artifacts", True)),
+        include_markdown_reports=bool(payload.get("include_markdown_reports", True)),
+        include_json_reports=bool(payload.get("include_json_reports", True)),
+        fail_on_contract_error=bool(payload.get("fail_on_contract_error", True)),
+        fail_on_daily_error=bool(payload.get("fail_on_daily_error", True)),
+        fail_on_experiment_error=bool(payload.get("fail_on_experiment_error", False)),
+        fail_on_readiness_error=bool(payload.get("fail_on_readiness_error", False)),
+    )
+
+
 def load_experiment_scoring_config(path: Path | str) -> ExperimentScoringFileConfig:
     config_path = Path(path)
     if not config_path.exists():
