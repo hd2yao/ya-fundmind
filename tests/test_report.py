@@ -37,6 +37,28 @@ def test_markdown_and_html_reports_include_risk_boundary_and_evidence():
     assert "不构成投资建议" in html
 
 
+def test_html_report_renders_interactive_dashboard_sections():
+    funds = FixtureProvider(Path("data/fixtures/funds.json")).fetch_funds()
+    holdings = load_portfolio_file(Path("data/portfolio.example.json"))
+    result = run_research(funds, holdings=holdings, as_of="2026-06-22")
+
+    html = render_html(result)
+
+    assert 'class="app-shell"' in html
+    assert 'class="section-nav"' in html
+    assert 'href="#research-priority"' in html
+    assert '<section id="research-priority"' in html
+    assert 'class="metric-card"' in html
+    assert '<details class="report-panel" open>' in html
+    assert '<table class="data-table">' in html
+    assert "<thead>" in html
+    assert "<tbody>" in html
+    assert 'id="fund-510300"' in html
+    assert 'data-code="510300"' in html
+    assert 'class="severity severity-high"' in html
+    assert "| 排名 |" not in html
+
+
 def test_markdown_report_includes_snapshot_delta_when_available():
     funds = FixtureProvider(Path("data/fixtures/funds.json")).fetch_funds()
     result = run_research(funds, as_of="2026-06-22")
