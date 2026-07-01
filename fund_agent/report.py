@@ -16,12 +16,14 @@ GENERATOR = "fund_agent"
 
 
 def render_markdown(result: ResearchResult) -> str:
+    scope_name = _scope_name(result)
     lines: list[str] = [
         "# YA FundMind 基金智研系统日报",
         "",
         f"> {DISCLAIMER}",
         "",
         f"- 版本日期: {result.as_of or '未指定'}",
+        f"- 报告范围: {scope_name}；当前报告只分析配置筛选后的基金池，不代表全市场或板块热度结论。",
         f"- 候选数量: {len(result.ranked_candidates)}",
         "",
         "## Agent 运行摘要",
@@ -118,7 +120,7 @@ def render_markdown(result: ResearchResult) -> str:
     lines.extend(
         [
             "",
-            "## 数据来源与新鲜度",
+            f"## {scope_name}数据来源与新鲜度",
             "",
             "| 代码 | 名称 | 来源 | as_of | updated_at | expires_at | stale |",
             "| --- | --- | --- | --- | --- | --- | --- |",
@@ -139,7 +141,7 @@ def render_markdown(result: ResearchResult) -> str:
     lines.extend(
         [
             "",
-            "## 研究优先级",
+            f"## {scope_name}研究优先级",
             "",
             "| 排名 | 代码 | 名称 | 类型 | 分数 | 证据 | 估值方式 | 置信度 |",
             "| --- | --- | --- | --- | ---: | --- | --- | --- |",
@@ -304,6 +306,8 @@ def render_markdown(result: ResearchResult) -> str:
 
 
 def render_html(result: ResearchResult) -> str:
+    scope_name = _scope_name(result)
+    scope_metric_label = _scope_metric_label(result)
     provider_count = len(result.provider_health)
     fallback_count = sum(1 for health in result.provider_health if health.fallback_used)
     stale_count = sum(
@@ -335,6 +339,7 @@ def render_html(result: ResearchResult) -> str:
             '<p class="eyebrow">YA FundMind Daily Research</p>',
             f"<h1>基金智研系统日报</h1>",
             f'<p class="disclaimer">{_html(DISCLAIMER)}</p>',
+            f'<p class="scope-note">报告范围：{_html(scope_name)}；当前页面只分析配置筛选后的基金池，不代表全市场或板块热度结论。</p>',
             "</div>",
             '<div class="hero-status">',
             f'<span class="status-pill status-{quality_class}">数据质量 {_html(result.data_quality_grade)}</span>',
@@ -342,7 +347,7 @@ def render_html(result: ResearchResult) -> str:
             "</div>",
             "</header>",
             '<section class="metric-grid" aria-label="关键指标">',
-            _metric_card("候选基金", str(len(result.ranked_candidates)), "研究优先级列表"),
+            _metric_card(scope_metric_label, str(len(result.ranked_candidates)), "研究优先级列表"),
             _metric_card("Live Rows", str(live_rows), "provider 实时映射行数"),
             _metric_card("Fallback", str(fallback_count), "本次 fallback 次数", "warn" if fallback_count else "ok"),
             _metric_card("风险提示", str(risk_count), "组合层风险条目", "danger" if risk_count else "ok"),
@@ -384,11 +389,12 @@ def render_html(result: ResearchResult) -> str:
 
 
 def _render_side_nav(result: ResearchResult) -> str:
+    scope_name = _scope_name(result)
     items = [
         ("overview", "运行摘要"),
         ("data-quality", "数据质量"),
-        ("freshness", "新鲜度"),
-        ("research-priority", "研究优先级"),
+        ("freshness", f"{scope_name}新鲜度"),
+        ("research-priority", f"{scope_name}优先级"),
         ("valuation", "估值"),
     ]
     if result.portfolio:
@@ -555,7 +561,7 @@ def _render_freshness_section(result: ResearchResult) -> str:
     return (
         '<section id="freshness" class="report-section">'
         '<details class="report-panel" open>'
-        "<summary>数据来源与新鲜度</summary>"
+        f"<summary>{_html(_scope_name(result))}数据来源与新鲜度</summary>"
         f"{_table(['代码', '名称', '来源', 'as_of', 'updated_at', 'expires_at', 'stale'], rows)}"
         "</details>"
         "</section>"
@@ -586,7 +592,7 @@ def _render_research_priority_section(result: ResearchResult) -> str:
     return (
         '<section id="research-priority" class="report-section">'
         '<details class="report-panel" open>'
-        "<summary>研究优先级</summary>"
+        f"<summary>{_html(_scope_name(result))}研究优先级</summary>"
         f"{_table(['排名', '代码', '名称', '类型', '分数', '证据', '估值方式', '置信度'], rows)}"
         "</details>"
         "</section>"
@@ -826,6 +832,18 @@ def _metric_card(label: str, value: str, caption: str, tone: str = "") -> str:
     )
 
 
+def _is_watchlist_scoped(result: ResearchResult) -> bool:
+    return any(health.watchlist_requested_count for health in result.provider_health)
+
+
+def _scope_name(result: ResearchResult) -> str:
+    return "自选池" if _is_watchlist_scoped(result) else "当前研究池"
+
+
+def _scope_metric_label(result: ResearchResult) -> str:
+    return "自选基金" if _is_watchlist_scoped(result) else "候选基金"
+
+
 def _table(headers: list[str], rows: list, *, empty_text: str = "暂无数据") -> str:
     header_html = "".join(f"<th>{_html(header)}</th>" for header in headers)
     if not rows:
@@ -913,7 +931,8 @@ a:focus-visible,summary:focus-visible{outline:3px solid rgba(47,95,159,.45);outl
 .eyebrow{margin:0 0 6px;color:var(--teal);font-weight:800;text-transform:uppercase;font-size:12px;letter-spacing:.08em}
 h1{margin:0;font-size:34px;line-height:1.15;letter-spacing:0}
 h3{margin:22px 0 10px;font-size:16px}
-.disclaimer{max-width:760px;margin:12px 0 0;color:var(--muted)}
+.disclaimer,.scope-note{max-width:760px;margin:12px 0 0;color:var(--muted)}
+.scope-note{display:inline-block;background:#eef7f5;border:1px solid #cce8e2;border-radius:8px;padding:8px 10px;color:#155e56}
 .hero-status{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .metric-grid,.mini-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin:18px 0}
 .mini-grid{grid-template-columns:repeat(3,minmax(0,1fr))}

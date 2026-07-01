@@ -59,6 +59,32 @@ def test_html_report_renders_interactive_dashboard_sections():
     assert "| 排名 |" not in html
 
 
+def test_report_labels_watchlist_scope_when_watchlist_is_used():
+    health = ProviderHealth(
+        provider="fixture",
+        started_at="2026-06-22T00:00:00+00:00",
+        finished_at="2026-06-22T00:00:01+00:00",
+        duration_ms=1000,
+        watchlist_requested_count=1,
+        watchlist_matched_count=1,
+    )
+    result = run_research(
+        [FundRecord(code="510300", name="沪深300ETF", category="ETF", price=4.01)],
+        as_of="2026-06-22",
+        provider_health=(health,),
+    )
+
+    markdown = render_markdown(result)
+    html = render_html(result)
+
+    assert "报告范围: 自选池" in markdown
+    assert "自选池数据来源与新鲜度" in markdown
+    assert "自选池研究优先级" in markdown
+    assert "报告范围：自选池" in html
+    assert "自选基金" in html
+    assert "自选池研究优先级" in html
+
+
 def test_markdown_report_includes_snapshot_delta_when_available():
     funds = FixtureProvider(Path("data/fixtures/funds.json")).fetch_funds()
     result = run_research(funds, as_of="2026-06-22")
