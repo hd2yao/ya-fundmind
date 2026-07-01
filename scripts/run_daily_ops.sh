@@ -13,6 +13,8 @@ DAYS="${DAYS:-30}"
 WEEKLY_DAYS="${WEEKLY_DAYS:-7}"
 REFRESH_DASHBOARD="${REFRESH_DASHBOARD:-true}"
 ENABLE_MARKET_INTELLIGENCE="${ENABLE_MARKET_INTELLIGENCE:-false}"
+MARKET_TREND_DAYS="${MARKET_TREND_DAYS:-30}"
+MARKET_TREND_MIN_SNAPSHOTS="${MARKET_TREND_MIN_SNAPSHOTS:-3}"
 
 cd "${PROJECT_DIR}"
 
@@ -36,6 +38,13 @@ if [[ "${ENABLE_MARKET_INTELLIGENCE}" == "true" ]]; then
     --output-dir "${OUTPUT_DIR}" \
     --as-of "${AS_OF}"; then
     echo "market intelligence warning: market-scan failed; daily ops will continue"
+  fi
+  if ! "${PYTHON_BIN}" -m fund_agent.cli market-trend \
+    --market-dir "${OUTPUT_DIR}/market" \
+    --output-dir "${OUTPUT_DIR}" \
+    --days "${MARKET_TREND_DAYS}" \
+    --min-snapshots "${MARKET_TREND_MIN_SNAPSHOTS}"; then
+    echo "market trend warning: market-trend failed; daily ops will continue"
   fi
 else
   echo "market intelligence skipped: ENABLE_MARKET_INTELLIGENCE=${ENABLE_MARKET_INTELLIGENCE}"

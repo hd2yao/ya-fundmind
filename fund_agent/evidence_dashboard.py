@@ -35,6 +35,7 @@ def generate_evidence_dashboard(
         "queue_summary": queue_summary,
         "state_summary": state_summary,
         "market_report": _latest_market_report(run_dirs, output),
+        "market_trend": _latest_market_trend(output),
     }
     _write_page(output / "index.html", "Evidence Dashboard", _index_body(context))
     _write_page(output / "runs.html", "Runs", _runs_body(context))
@@ -74,6 +75,8 @@ def _write_page(path: Path, title: str, body: str) -> None:
 def _index_body(context: dict[str, Any]) -> str:
     summaries = context["summaries"]
     latest = summaries[-1] if summaries else {}
+    market_report = context.get("market_report") or {}
+    market_trend = context.get("market_trend") or {}
     research_ready = str(bool(latest.get("status") == "success")).lower()
     dashboard_ready = "true"
     return """
@@ -86,6 +89,10 @@ def _index_body(context: dict[str, Any]) -> str:
   <li>recommend_main_model: no</li>
   <li>research_loop_ready: {research_ready}</li>
   <li>dashboard_ready: {dashboard_ready}</li>
+  <li>market_intelligence_available: {market_available}</li>
+  <li>market_trend_available: {trend_available}</li>
+  <li>market_trend_snapshots_processed: {trend_snapshots}</li>
+  <li>market_trend_enough_history: {trend_enough}</li>
 </ul>
 <p>当前系统可继续运行，dashboard 可继续查看，research loop 可继续积累证据。</p>
 <p>insufficient_history 只影响主评分/主风险接入判断，不表示系统级失败。</p>
@@ -97,6 +104,10 @@ def _index_body(context: dict[str, Any]) -> str:
         applied=html.escape(str((latest.get("experiment_scoring") or {}).get("applied_signal_count", 0))),
         research_ready=research_ready,
         dashboard_ready=dashboard_ready,
+        market_available=str(bool(market_report)).lower(),
+        trend_available=str(bool(market_trend)).lower(),
+        trend_snapshots=html.escape(str(market_trend.get("snapshots_processed", 0))),
+        trend_enough=html.escape(str(market_trend.get("enough_market_history", False))),
     )
 
 
@@ -189,10 +200,13 @@ def _data_quality_body(context: dict[str, Any]) -> str:
 
 def _market_body(context: dict[str, Any]) -> str:
     report = context.get("market_report") or {}
+    trend = context.get("market_trend") or {}
     if not report:
         return """
 <h1>Market Intelligence</h1>
 <p>Market Intelligence 尚未运行。</p>
+<h2>Market Trend Summary</h2>
+<p>Market Trend 尚未运行。</p>
 <p>运行后将展示全市场基金/ETF 数量、主题排行榜、热门主题候选和数据质量摘要。</p>
 """
     hot_rows = "".join(
@@ -212,6 +226,7 @@ def _market_body(context: dict[str, Any]) -> str:
     )
     warnings = "".join(f"<li>{html.escape(str(item))}</li>" for item in report.get("warnings") or [])
     data_quality = report.get("data_quality_summary") or {}
+    trend_html = _market_trend_section(trend)
     return """
 <h1>Market Intelligence</h1>
 <ul>
@@ -231,6 +246,7 @@ def _market_body(context: dict[str, Any]) -> str:
 <table><tr><th>Theme</th><th>Sample Size</th></tr>{insufficient_rows}</table>
 <h2>Warnings</h2>
 <ul>{warnings}</ul>
+{trend_html}
 """.format(
         as_of=html.escape(str(report.get("as_of"))),
         source=html.escape(str(report.get("source"))),
@@ -242,6 +258,75 @@ def _market_body(context: dict[str, Any]) -> str:
         hot_rows=hot_rows,
         insufficient_rows=insufficient_rows,
         warnings=warnings or "<li>none</li>",
+        trend_html=trend_html,
+    )
+
+
+def _market_trend_section(trend: dict[str, Any]) -> str:
+    if not trend:
+        return """
+<h2>Market Trend Summary</h2>
+<p>Market Trend 尚未运行。</p>
+"""
+    persistent = _trend_list(trend.get("persistent_hot_themes") or [])
+    new_hot = _trend_list(trend.get("new_hot_themes") or [])
+    rising = _trend_list(trend.get("rising_themes") or [])
+    falling = _trend_list(trend.get("falling_themes") or [])
+    quality_rows = "".join(
+        "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+            html.escape(str(item.get("as_of"))),
+            html.escape(str(item.get("data_quality_grade"))),
+            html.escape(str(item.get("insufficient_sample_theme_count", 0))),
+            html.escape(str(item.get("warning_count", 0))),
+        )
+        for item in trend.get("data_quality_trend") or []
+    )
+    warnings = "".join(f"<li>{html.escape(str(item))}</li>" for item in trend.get("warnings") or [])
+    insufficient = ""
+    if not trend.get("enough_market_history", False):
+        insufficient = "<p>趋势样本不足，但 Market Intelligence 可继续运行。</p>"
+    return """
+<h2>Market Trend Summary</h2>
+<ul>
+  <li>snapshots_processed: {snapshots}</li>
+  <li>minimum_required_snapshots: {minimum}</li>
+  <li>enough_market_history: {enough}</li>
+  <li>latest_as_of: {latest}</li>
+</ul>
+{insufficient}
+<h3>Persistent Hot Themes</h3><ul>{persistent}</ul>
+<h3>New Hot Themes</h3><ul>{new_hot}</ul>
+<h3>Rising Themes</h3><ul>{rising}</ul>
+<h3>Falling Themes</h3><ul>{falling}</ul>
+<h3>Data Quality Trend</h3>
+<table><tr><th>Date</th><th>Grade</th><th>Insufficient Themes</th><th>Warnings</th></tr>{quality_rows}</table>
+<h3>Trend Warnings</h3><ul>{warnings}</ul>
+""".format(
+        snapshots=html.escape(str(trend.get("snapshots_processed", 0))),
+        minimum=html.escape(str(trend.get("minimum_required_snapshots", 0))),
+        enough=html.escape(str(trend.get("enough_market_history", False))),
+        latest=html.escape(str(trend.get("latest_as_of"))),
+        insufficient=insufficient,
+        persistent=persistent,
+        new_hot=new_hot,
+        rising=rising,
+        falling=falling,
+        quality_rows=quality_rows or "<tr><td colspan=\"4\">none</td></tr>",
+        warnings=warnings or "<li>none</li>",
+    )
+
+
+def _trend_list(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return "<li>none</li>"
+    return "".join(
+        "<li>{theme}: latest_rank={rank}, rank_change={change}, hot_days={hot_days}</li>".format(
+            theme=html.escape(str(item.get("theme"))),
+            rank=html.escape(str(item.get("latest_rank"))),
+            change=html.escape(str(item.get("rank_change"))),
+            hot_days=html.escape(str(item.get("hot_days", 0))),
+        )
+        for item in items
     )
 
 
@@ -281,3 +366,11 @@ def _latest_market_report(run_dirs: list[Path], output_dir: Path) -> dict[str, A
             payload["_path"] = str(path)
             return payload
     return {}
+
+
+def _latest_market_trend(output_dir: Path) -> dict[str, Any]:
+    path = output_dir.parent / "market" / "market_trend_report.json"
+    payload = _load_json(path)
+    if payload:
+        payload["_path"] = str(path)
+    return payload

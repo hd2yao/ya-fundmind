@@ -27,6 +27,7 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
     weekly = _load_json(root / "weekly_research_summary.json")
     stability = _load_json(root / "long_horizon_stability.json")
     market = _latest_market_report(root)
+    market_trend = _latest_market_trend(root)
     latest_run_status = latest_run.get("status")
     daily_success = daily.get("status") == "success" or latest_run_status == "success"
     dashboard_ready = artifacts["dashboard_index"]["exists"]
@@ -49,6 +50,13 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
         "latest_market_total_etfs": market.get("total_etfs"),
         "latest_market_theme_count": len(market.get("themes") or []) if market else 0,
         "latest_market_data_quality_grade": (market.get("data_quality_summary") or {}).get("grade") if market else None,
+        "market_trend_available": bool(market_trend),
+        "latest_market_trend_path": market_trend.get("_path"),
+        "latest_market_snapshots_processed": market_trend.get("snapshots_processed", 0) if market_trend else 0,
+        "enough_market_history": bool(market_trend.get("enough_market_history", False)) if market_trend else False,
+        "latest_market_persistent_hot_count": len(market_trend.get("persistent_hot_themes") or []) if market_trend else 0,
+        "latest_market_new_hot_count": len(market_trend.get("new_hot_themes") or []) if market_trend else 0,
+        "latest_market_data_quality_trend": market_trend.get("data_quality_trend", []) if market_trend else [],
         "main_model_ready": main_model_ready,
         "main_model_blockers": main_model_blockers,
         "main_model_blocker_explanation": blocker_explanation,
@@ -113,6 +121,27 @@ def write_latest_summary(output_dir: Path | str) -> Path:
             f"- market_data_quality: {status.get('latest_market_data_quality_grade')}",
             "- 市场观察只用于主题/板块观察，不修改主评分/主风险，不构成投资建议。",
         ]
+    trend_lines = []
+    if status.get("market_trend_available"):
+        trend_lines = [
+            "",
+            "## Market Trend",
+            "",
+            f"- market_trend_report: {status.get('latest_market_trend_path')}",
+            f"- market_trend_snapshots_processed: {status.get('latest_market_snapshots_processed')}",
+            f"- market_trend_enough_history: {status.get('enough_market_history')}",
+            f"- market_persistent_hot_count: {status.get('latest_market_persistent_hot_count')}",
+            f"- market_new_hot_count: {status.get('latest_market_new_hot_count')}",
+            "- 趋势样本不足只影响板块趋势判断，不影响 daily ops/dashboard/market-scan 继续运行。",
+        ]
+    else:
+        trend_lines = [
+            "",
+            "## Market Trend",
+            "",
+            "- market_trend_available: False",
+            "- Market Trend 尚未运行；不影响 daily ops/dashboard/market-scan 继续运行。",
+        ]
     lines = [
         "# YA FundMind Latest Summary",
         "",
@@ -135,6 +164,7 @@ def write_latest_summary(output_dir: Path | str) -> Path:
         "",
         status.get("main_model_blocker_explanation", ""),
         *market_lines,
+        *trend_lines,
         "",
         "本摘要仅用于本地投研运行状态查看，不修改主评分/主风险，不构成投资建议。",
     ]
@@ -212,6 +242,22 @@ def _latest_market_report(root: Path) -> dict[str, Any]:
     if runs_dir.exists():
         candidates.extend(
             path / "market_intelligence_report.json"
+            for path in reversed(sorted(item for item in runs_dir.iterdir() if item.is_dir()))
+        )
+    for path in candidates:
+        payload = _load_json(path)
+        if payload:
+            payload["_path"] = str(path)
+            return payload
+    return {}
+
+
+def _latest_market_trend(root: Path) -> dict[str, Any]:
+    candidates = [root / "market" / "market_trend_report.json"]
+    runs_dir = root / "runs"
+    if runs_dir.exists():
+        candidates.extend(
+            path / "market_trend_report.json"
             for path in reversed(sorted(item for item in runs_dir.iterdir() if item.is_dir()))
         )
     for path in candidates:

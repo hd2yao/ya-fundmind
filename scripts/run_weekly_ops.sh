@@ -7,6 +7,8 @@ OUTPUT_DIR="${OUTPUT_DIR:-outputs}"
 REVIEW_STATE="${REVIEW_STATE:-${OUTPUT_DIR}/manual_review_state.json}"
 DAYS="${DAYS:-30}"
 AS_OF="${AS_OF:-$(date +%F)}"
+MARKET_TREND_DAYS="${MARKET_TREND_DAYS:-30}"
+MARKET_TREND_MIN_SNAPSHOTS="${MARKET_TREND_MIN_SNAPSHOTS:-3}"
 
 cd "${PROJECT_DIR}"
 
@@ -23,6 +25,14 @@ echo "weekly ops started: as_of=${AS_OF} output_dir=${OUTPUT_DIR} days=${DAYS}"
   --output "${OUTPUT_DIR}/weekly_research_summary.md" \
   --json-output "${OUTPUT_DIR}/weekly_research_summary.json" \
   --days "${DAYS}"
+
+if ! "${PYTHON_BIN}" -m fund_agent.cli market-trend \
+  --market-dir "${OUTPUT_DIR}/market" \
+  --output-dir "${OUTPUT_DIR}" \
+  --days "${MARKET_TREND_DAYS}" \
+  --min-snapshots "${MARKET_TREND_MIN_SNAPSHOTS}"; then
+  echo "market trend warning: market-trend failed; weekly ops will continue"
+fi
 
 "${PYTHON_BIN}" -m fund_agent.cli generate-evidence-dashboard \
   --runs-dir "${OUTPUT_DIR}/runs" \

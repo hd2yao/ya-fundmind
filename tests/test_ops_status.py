@@ -26,6 +26,17 @@ def test_build_ops_status_reports_latest_run_and_required_artifacts(tmp_path):
             "data_quality_summary": {"grade": "warning"},
         },
     )
+    _write_json(
+        output_dir / "market" / "market_trend_report.json",
+        {
+            "latest_as_of": "2026-06-23",
+            "snapshots_processed": 2,
+            "enough_market_history": False,
+            "persistent_hot_themes": [{"theme": "半导体"}],
+            "new_hot_themes": [{"theme": "芯片"}],
+            "data_quality_trend": [{"as_of": "2026-06-23", "data_quality_grade": "warning"}],
+        },
+    )
 
     status = build_ops_status(output_dir)
 
@@ -48,6 +59,12 @@ def test_build_ops_status_reports_latest_run_and_required_artifacts(tmp_path):
     assert status["latest_market_total_etfs"] == 2
     assert status["latest_market_theme_count"] == 1
     assert status["latest_market_data_quality_grade"] == "warning"
+    assert status["market_trend_available"] is True
+    assert status["latest_market_snapshots_processed"] == 2
+    assert status["enough_market_history"] is False
+    assert status["latest_market_persistent_hot_count"] == 1
+    assert status["latest_market_new_hot_count"] == 1
+    assert status["latest_market_data_quality_trend"]
     assert status["artifacts"]["dashboard_index"]["exists"] is False
     assert status["artifacts"]["dashboard_manifest"]["exists"] is True
 
@@ -82,6 +99,17 @@ def test_write_latest_summary_combines_daily_weekly_and_stability(tmp_path):
             "data_quality_summary": {"grade": "warning"},
         },
     )
+    _write_json(
+        output_dir / "market" / "market_trend_report.json",
+        {
+            "latest_as_of": "2026-06-23",
+            "snapshots_processed": 1,
+            "enough_market_history": False,
+            "persistent_hot_themes": [],
+            "new_hot_themes": [],
+            "data_quality_trend": [{"as_of": "2026-06-23", "data_quality_grade": "warning"}],
+        },
+    )
 
     path = write_latest_summary(output_dir)
     markdown = path.read_text(encoding="utf-8")
@@ -98,5 +126,8 @@ def test_write_latest_summary_combines_daily_weekly_and_stability(tmp_path):
     assert "Market Intelligence" in markdown
     assert "market_total_funds: 6" in markdown
     assert "market_theme_count: 1" in markdown
+    assert "Market Trend" in markdown
+    assert "market_trend_snapshots_processed: 1" in markdown
+    assert "趋势样本不足只影响板块趋势判断" in markdown
     assert "insufficient_history" in markdown
     assert "不修改主评分/主风险" in markdown

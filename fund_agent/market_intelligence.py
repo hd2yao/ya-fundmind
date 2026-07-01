@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from statistics import median
 from typing import Any, Iterable
@@ -100,10 +100,62 @@ class MarketIntelligenceOutputs:
     summary_path: Path
     theme_rankings_path: Path
     fund_candidates_path: Path
+    snapshot_path: Path
     run_report_path: Path
     run_summary_path: Path
     run_theme_rankings_path: Path
     run_fund_candidates_path: Path
+    run_snapshot_path: Path
+
+
+@dataclass(frozen=True)
+class MarketThemeTrend:
+    theme: str
+    snapshots_count: int
+    first_seen: str | None
+    last_seen: str | None
+    latest_rank: int | None
+    previous_rank: int | None
+    rank_change: int | None
+    latest_sample_size: int | None
+    sample_size_change: int | None
+    latest_hot: bool
+    hot_days: int
+    hot_ratio: float
+    latest_data_quality_grade: str
+    warnings: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class MarketTrendReport:
+    schema_version: str
+    generated_at: str
+    period_days: int
+    snapshots_processed: int
+    minimum_required_snapshots: int
+    enough_market_history: bool
+    source: str | None
+    latest_as_of: str | None
+    theme_trends: tuple[dict[str, Any], ...]
+    rising_themes: tuple[dict[str, Any], ...]
+    falling_themes: tuple[dict[str, Any], ...]
+    persistent_hot_themes: tuple[dict[str, Any], ...]
+    new_hot_themes: tuple[dict[str, Any], ...]
+    disappeared_hot_themes: tuple[dict[str, Any], ...]
+    insufficient_history_themes: tuple[dict[str, Any], ...]
+    data_quality_trend: tuple[dict[str, Any], ...]
+    warnings: tuple[str, ...]
+    not_production_model: bool = True
+
+
+@dataclass(frozen=True)
+class MarketTrendOutputs:
+    report_path: Path
+    summary_path: Path
+    rankings_path: Path
+    run_report_path: Path | None = None
+    run_summary_path: Path | None = None
 
 
 def fund_record_to_market_record(fund: FundRecord, *, as_of: str) -> MarketFundRecord:
@@ -304,10 +356,13 @@ def write_market_intelligence_outputs(
 ) -> MarketIntelligenceOutputs:
     root = Path(output_dir)
     market_dir = root / "market"
+    snapshots_dir = market_dir / "snapshots"
     run_dir = root / "runs" / report.as_of
     market_dir.mkdir(parents=True, exist_ok=True)
+    snapshots_dir.mkdir(parents=True, exist_ok=True)
     run_dir.mkdir(parents=True, exist_ok=True)
     report_payload = market_report_to_dict(report)
+    snapshot_payload = build_market_snapshot(report)
     rankings = {
         "schema_version": "1.0",
         "generated_at": report.generated_at,
@@ -333,18 +388,22 @@ def write_market_intelligence_outputs(
         summary_path=market_dir / "market_intelligence_summary.md",
         theme_rankings_path=market_dir / "market_theme_rankings.json",
         fund_candidates_path=market_dir / "market_fund_candidates.json",
+        snapshot_path=snapshots_dir / f"{report.as_of}.json",
         run_report_path=run_dir / "market_intelligence_report.json",
         run_summary_path=run_dir / "market_intelligence_summary.md",
         run_theme_rankings_path=run_dir / "market_theme_rankings.json",
         run_fund_candidates_path=run_dir / "market_fund_candidates.json",
+        run_snapshot_path=run_dir / "market_snapshot.json",
     )
     for path, payload in (
         (paths.report_path, report_payload),
         (paths.theme_rankings_path, rankings),
         (paths.fund_candidates_path, candidates),
+        (paths.snapshot_path, snapshot_payload),
         (paths.run_report_path, report_payload),
         (paths.run_theme_rankings_path, rankings),
         (paths.run_fund_candidates_path, candidates),
+        (paths.run_snapshot_path, snapshot_payload),
     ):
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     paths.summary_path.write_text(summary, encoding="utf-8")
@@ -354,6 +413,405 @@ def write_market_intelligence_outputs(
 
 def market_report_to_dict(report: MarketIntelligenceReport) -> dict[str, Any]:
     return asdict(report)
+
+
+def build_market_snapshot(report: MarketIntelligenceReport) -> dict[str, Any]:
+    return {
+        "schema_version": report.schema_version,
+        "generated_at": report.generated_at,
+        "as_of": report.as_of,
+        "source": report.source,
+        "provider": report.source,
+        "run_type": report.run_type,
+        "total_funds": report.total_funds,
+        "total_etfs": report.total_etfs,
+        "theme_count": len(report.themes),
+        "hot_theme_count": len(report.hot_theme_candidates),
+        "data_quality_grade": report.data_quality_summary.get("grade", "unknown"),
+        "theme_rankings": list(report.top_themes),
+        "hot_theme_candidates": list(report.hot_theme_candidates),
+        "insufficient_sample_themes": list(report.insufficient_sample_themes),
+        "data_quality_summary": report.data_quality_summary,
+        "warnings": list(report.warnings),
+        "not_production_model": True,
+        "market_observation_only": True,
+    }
+
+
+def build_market_trend_report(
+    market_dir: Path | str,
+    *,
+    days: int = 30,
+    min_snapshots: int = 3,
+    top_n: int = 20,
+) -> MarketTrendReport:
+    snapshots = _load_market_snapshots(Path(market_dir), days=days)
+    processed = len(snapshots)
+    enough_history = processed >= max(min_snapshots, 1)
+    latest = snapshots[-1] if snapshots else {}
+    latest_as_of = str(latest.get("as_of")) if latest.get("as_of") else None
+    previous_as_of = str(snapshots[-2].get("as_of")) if processed >= 2 and snapshots[-2].get("as_of") else None
+    theme_history: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    hot_by_date: dict[str, set[str]] = {}
+
+    for snapshot in snapshots:
+        as_of = str(snapshot.get("as_of") or "")
+        hot_themes = {_theme_name(item) for item in snapshot.get("hot_theme_candidates") or []}
+        hot_themes.discard("")
+        hot_by_date[as_of] = hot_themes
+        rankings = _snapshot_theme_rankings(snapshot)
+        for rank, item in enumerate(rankings, start=1):
+            theme = _theme_name(item)
+            if not theme:
+                continue
+            theme_history[theme].append(
+                {
+                    "as_of": as_of,
+                    "rank": rank,
+                    "sample_size": _safe_int(item.get("sample_size")),
+                    "hot": theme in hot_themes,
+                    "data_quality_grade": str(item.get("data_quality_grade") or snapshot.get("data_quality_grade") or "unknown"),
+                    "warnings": tuple(str(value) for value in (item.get("warnings") or [])),
+                    "raw": item,
+                }
+            )
+
+    trends = tuple(
+        _build_theme_trend(
+            theme,
+            history,
+            snapshots_processed=processed,
+            latest_as_of=latest_as_of,
+            previous_as_of=previous_as_of,
+        )
+        for theme, history in sorted(theme_history.items())
+    )
+    trend_dicts = tuple(
+        sorted(
+            (asdict(item) for item in trends),
+            key=lambda item: (
+                item.get("latest_rank") is None,
+                item.get("latest_rank") or 999999,
+                -(item.get("hot_ratio") or 0),
+                item.get("theme"),
+            ),
+        )
+    )
+    rising = tuple(
+        sorted(
+            (item for item in trend_dicts if item.get("latest_rank") is not None and (item.get("rank_change") or 0) > 0),
+            key=lambda item: (-(item.get("rank_change") or 0), item.get("latest_rank") or 999999, item.get("theme")),
+        )[: max(top_n, 0)]
+    )
+    falling = tuple(
+        sorted(
+            (item for item in trend_dicts if item.get("latest_rank") is not None and (item.get("rank_change") or 0) < 0),
+            key=lambda item: ((item.get("rank_change") or 0), item.get("latest_rank") or 999999, item.get("theme")),
+        )[: max(top_n, 0)]
+    )
+    persistent = tuple(
+        sorted(
+            (
+                item
+                for item in trend_dicts
+                if item.get("latest_hot") and item.get("hot_days", 0) >= 2
+            ),
+            key=lambda item: (-(item.get("hot_ratio") or 0), item.get("latest_rank") or 999999, item.get("theme")),
+        )[: max(top_n, 0)]
+    )
+    latest_hot = hot_by_date.get(latest_as_of or "", set())
+    previous_hot = hot_by_date.get(previous_as_of or "", set())
+    new_hot = tuple(
+        sorted(
+            (item for item in trend_dicts if item.get("theme") in latest_hot and item.get("theme") not in previous_hot),
+            key=lambda item: (item.get("latest_rank") or 999999, item.get("theme")),
+        )[: max(top_n, 0)]
+        if processed >= 2
+        else ()
+    )
+    disappeared = tuple(
+        sorted(
+            (item for item in trend_dicts if item.get("theme") in previous_hot and item.get("theme") not in latest_hot),
+            key=lambda item: (item.get("previous_rank") or 999999, item.get("theme")),
+        )[: max(top_n, 0)]
+        if processed >= 2
+        else ()
+    )
+    insufficient = tuple(
+        sorted(
+            (item for item in trend_dicts if item.get("snapshots_count", 0) < max(min_snapshots, 1)),
+            key=lambda item: (item.get("snapshots_count", 0), item.get("latest_rank") or 999999, item.get("theme")),
+        )[: max(top_n, 0)]
+    )
+    warnings: list[str] = []
+    if not enough_history:
+        warnings.append(
+            f"insufficient_market_history: snapshots_processed={processed} minimum_required={max(min_snapshots, 1)}"
+        )
+    if not snapshots:
+        warnings.append("no_market_snapshots_found")
+    return MarketTrendReport(
+        schema_version="1.0",
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        period_days=max(days, 1),
+        snapshots_processed=processed,
+        minimum_required_snapshots=max(min_snapshots, 1),
+        enough_market_history=enough_history,
+        source=latest.get("source") or latest.get("provider"),
+        latest_as_of=latest_as_of,
+        theme_trends=trend_dicts,
+        rising_themes=rising,
+        falling_themes=falling,
+        persistent_hot_themes=persistent,
+        new_hot_themes=new_hot,
+        disappeared_hot_themes=disappeared,
+        insufficient_history_themes=insufficient,
+        data_quality_trend=_build_market_data_quality_trend(snapshots),
+        warnings=tuple(warnings),
+        not_production_model=True,
+    )
+
+
+def write_market_trend_outputs(report: MarketTrendReport, output_dir: Path | str) -> MarketTrendOutputs:
+    root = Path(output_dir)
+    market_dir = root / "market"
+    market_dir.mkdir(parents=True, exist_ok=True)
+    report_payload = market_trend_report_to_dict(report)
+    rankings = {
+        "schema_version": report.schema_version,
+        "generated_at": report.generated_at,
+        "latest_as_of": report.latest_as_of,
+        "period_days": report.period_days,
+        "theme_trends": report.theme_trends,
+        "rising_themes": report.rising_themes,
+        "falling_themes": report.falling_themes,
+        "persistent_hot_themes": report.persistent_hot_themes,
+        "new_hot_themes": report.new_hot_themes,
+        "disappeared_hot_themes": report.disappeared_hot_themes,
+        "not_production_model": True,
+    }
+    summary = render_market_trend_summary(report)
+    report_path = market_dir / "market_trend_report.json"
+    summary_path = market_dir / "market_trend_summary.md"
+    rankings_path = market_dir / "theme_trend_rankings.json"
+    report_path.write_text(json.dumps(report_payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    rankings_path.write_text(json.dumps(rankings, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    summary_path.write_text(summary, encoding="utf-8")
+    run_report_path = None
+    run_summary_path = None
+    if report.latest_as_of:
+        run_dir = root / "runs" / report.latest_as_of
+        if run_dir.exists():
+            run_report_path = run_dir / "market_trend_report.json"
+            run_summary_path = run_dir / "market_trend_summary.md"
+            run_report_path.write_text(
+                json.dumps(report_payload, ensure_ascii=False, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            run_summary_path.write_text(summary, encoding="utf-8")
+    return MarketTrendOutputs(
+        report_path=report_path,
+        summary_path=summary_path,
+        rankings_path=rankings_path,
+        run_report_path=run_report_path,
+        run_summary_path=run_summary_path,
+    )
+
+
+def market_trend_report_to_dict(report: MarketTrendReport) -> dict[str, Any]:
+    return asdict(report)
+
+
+def render_market_trend_summary(report: MarketTrendReport) -> str:
+    lines = [
+        "# Market Trend Summary",
+        "",
+        f"- latest_as_of: {report.latest_as_of or '--'}",
+        f"- period_days: {report.period_days}",
+        f"- snapshots_processed: {report.snapshots_processed}",
+        f"- minimum_required_snapshots: {report.minimum_required_snapshots}",
+        f"- enough_market_history: {report.enough_market_history}",
+        "- 这是市场趋势观察，不是买卖建议。",
+        "- 本阶段不接入主评分/主风险，不改变主报告结论。",
+        "",
+    ]
+    if not report.enough_market_history:
+        lines.extend(
+            [
+                "## 趋势样本不足",
+                "",
+                "- 趋势样本不足，但 Market Intelligence 可继续运行。",
+                "- 当前结果可作为当日横截面观察，不能视为稳定板块趋势。",
+                "",
+            ]
+        )
+    lines.extend(["## 持续热门主题", ""])
+    lines.extend(_theme_summary_lines(report.persistent_hot_themes, empty="- none"))
+    lines.extend(["", "## 新增热门主题", ""])
+    lines.extend(_theme_summary_lines(report.new_hot_themes, empty="- none"))
+    lines.extend(["", "## 排名上升主题", ""])
+    lines.extend(_theme_summary_lines(report.rising_themes, empty="- none"))
+    lines.extend(["", "## 排名下降主题", ""])
+    lines.extend(_theme_summary_lines(report.falling_themes, empty="- none"))
+    lines.extend(["", "## 数据质量趋势", ""])
+    if report.data_quality_trend:
+        for item in report.data_quality_trend:
+            lines.append(
+                "- {as_of}: grade={grade} insufficient_sample={insufficient} warnings={warnings}".format(
+                    as_of=item.get("as_of"),
+                    grade=item.get("data_quality_grade"),
+                    insufficient=item.get("insufficient_sample_theme_count"),
+                    warnings=item.get("warning_count"),
+                )
+            )
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Warnings", ""])
+    lines.extend([f"- {item}" for item in report.warnings] or ["- none"])
+    return "\n".join(lines) + "\n"
+
+
+def _load_market_snapshots(market_dir: Path, *, days: int) -> tuple[dict[str, Any], ...]:
+    snapshots_dir = market_dir / "snapshots"
+    if not snapshots_dir.exists():
+        return ()
+    rows = []
+    for path in sorted(snapshots_dir.glob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        as_of = str(payload.get("as_of") or path.stem)
+        parsed = _parse_snapshot_date(as_of)
+        if parsed is None:
+            continue
+        payload["_path"] = str(path)
+        payload["_as_of_date"] = parsed
+        rows.append(payload)
+    if not rows:
+        return ()
+    rows.sort(key=lambda item: item["_as_of_date"])
+    latest = rows[-1]["_as_of_date"]
+    start = latest - timedelta(days=max(days, 1) - 1)
+    filtered = [item for item in rows if start <= item["_as_of_date"] <= latest]
+    for item in filtered:
+        item.pop("_as_of_date", None)
+    return tuple(filtered)
+
+
+def _build_theme_trend(
+    theme: str,
+    history: list[dict[str, Any]],
+    *,
+    snapshots_processed: int,
+    latest_as_of: str | None,
+    previous_as_of: str | None,
+) -> MarketThemeTrend:
+    history = sorted(history, key=lambda item: item.get("as_of") or "")
+    by_as_of = {item.get("as_of"): item for item in history}
+    latest_entry = by_as_of.get(latest_as_of) if latest_as_of else None
+    previous_entry = by_as_of.get(previous_as_of) if previous_as_of else None
+    if latest_entry is not None and previous_entry is None:
+        earlier = [item for item in history if item is not latest_entry]
+        previous_entry = earlier[-1] if earlier else None
+    rank_change = None
+    sample_size_change = None
+    if latest_entry is not None and previous_entry is not None:
+        rank_change = _safe_int(previous_entry.get("rank")) - _safe_int(latest_entry.get("rank"))
+        sample_size_change = _safe_int(latest_entry.get("sample_size")) - _safe_int(previous_entry.get("sample_size"))
+    hot_days = sum(1 for item in history if item.get("hot"))
+    latest_hot = bool(latest_entry and latest_entry.get("hot"))
+    warnings: list[str] = []
+    for item in history:
+        warnings.extend(str(value) for value in (item.get("warnings") or ()))
+    if latest_entry is None and latest_as_of:
+        warnings.append("theme_not_seen_in_latest_snapshot")
+    quality_entry = latest_entry or (history[-1] if history else {})
+    return MarketThemeTrend(
+        theme=theme,
+        snapshots_count=len(history),
+        first_seen=str(history[0].get("as_of")) if history else None,
+        last_seen=str(history[-1].get("as_of")) if history else None,
+        latest_rank=_safe_int(latest_entry.get("rank")) if latest_entry else None,
+        previous_rank=_safe_int(previous_entry.get("rank")) if previous_entry else None,
+        rank_change=rank_change,
+        latest_sample_size=_safe_int(latest_entry.get("sample_size")) if latest_entry else None,
+        sample_size_change=sample_size_change,
+        latest_hot=latest_hot,
+        hot_days=hot_days,
+        hot_ratio=round(hot_days / snapshots_processed, 4) if snapshots_processed else 0.0,
+        latest_data_quality_grade=str(quality_entry.get("data_quality_grade", "unknown")),
+        warnings=tuple(dict.fromkeys(warnings)),
+        metadata={
+            "observation_only": True,
+            "not_production_model": True,
+            "latest_snapshot_as_of": latest_as_of,
+        },
+    )
+
+
+def _build_market_data_quality_trend(snapshots: tuple[dict[str, Any], ...]) -> tuple[dict[str, Any], ...]:
+    rows = []
+    for snapshot in snapshots:
+        summary = snapshot.get("data_quality_summary") or {}
+        warnings = snapshot.get("warnings") or []
+        rows.append(
+            {
+                "as_of": snapshot.get("as_of"),
+                "data_quality_grade": snapshot.get("data_quality_grade") or summary.get("grade", "unknown"),
+                "unknown_theme_count": _safe_int(summary.get("unknown_theme_count")),
+                "insufficient_sample_theme_count": _safe_int(
+                    summary.get("insufficient_sample_theme_count")
+                    or len(snapshot.get("insufficient_sample_themes") or [])
+                ),
+                "warning_count": len(warnings),
+            }
+        )
+    return tuple(rows)
+
+
+def _snapshot_theme_rankings(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    rankings = snapshot.get("theme_rankings") or snapshot.get("top_themes") or snapshot.get("themes") or []
+    return [item for item in rankings if isinstance(item, dict) and _theme_name(item)]
+
+
+def _theme_summary_lines(items: tuple[dict[str, Any], ...], *, empty: str) -> list[str]:
+    if not items:
+        return [empty]
+    rows = []
+    for item in items:
+        rows.append(
+            "- {theme}: latest_rank={rank} rank_change={change} hot_days={hot_days} hot_ratio={hot_ratio}".format(
+                theme=item.get("theme"),
+                rank=_display_number(item.get("latest_rank")),
+                change=_display_number(item.get("rank_change")),
+                hot_days=item.get("hot_days", 0),
+                hot_ratio=item.get("hot_ratio", 0),
+            )
+        )
+    return rows
+
+
+def _theme_name(item: dict[str, Any]) -> str:
+    return str(item.get("theme") or "").strip()
+
+
+def _parse_snapshot_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _safe_int(value: object) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _build_theme_stats(

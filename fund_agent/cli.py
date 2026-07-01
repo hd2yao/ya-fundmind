@@ -27,8 +27,10 @@ from .experiment_scoring import (
 from .long_horizon import evaluate_long_horizon_stability, write_long_horizon_stability
 from .market_intelligence import (
     build_market_intelligence_report,
+    build_market_trend_report,
     fund_record_to_market_record,
     write_market_intelligence_outputs,
+    write_market_trend_outputs,
 )
 from .models import FundRecord, ProviderHealth, ProviderWarning
 from .nav_summary import build_nav_history_windows_summary, parse_nav_windows
@@ -473,7 +475,32 @@ def _run_market_scan(args) -> int:
     print(f"Market intelligence summary: {outputs.summary_path}")
     print(f"Market theme rankings: {outputs.theme_rankings_path}")
     print(f"Market fund candidates: {outputs.fund_candidates_path}")
+    print(f"Market snapshot: {outputs.snapshot_path}")
     print(f"Run bundle market report: {outputs.run_report_path}")
+    return 0
+
+
+def _run_market_trend(args) -> int:
+    report = build_market_trend_report(
+        args.market_dir,
+        days=args.days,
+        min_snapshots=args.min_snapshots,
+        top_n=args.top_n,
+    )
+    outputs = write_market_trend_outputs(report, args.output_dir)
+    if args.json_output and args.json_output != outputs.report_path:
+        args.json_output.parent.mkdir(parents=True, exist_ok=True)
+        args.json_output.write_text(outputs.report_path.read_text(encoding="utf-8"), encoding="utf-8")
+    if args.summary_output and args.summary_output != outputs.summary_path:
+        args.summary_output.parent.mkdir(parents=True, exist_ok=True)
+        args.summary_output.write_text(outputs.summary_path.read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"Market trend report: {outputs.report_path}")
+    print(f"Market trend summary: {outputs.summary_path}")
+    print(f"Market trend rankings: {outputs.rankings_path}")
+    if outputs.run_report_path:
+        print(f"Run bundle market trend report: {outputs.run_report_path}")
+    if not report.enough_market_history:
+        print("Market trend warning: insufficient market history; daily ops can continue.")
     return 0
 
 
@@ -1132,6 +1159,16 @@ def build_parser() -> argparse.ArgumentParser:
     market_scan.add_argument("--min-theme-sample-size", type=int, default=5)
     market_scan.add_argument("--provider-verbose", action="store_true")
     market_scan.set_defaults(func=_run_market_scan)
+
+    market_trend = subparsers.add_parser("market-trend", help="基于 market snapshots 生成板块趋势观察，不修改主评分/风险")
+    market_trend.add_argument("--market-dir", type=Path, default=Path("outputs/market"))
+    market_trend.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    market_trend.add_argument("--days", type=int, default=30, choices=[7, 30, 60])
+    market_trend.add_argument("--min-snapshots", type=int, default=3)
+    market_trend.add_argument("--top-n", type=int, default=20)
+    market_trend.add_argument("--json-output", type=Path)
+    market_trend.add_argument("--summary-output", type=Path)
+    market_trend.set_defaults(func=_run_market_trend)
 
     weekly_research = subparsers.add_parser("weekly-research", help="聚合 daily-research run bundle，生成每周证据摘要")
     weekly_research.add_argument("--runs-dir", type=Path, default=Path("outputs/runs"))

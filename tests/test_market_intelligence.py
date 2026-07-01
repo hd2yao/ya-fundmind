@@ -79,8 +79,16 @@ def test_market_intelligence_outputs_include_json_markdown_and_run_bundle(tmp_pa
     assert outputs.summary_path.exists()
     assert outputs.theme_rankings_path.exists()
     assert outputs.fund_candidates_path.exists()
+    assert outputs.snapshot_path.exists()
     assert (tmp_path / "runs" / "2026-06-23" / "market_intelligence_report.json").exists()
+    assert (tmp_path / "runs" / "2026-06-23" / "market_snapshot.json").exists()
     assert "不是买卖建议" in summary
     payload = json.loads(outputs.report_path.read_text(encoding="utf-8"))
+    snapshot = json.loads(outputs.snapshot_path.read_text(encoding="utf-8"))
     assert payload["not_production_model"] is True
     assert payload["themes"]
+    assert snapshot["schema_version"] == "1.0"
+    assert snapshot["as_of"] == "2026-06-23"
+    assert snapshot["provider"] == "fixture"
+    assert snapshot["theme_rankings"]
+    assert snapshot["not_production_model"] is True

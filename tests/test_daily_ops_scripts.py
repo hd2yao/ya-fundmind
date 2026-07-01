@@ -6,6 +6,8 @@ def test_daily_ops_script_keeps_market_intelligence_disabled_by_default():
 
     assert 'ENABLE_MARKET_INTELLIGENCE="${ENABLE_MARKET_INTELLIGENCE:-false}"' in text
     assert "market-scan" in text
+    assert "market-trend" in text
     assert "market intelligence warning" in text
+    assert "market trend warning" in text
     assert "--provider \"${PROVIDER}\"" in text
     assert "REFRESH_DASHBOARD" in text

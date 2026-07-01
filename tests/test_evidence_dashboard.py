@@ -54,6 +54,7 @@ def test_generate_evidence_dashboard_writes_static_pages_from_json_only(tmp_path
     assert "当前系统可继续运行" in index_html
     market_html = (dashboard / "market.html").read_text(encoding="utf-8")
     assert "Market Intelligence 尚未运行" in market_html
+    assert "Market Trend 尚未运行" in market_html
     assert sorted(manifest["pages"]) == [
         "data_quality.html",
         "index.html",
@@ -85,6 +86,29 @@ def test_generate_evidence_dashboard_renders_market_page_from_json(tmp_path):
             "not_production_model": True,
         },
     )
+    _write_json(
+        tmp_path / "market" / "market_trend_report.json",
+        {
+            "schema_version": "1.0",
+            "generated_at": "2026-06-23T00:00:00+00:00",
+            "period_days": 30,
+            "snapshots_processed": 1,
+            "minimum_required_snapshots": 3,
+            "enough_market_history": False,
+            "source": "fixture",
+            "latest_as_of": "2026-06-23",
+            "theme_trends": [{"theme": "沪深300", "latest_rank": 1, "rank_change": None}],
+            "rising_themes": [],
+            "falling_themes": [],
+            "persistent_hot_themes": [{"theme": "沪深300", "hot_days": 1, "hot_ratio": 1.0}],
+            "new_hot_themes": [],
+            "disappeared_hot_themes": [],
+            "insufficient_history_themes": [{"theme": "沪深300"}],
+            "data_quality_trend": [{"as_of": "2026-06-23", "data_quality_grade": "warning"}],
+            "warnings": ["insufficient_market_history"],
+            "not_production_model": True,
+        },
+    )
     review_state = tmp_path / "manual_review_state.json"
     _write_json(review_state, {"items": []})
 
@@ -97,6 +121,9 @@ def test_generate_evidence_dashboard_renders_market_page_from_json(tmp_path):
 
     market_html = (tmp_path / "dashboard" / "market.html").read_text(encoding="utf-8")
     assert "Market Intelligence" in market_html
+    assert "Market Trend Summary" in market_html
+    assert "snapshots_processed: 1" in market_html
+    assert "趋势样本不足，但 Market Intelligence 可继续运行" in market_html
     assert "沪深300" in market_html
     assert "白酒" in market_html
     assert "not_production_model=true" in market_html

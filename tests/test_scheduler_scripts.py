@@ -37,11 +37,13 @@ def test_ops_runner_scripts_write_logs_and_keep_expected_steps():
     assert "latest_summary.json" in daily
     assert "daily-research" in daily
     assert "weekly-research" in daily
+    assert "market-trend" in daily
     assert "evaluate-long-horizon-stability" in daily
     assert "ops-status" in daily
 
     assert "outputs/logs/weekly-ops-" in weekly
     assert "weekly-research" in weekly
+    assert "market-trend" in weekly
     assert "generate-evidence-dashboard" in weekly
     assert "evaluate-long-horizon-stability" in weekly
     assert "ops-status" in weekly
