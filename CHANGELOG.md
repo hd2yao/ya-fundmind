@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.12.0 - 2026-07-01
+
+Phase 12 release checkpoint.
+
+- Added Fund Detail and Watchlist Drilldown observation layer for single funds and current watchlist funds.
+- Added `fund-detail` and `watchlist-detail` CLI commands that read existing artifacts/cache and write JSON/Markdown drilldown outputs.
+- Added dashboard `funds.html`, per-fund dashboard pages, ops-status fields, and latest-summary fund detail section.
+- Added daily ops integration so Market Intelligence runs can produce watchlist drilldowns without changing the daily default provider.
+- Current system remains research/observation only: no trading, no return promises, no main scoring/risk promotion.
+
 ## v0.11.0 - 2026-07-01
 
 Phase 1 through Phase 11 release checkpoint.
