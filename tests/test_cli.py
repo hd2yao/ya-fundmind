@@ -144,6 +144,14 @@ def test_daily_akshare_provider_can_generate_report_from_cache_fallback(
     monkeypatch, tmp_path
 ):
     cache_file = tmp_path / "funds.sqlite"
+    watchlist = tmp_path / "watchlist.yaml"
+    watchlist.write_text(
+        """
+funds:
+  - code: 510300
+""",
+        encoding="utf-8",
+    )
     cache = FundCache(cache_file)
     cache.upsert_funds(
         [
@@ -176,6 +184,8 @@ def test_daily_akshare_provider_can_generate_report_from_cache_fallback(
             "akshare",
             "--cache-file",
             str(cache_file),
+            "--watchlist-file",
+            str(watchlist),
             "--output-dir",
             str(tmp_path),
             "--as-of",

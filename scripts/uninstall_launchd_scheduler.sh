@@ -43,5 +43,9 @@ uninstall_one() {
   fi
 }
 
-[[ "${INSTALL_DAILY}" == "true" ]] && uninstall_one daily
-[[ "${INSTALL_WEEKLY}" == "true" ]] && uninstall_one weekly
+if [[ "${INSTALL_DAILY}" == "true" ]]; then
+  uninstall_one daily
+fi
+if [[ "${INSTALL_WEEKLY}" == "true" ]]; then
+  uninstall_one weekly
+fi

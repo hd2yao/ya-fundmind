@@ -1,10 +1,14 @@
 name: YA FundMind watchlist
 funds:
-  - code: 510300
-    name: 沪深300ETF
-  - code: 000311
-    name: 华夏沪深300ETF联接A
-  - code: 000834
-    name: 广发纳斯达克100ETF联接A
-  - code: 110022
-    name: 易方达消费行业股票
+  - code: 021511
+    name: 宏利半导体产业混合发起C
+    type: 混合型
+    notes: 截图标签：今日热度榜 No.10；近1周涨超16%
+  - code: 021580
+    name: 华夏人工智能ETF联接D
+    type: ETF联接
+    notes: 截图标签：人工智能 No.7
+  - code: 011452
+    name: 华泰柏瑞质量成长混合C
+    type: 混合型
+    notes: 截图标签：定投热基榜 No.3

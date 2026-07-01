@@ -57,3 +57,16 @@ def test_launchd_install_dry_run_daily_only_returns_zero():
 
     assert result.returncode == 0
     assert "dry-run daily" in result.stdout
+
+
+def test_launchd_uninstall_daily_only_returns_zero(tmp_path):
+    result = subprocess.run(
+        ["bash", "scripts/uninstall_launchd_scheduler.sh", "--daily"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={"HOME": str(tmp_path)},
+    )
+
+    assert result.returncode == 0
+    assert "daily" in result.stdout
