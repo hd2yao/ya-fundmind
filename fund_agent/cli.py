@@ -24,6 +24,11 @@ from .experiment_scoring import (
     run_experiment_config_sensitivity_file,
     run_experiment_scoring_file,
 )
+from .fund_detail import (
+    build_fund_detail_views,
+    write_single_fund_detail,
+    write_watchlist_fund_details,
+)
 from .long_horizon import evaluate_long_horizon_stability, write_long_horizon_stability
 from .market_intelligence import (
     build_market_intelligence_report,
@@ -501,6 +506,68 @@ def _run_market_trend(args) -> int:
         print(f"Run bundle market trend report: {outputs.run_report_path}")
     if not report.enough_market_history:
         print("Market trend warning: insufficient market history; daily ops can continue.")
+    return 0
+
+
+def _run_fund_detail(args) -> int:
+    codes = []
+    if getattr(args, "code", None):
+        codes.append(args.code)
+    if getattr(args, "codes", None):
+        codes.extend(item.strip() for item in str(args.codes).split(",") if item.strip())
+    codes = list(dict.fromkeys(normalize_fund_code(code) for code in codes if normalize_fund_code(code)))
+    if not codes:
+        print("fund-detail requires --code or --codes.")
+        return 2
+    details = build_fund_detail_views(
+        codes=codes,
+        output_dir=args.output_dir,
+        watchlist_file=args.watchlist_file,
+        portfolio_config=args.portfolio_config,
+        cache_file=args.cache_file,
+    )
+    if len(details) == 1 and not getattr(args, "codes", None):
+        json_path, md_path = write_single_fund_detail(
+            details[0],
+            args.output_dir,
+            json_output=args.json_output,
+            summary_output=args.summary_output,
+        )
+        print(f"Fund detail JSON: {json_path}")
+        print(f"Fund detail summary: {md_path}")
+        return 0
+    json_path, md_path = write_watchlist_fund_details(
+        details,
+        args.output_dir,
+        json_output=args.json_output,
+        summary_output=args.summary_output,
+    )
+    print(f"Watchlist fund details JSON: {json_path}")
+    print(f"Watchlist fund details summary: {md_path}")
+    return 0
+
+
+def _run_watchlist_detail(args) -> int:
+    try:
+        codes = list(load_watchlist_config(args.watchlist_file).codes)
+    except Exception as exc:
+        print(f"Failed to read watchlist: {exc}")
+        return 2
+    details = build_fund_detail_views(
+        codes=codes,
+        output_dir=args.output_dir,
+        watchlist_file=args.watchlist_file,
+        portfolio_config=args.portfolio_config,
+        cache_file=args.cache_file,
+    )
+    json_path, md_path = write_watchlist_fund_details(
+        details,
+        args.output_dir,
+        json_output=args.json_output,
+        summary_output=args.summary_output,
+    )
+    print(f"Watchlist fund details JSON: {json_path}")
+    print(f"Watchlist fund details summary: {md_path}")
     return 0
 
 
@@ -1169,6 +1236,26 @@ def build_parser() -> argparse.ArgumentParser:
     market_trend.add_argument("--json-output", type=Path)
     market_trend.add_argument("--summary-output", type=Path)
     market_trend.set_defaults(func=_run_market_trend)
+
+    fund_detail = subparsers.add_parser("fund-detail", help="生成单只或多只基金详情观察层，不修改主评分/风险")
+    fund_detail.add_argument("--code")
+    fund_detail.add_argument("--codes")
+    fund_detail.add_argument("--watchlist-file", type=Path, default=DEFAULT_WATCHLIST_FILE)
+    fund_detail.add_argument("--portfolio-config", type=Path, default=DEFAULT_PORTFOLIO_CONFIG)
+    fund_detail.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
+    fund_detail.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    fund_detail.add_argument("--json-output", type=Path)
+    fund_detail.add_argument("--summary-output", type=Path)
+    fund_detail.set_defaults(func=_run_fund_detail)
+
+    watchlist_detail = subparsers.add_parser("watchlist-detail", help="生成自选池基金详情观察层，不修改主评分/风险")
+    watchlist_detail.add_argument("--watchlist-file", type=Path, default=DEFAULT_WATCHLIST_FILE)
+    watchlist_detail.add_argument("--portfolio-config", type=Path, default=DEFAULT_PORTFOLIO_CONFIG)
+    watchlist_detail.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
+    watchlist_detail.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    watchlist_detail.add_argument("--json-output", type=Path)
+    watchlist_detail.add_argument("--summary-output", type=Path)
+    watchlist_detail.set_defaults(func=_run_watchlist_detail)
 
     weekly_research = subparsers.add_parser("weekly-research", help="聚合 daily-research run bundle，生成每周证据摘要")
     weekly_research.add_argument("--runs-dir", type=Path, default=Path("outputs/runs"))

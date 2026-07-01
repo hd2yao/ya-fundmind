@@ -28,6 +28,7 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
     stability = _load_json(root / "long_horizon_stability.json")
     market = _latest_market_report(root)
     market_trend = _latest_market_trend(root)
+    fund_details = _latest_fund_details(root)
     latest_run_status = latest_run.get("status")
     daily_success = daily.get("status") == "success" or latest_run_status == "success"
     dashboard_ready = artifacts["dashboard_index"]["exists"]
@@ -57,6 +58,12 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
         "latest_market_persistent_hot_count": len(market_trend.get("persistent_hot_themes") or []) if market_trend else 0,
         "latest_market_new_hot_count": len(market_trend.get("new_hot_themes") or []) if market_trend else 0,
         "latest_market_data_quality_trend": market_trend.get("data_quality_trend", []) if market_trend else [],
+        "fund_detail_available": bool(fund_details),
+        "latest_watchlist_detail_path": fund_details.get("_path"),
+        "watchlist_detail_count": fund_details.get("detail_count", 0) if fund_details else 0,
+        "watchlist_detail_missing_count": fund_details.get("missing_count", 0) if fund_details else 0,
+        "watchlist_detail_warning_count": fund_details.get("warning_count", 0) if fund_details else 0,
+        "latest_fund_detail_as_of": fund_details.get("as_of") if fund_details else None,
         "main_model_ready": main_model_ready,
         "main_model_blockers": main_model_blockers,
         "main_model_blocker_explanation": blocker_explanation,
@@ -142,6 +149,27 @@ def write_latest_summary(output_dir: Path | str) -> Path:
             "- market_trend_available: False",
             "- Market Trend 尚未运行；不影响 daily ops/dashboard/market-scan 继续运行。",
         ]
+    fund_detail_lines = []
+    if status.get("fund_detail_available"):
+        fund_detail_lines = [
+            "",
+            "## Watchlist Fund Details",
+            "",
+            "- fund_detail_available: True",
+            f"- detail_count: {status.get('watchlist_detail_count')}",
+            f"- missing_count: {status.get('watchlist_detail_missing_count')}",
+            f"- warning_count: {status.get('watchlist_detail_warning_count')}",
+            f"- detail_path: {status.get('latest_watchlist_detail_path')}",
+            "- Fund Detail 是观察页，不接主评分/主风险，不构成投资建议。",
+        ]
+    else:
+        fund_detail_lines = [
+            "",
+            "## Watchlist Fund Details",
+            "",
+            "- fund_detail_available: False",
+            "- Fund Detail 尚未运行；不影响 daily ops/dashboard/market-scan 继续运行。",
+        ]
     lines = [
         "# YA FundMind Latest Summary",
         "",
@@ -165,6 +193,7 @@ def write_latest_summary(output_dir: Path | str) -> Path:
         status.get("main_model_blocker_explanation", ""),
         *market_lines,
         *trend_lines,
+        *fund_detail_lines,
         "",
         "本摘要仅用于本地投研运行状态查看，不修改主评分/主风险，不构成投资建议。",
     ]
@@ -258,6 +287,22 @@ def _latest_market_trend(root: Path) -> dict[str, Any]:
     if runs_dir.exists():
         candidates.extend(
             path / "market_trend_report.json"
+            for path in reversed(sorted(item for item in runs_dir.iterdir() if item.is_dir()))
+        )
+    for path in candidates:
+        payload = _load_json(path)
+        if payload:
+            payload["_path"] = str(path)
+            return payload
+    return {}
+
+
+def _latest_fund_details(root: Path) -> dict[str, Any]:
+    candidates = [root / "fund_details" / "watchlist_fund_details.json"]
+    runs_dir = root / "runs"
+    if runs_dir.exists():
+        candidates.extend(
+            path / "fund_details" / "watchlist_fund_details.json"
             for path in reversed(sorted(item for item in runs_dir.iterdir() if item.is_dir()))
         )
     for path in candidates:

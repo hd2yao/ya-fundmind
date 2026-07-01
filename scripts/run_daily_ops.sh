@@ -46,6 +46,12 @@ if [[ "${ENABLE_MARKET_INTELLIGENCE}" == "true" ]]; then
     --min-snapshots "${MARKET_TREND_MIN_SNAPSHOTS}"; then
     echo "market trend warning: market-trend failed; daily ops will continue"
   fi
+  if ! "${PYTHON_BIN}" -m fund_agent.cli watchlist-detail \
+    --watchlist-file "${WATCHLIST_FILE}" \
+    --portfolio-config "${PORTFOLIO_CONFIG}" \
+    --output-dir "${OUTPUT_DIR}"; then
+    echo "watchlist detail warning: watchlist-detail failed; daily ops will continue"
+  fi
 else
   echo "market intelligence skipped: ENABLE_MARKET_INTELLIGENCE=${ENABLE_MARKET_INTELLIGENCE}"
 fi

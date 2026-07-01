@@ -37,6 +37,16 @@ def test_build_ops_status_reports_latest_run_and_required_artifacts(tmp_path):
             "data_quality_trend": [{"as_of": "2026-06-23", "data_quality_grade": "warning"}],
         },
     )
+    _write_json(
+        output_dir / "fund_details" / "watchlist_fund_details.json",
+        {
+            "as_of": "2026-06-23",
+            "detail_count": 2,
+            "missing_count": 1,
+            "warning_count": 3,
+            "fund_details": [{"code": "021511"}, {"code": "021580"}],
+        },
+    )
 
     status = build_ops_status(output_dir)
 
@@ -65,6 +75,11 @@ def test_build_ops_status_reports_latest_run_and_required_artifacts(tmp_path):
     assert status["latest_market_persistent_hot_count"] == 1
     assert status["latest_market_new_hot_count"] == 1
     assert status["latest_market_data_quality_trend"]
+    assert status["fund_detail_available"] is True
+    assert status["watchlist_detail_count"] == 2
+    assert status["watchlist_detail_missing_count"] == 1
+    assert status["watchlist_detail_warning_count"] == 3
+    assert status["latest_fund_detail_as_of"] == "2026-06-23"
     assert status["artifacts"]["dashboard_index"]["exists"] is False
     assert status["artifacts"]["dashboard_manifest"]["exists"] is True
 
@@ -110,6 +125,16 @@ def test_write_latest_summary_combines_daily_weekly_and_stability(tmp_path):
             "data_quality_trend": [{"as_of": "2026-06-23", "data_quality_grade": "warning"}],
         },
     )
+    _write_json(
+        output_dir / "fund_details" / "watchlist_fund_details.json",
+        {
+            "as_of": "2026-06-23",
+            "detail_count": 1,
+            "missing_count": 0,
+            "warning_count": 1,
+            "fund_details": [{"code": "021511"}],
+        },
+    )
 
     path = write_latest_summary(output_dir)
     markdown = path.read_text(encoding="utf-8")
@@ -128,6 +153,9 @@ def test_write_latest_summary_combines_daily_weekly_and_stability(tmp_path):
     assert "market_theme_count: 1" in markdown
     assert "Market Trend" in markdown
     assert "market_trend_snapshots_processed: 1" in markdown
+    assert "Watchlist Fund Details" in markdown
+    assert "fund_detail_available: True" in markdown
+    assert "detail_count: 1" in markdown
     assert "趋势样本不足只影响板块趋势判断" in markdown
     assert "insufficient_history" in markdown
     assert "不修改主评分/主风险" in markdown

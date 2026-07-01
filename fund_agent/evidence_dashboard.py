@@ -10,7 +10,7 @@ from .research_loop import aggregate_manual_review_queues
 from .review_state import list_review_state, summarize_review_state
 
 
-PAGES = ("index.html", "runs.html", "signals.html", "review.html", "data_quality.html", "market.html")
+PAGES = ("index.html", "runs.html", "signals.html", "review.html", "data_quality.html", "market.html", "funds.html")
 
 
 def generate_evidence_dashboard(
@@ -36,6 +36,7 @@ def generate_evidence_dashboard(
         "state_summary": state_summary,
         "market_report": _latest_market_report(run_dirs, output),
         "market_trend": _latest_market_trend(output),
+        "fund_details": _latest_fund_details(output),
     }
     _write_page(output / "index.html", "Evidence Dashboard", _index_body(context))
     _write_page(output / "runs.html", "Runs", _runs_body(context))
@@ -43,6 +44,8 @@ def generate_evidence_dashboard(
     _write_page(output / "review.html", "Manual Review", _review_body(context))
     _write_page(output / "data_quality.html", "Data Quality", _data_quality_body(context))
     _write_page(output / "market.html", "Market Intelligence", _market_body(context))
+    _write_page(output / "funds.html", "Watchlist Fund Details", _funds_body(context))
+    _write_fund_detail_pages(output, context.get("fund_details") or {})
     manifest = {
         "schema_version": "1.0",
         "generator": "fund_agent",
@@ -62,7 +65,7 @@ def _write_page(path: Path, title: str, body: str) -> None:
                 "<!doctype html>",
                 "<html><head><meta charset=\"utf-8\"><title>{}</title></head>".format(html.escape(title)),
                 "<body>",
-                "<nav><a href=\"index.html\">Index</a> <a href=\"runs.html\">Runs</a> <a href=\"signals.html\">Signals</a> <a href=\"review.html\">Review</a> <a href=\"data_quality.html\">Data Quality</a> <a href=\"market.html\">Market</a></nav>",
+                "<nav><a href=\"index.html\">Index</a> <a href=\"runs.html\">Runs</a> <a href=\"signals.html\">Signals</a> <a href=\"review.html\">Review</a> <a href=\"data_quality.html\">Data Quality</a> <a href=\"market.html\">Market</a> <a href=\"funds.html\">Funds</a></nav>",
                 "<p><strong>not_production_model=true</strong></p>",
                 body,
                 "</body></html>",
@@ -77,6 +80,7 @@ def _index_body(context: dict[str, Any]) -> str:
     latest = summaries[-1] if summaries else {}
     market_report = context.get("market_report") or {}
     market_trend = context.get("market_trend") or {}
+    fund_details = context.get("fund_details") or {}
     research_ready = str(bool(latest.get("status") == "success")).lower()
     dashboard_ready = "true"
     return """
@@ -93,10 +97,13 @@ def _index_body(context: dict[str, Any]) -> str:
   <li>market_trend_available: {trend_available}</li>
   <li>market_trend_snapshots_processed: {trend_snapshots}</li>
   <li>market_trend_enough_history: {trend_enough}</li>
+  <li>fund_detail_available: {fund_available}</li>
+  <li>watchlist_detail_count: {fund_count}</li>
 </ul>
 <p>当前系统可继续运行，dashboard 可继续查看，research loop 可继续积累证据。</p>
 <p>insufficient_history 只影响主评分/主风险接入判断，不表示系统级失败。</p>
 <p><a href="market.html">Market Intelligence 市场观察页</a></p>
+<p><a href="funds.html">Watchlist Fund Details 自选基金详情页</a></p>
 """.format(
         runs=len(summaries),
         status=html.escape(str(latest.get("status", "unknown"))),
@@ -108,6 +115,8 @@ def _index_body(context: dict[str, Any]) -> str:
         trend_available=str(bool(market_trend)).lower(),
         trend_snapshots=html.escape(str(market_trend.get("snapshots_processed", 0))),
         trend_enough=html.escape(str(market_trend.get("enough_market_history", False))),
+        fund_available=str(bool(fund_details)).lower(),
+        fund_count=html.escape(str(fund_details.get("detail_count", 0))),
     )
 
 
@@ -330,6 +339,130 @@ def _trend_list(items: list[dict[str, Any]]) -> str:
     )
 
 
+def _funds_body(context: dict[str, Any]) -> str:
+    payload = context.get("fund_details") or {}
+    if not payload:
+        return """
+<h1>Watchlist Fund Details</h1>
+<p>Fund Detail 尚未运行。</p>
+<p>运行 watchlist-detail 后将展示自选基金详情、主题归类、收益窗口、数据质量和 signal/review 状态。</p>
+"""
+    rows = []
+    for item in payload.get("fund_details") or []:
+        returns = item.get("return_windows") or {}
+        signal = item.get("signal_context") or {}
+        missing = item.get("missing_fields") or []
+        code = str(item.get("code"))
+        rows.append(
+            "<tr><td><a href=\"funds/{code}.html\">{code}</a></td><td>{name}</td><td>{fund_type}</td><td>{theme}</td><td>{themes}</td><td>{quality}</td><td>{r1m}</td><td>{r3m}</td><td>{r6m}</td><td>{r1y}</td><td>{signal}</td><td>{review}</td><td>{missing}</td><td>{path}</td></tr>".format(
+                code=html.escape(code),
+                name=html.escape(str(item.get("name") or "")),
+                fund_type=html.escape(str(item.get("fund_type") or "")),
+                theme=html.escape(str(item.get("primary_theme") or "")),
+                themes=html.escape(", ".join(str(value) for value in item.get("themes") or [])),
+                quality=html.escape(str(item.get("data_quality_grade") or "")),
+                r1m=html.escape(_return_value(returns, "1m")),
+                r3m=html.escape(_return_value(returns, "3m")),
+                r6m=html.escape(_return_value(returns, "6m")),
+                r1y=html.escape(_return_value(returns, "1y")),
+                signal=html.escape(str(signal.get("signal_status", "none"))),
+                review=html.escape(str(signal.get("manual_review_status", "none"))),
+                missing=html.escape(str(len(missing))),
+                path=html.escape(str(item.get("latest_detail_json_path") or f"fund_details/fund_detail_{code}.json")),
+            )
+        )
+    return """
+<h1>Watchlist Fund Details</h1>
+<ul>
+  <li>as_of: {as_of}</li>
+  <li>detail_count: {count}</li>
+  <li>missing_count: {missing}</li>
+  <li>warning_count: {warnings}</li>
+  <li>not_production_model=true</li>
+</ul>
+<p>Fund Detail 是观察页，不接主评分/主风险，不构成投资建议。</p>
+<table><tr><th>Code</th><th>Name</th><th>Type</th><th>Primary Theme</th><th>Themes</th><th>Quality</th><th>1M</th><th>3M</th><th>6M</th><th>1Y</th><th>Signal</th><th>Manual Review</th><th>Missing</th><th>Detail JSON</th></tr>{rows}</table>
+""".format(
+        as_of=html.escape(str(payload.get("as_of") or "")),
+        count=html.escape(str(payload.get("detail_count", 0))),
+        missing=html.escape(str(payload.get("missing_count", 0))),
+        warnings=html.escape(str(payload.get("warning_count", 0))),
+        rows="".join(rows),
+    )
+
+
+def _write_fund_detail_pages(output: Path, payload: dict[str, Any]) -> None:
+    details = payload.get("fund_details") or []
+    if not details:
+        return
+    details_dir = output / "funds"
+    details_dir.mkdir(parents=True, exist_ok=True)
+    for item in details:
+        code = str(item.get("code") or "")
+        if not code:
+            continue
+        body = _single_fund_detail_body(item)
+        (details_dir / f"{code}.html").write_text(
+            "\n".join(
+                [
+                    "<!doctype html>",
+                    f"<html><head><meta charset=\"utf-8\"><title>{html.escape(code)}</title></head>",
+                    "<body>",
+                    "<nav><a href=\"../index.html\">Index</a> <a href=\"../funds.html\">Funds</a> <a href=\"../market.html\">Market</a></nav>",
+                    "<p><strong>not_production_model=true</strong></p>",
+                    body,
+                    "</body></html>",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+
+def _single_fund_detail_body(item: dict[str, Any]) -> str:
+    rows = "".join(
+        "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+            html.escape(str(window)),
+            html.escape(str((summary or {}).get("total_return"))),
+            html.escape(str((summary or {}).get("data_quality_grade"))),
+        )
+        for window, summary in (item.get("return_windows") or {}).items()
+    )
+    missing = "".join(f"<li>{html.escape(str(value))}</li>" for value in item.get("missing_fields") or [])
+    warnings = "".join(f"<li>{html.escape(str(value))}</li>" for value in item.get("data_quality_warnings") or [])
+    return """
+<h1>{code} {name}</h1>
+<ul>
+  <li>fund_type: {fund_type}</li>
+  <li>source: {source}</li>
+  <li>as_of: {as_of}</li>
+  <li>primary_theme: {theme}</li>
+  <li>data_quality_grade: {quality}</li>
+</ul>
+<p>仅用于观察，不接主评分/主风险，不构成投资建议。</p>
+<h2>Return Windows</h2>
+<table><tr><th>Window</th><th>Total Return</th><th>Quality</th></tr>{rows}</table>
+<h2>Missing Fields</h2><ul>{missing}</ul>
+<h2>Warnings</h2><ul>{warnings}</ul>
+""".format(
+        code=html.escape(str(item.get("code") or "")),
+        name=html.escape(str(item.get("name") or "")),
+        fund_type=html.escape(str(item.get("fund_type") or "")),
+        source=html.escape(str(item.get("source") or "")),
+        as_of=html.escape(str(item.get("as_of") or "")),
+        theme=html.escape(str(item.get("primary_theme") or "")),
+        quality=html.escape(str(item.get("data_quality_grade") or "")),
+        rows=rows,
+        missing=missing or "<li>none</li>",
+        warnings=warnings or "<li>none</li>",
+    )
+
+
+def _return_value(returns: dict[str, Any], window: str) -> str:
+    item = returns.get(window) or {}
+    value = item.get("total_return") if isinstance(item, dict) else None
+    return "--" if value is None else str(value)
+
+
 def _recent_run_dirs(runs_dir: Path, days: int) -> list[Path]:
     if not runs_dir.exists():
         return []
@@ -373,4 +506,15 @@ def _latest_market_trend(output_dir: Path) -> dict[str, Any]:
     payload = _load_json(path)
     if payload:
         payload["_path"] = str(path)
+    return payload
+
+
+def _latest_fund_details(output_dir: Path) -> dict[str, Any]:
+    path = output_dir.parent / "fund_details" / "watchlist_fund_details.json"
+    payload = _load_json(path)
+    if payload:
+        payload["_path"] = str(path)
+        for item in payload.get("fund_details") or []:
+            code = str(item.get("code") or "")
+            item["latest_detail_json_path"] = str(output_dir.parent / "fund_details" / f"fund_detail_{code}.json")
     return payload
