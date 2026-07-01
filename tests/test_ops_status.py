@@ -20,6 +20,17 @@ def test_build_ops_status_reports_latest_run_and_required_artifacts(tmp_path):
     status = build_ops_status(output_dir)
 
     assert status["overall_status"] == "ok"
+    assert status["ops_ready"] is True
+    assert status["research_loop_ready"] is True
+    assert status["dashboard_ready"] is False
+    assert status["latest_run_available"] is True
+    assert status["latest_run_status"] == "success"
+    assert status["main_model_ready"] is False
+    assert status["main_model_blockers"] == ["insufficient_history"]
+    assert "只影响主评分/主风险接入判断" in status["main_model_blocker_explanation"]
+    assert "continue_daily_runs" in status["suggested_next_action"]
+    assert "continue_feature_development" in status["suggested_next_action"]
+    assert "do_not_promote_to_main_model_yet" in status["suggested_next_action"]
     assert status["latest_run"]["as_of"] == "2026-06-23"
     assert status["artifacts"]["dashboard_index"]["exists"] is False
     assert status["artifacts"]["dashboard_manifest"]["exists"] is True
@@ -52,5 +63,11 @@ def test_write_latest_summary_combines_daily_weekly_and_stability(tmp_path):
     assert path == output_dir / "latest_summary.md"
     assert "2026-06-23" in markdown
     assert "recommend_main_model: no" in markdown
+    assert "ops_ready:" in markdown
+    assert "dashboard_ready:" in markdown
+    assert "research_loop_ready:" in markdown
+    assert "main_model_ready: False" in markdown
+    assert "main_model_blockers: insufficient_history" in markdown
+    assert "历史 run 不足只影响主评分/主风险接入判断" in markdown
     assert "insufficient_history" in markdown
     assert "不修改主评分/主风险" in markdown

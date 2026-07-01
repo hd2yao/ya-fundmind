@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.ya-fundmind.daily</string>
+  <string>com.ya-fundmind.weekly</string>
   <key>WorkingDirectory</key>
   <string>${YA_FUNDMIND_PROJECT_DIR}</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>${YA_FUNDMIND_PROJECT_DIR}/scripts/run_daily_ops.sh</string>
+    <string>${YA_FUNDMIND_PROJECT_DIR}/scripts/run_weekly_ops.sh</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -26,14 +26,16 @@
   </dict>
   <key>StartCalendarInterval</key>
   <dict>
+    <key>Weekday</key>
+    <integer>6</integer>
     <key>Hour</key>
-    <integer>18</integer>
+    <integer>10</integer>
     <key>Minute</key>
-    <integer>30</integer>
+    <integer>0</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>${YA_FUNDMIND_PROJECT_DIR}/outputs/logs/launchd-daily.out.log</string>
+  <string>${YA_FUNDMIND_PROJECT_DIR}/outputs/logs/launchd-weekly.out.log</string>
   <key>StandardErrorPath</key>
-  <string>${YA_FUNDMIND_PROJECT_DIR}/outputs/logs/launchd-daily.err.log</string>
+  <string>${YA_FUNDMIND_PROJECT_DIR}/outputs/logs/launchd-weekly.err.log</string>
 </dict>
 </plist>

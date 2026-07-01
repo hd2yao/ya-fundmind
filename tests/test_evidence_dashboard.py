@@ -46,6 +46,11 @@ def test_generate_evidence_dashboard_writes_static_pages_from_json_only(tmp_path
         assert "not_production_model=true" in html
         assert "买入" not in html
         assert "卖出" not in html
+    index_html = (dashboard / "index.html").read_text(encoding="utf-8")
+    assert "research_loop_ready" in index_html
+    assert "dashboard_ready" in index_html
+    assert "insufficient_history 只影响主评分/主风险接入" in index_html
+    assert "当前系统可继续运行" in index_html
     assert sorted(manifest["pages"]) == [
         "data_quality.html",
         "index.html",

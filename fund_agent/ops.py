@@ -26,10 +26,29 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
     daily = _load_json(root / "daily_research_summary.json")
     weekly = _load_json(root / "weekly_research_summary.json")
     stability = _load_json(root / "long_horizon_stability.json")
+    latest_run_status = latest_run.get("status")
+    daily_success = daily.get("status") == "success" or latest_run_status == "success"
+    dashboard_ready = artifacts["dashboard_index"]["exists"]
+    main_model_blockers = stability.get("main_model_blockers") or stability.get("blockers", [])
+    main_model_ready = bool(stability.get("main_model_ready", False))
+    blocker_explanation = _main_model_blocker_explanation(main_model_blockers)
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "output_dir": str(root),
         "overall_status": overall,
+        "ops_ready": bool(daily_success),
+        "dashboard_ready": dashboard_ready,
+        "research_loop_ready": bool(daily_success),
+        "latest_run_available": bool(latest_run),
+        "latest_run_status": latest_run_status,
+        "main_model_ready": main_model_ready,
+        "main_model_blockers": main_model_blockers,
+        "main_model_blocker_explanation": blocker_explanation,
+        "suggested_next_action": _suggested_next_actions(
+            ops_ready=bool(daily_success),
+            dashboard_ready=dashboard_ready,
+            main_model_ready=main_model_ready,
+        ),
         "latest_run": latest_run,
         "artifacts": artifacts,
         "daily": {
@@ -45,6 +64,10 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
         "long_horizon": {
             "enough_history": stability.get("enough_history"),
             "blockers": stability.get("blockers", []),
+            "main_model_ready": main_model_ready,
+            "main_model_blockers": main_model_blockers,
+            "readiness_scope": stability.get("readiness_scope", "main_model_promotion_only"),
+            "non_blocking_for": stability.get("non_blocking_for", []),
         },
         "not_production_model": True,
         "main_score_changed": False,
@@ -67,26 +90,62 @@ def write_latest_summary(output_dir: Path | str) -> Path:
     stability = _load_json(root / "long_horizon_stability.json")
     manual = weekly.get("manual_review_state_summary") or {}
     queue = weekly.get("manual_review_queue_summary") or daily.get("manual_review_queue") or {}
+    main_model_blockers = status.get("main_model_blockers") or []
     lines = [
         "# YA FundMind Latest Summary",
         "",
         f"- generated_at: {status['generated_at']}",
         f"- latest_run: {status.get('latest_run', {}).get('as_of') or daily.get('as_of') or '--'}",
         f"- daily_status: {daily.get('status', 'unknown')}",
+        f"- ops_ready: {status.get('ops_ready')}",
+        f"- dashboard_ready: {status.get('dashboard_ready')}",
+        f"- research_loop_ready: {status.get('research_loop_ready')}",
         f"- data_quality_grade: {daily.get('data_quality_grade', 'unknown')}",
         f"- recommend_main_model: {daily.get('recommend_main_model', 'no')}",
+        f"- main_model_ready: {status.get('main_model_ready')}",
+        f"- main_model_blockers: {', '.join(main_model_blockers) or 'none'}",
         f"- weekly_runs_processed: {weekly.get('runs_processed', 0)}",
         f"- manual_review_items: {queue.get('total_review_items', 0)}",
         f"- manual_needs_more_data: {manual.get('needs_more_data_count', 0)}",
         f"- enough_history: {stability.get('enough_history')}",
         f"- blockers: {', '.join(stability.get('blockers') or []) or 'none'}",
+        f"- suggested_next_action: {', '.join(status.get('suggested_next_action') or []) or 'none'}",
+        "",
+        status.get("main_model_blocker_explanation", ""),
         "",
         "本摘要仅用于本地投研运行状态查看，不修改主评分/主风险，不构成投资建议。",
     ]
     output = root / "latest_summary.md"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (root / "latest_summary.json").write_text(
+        json.dumps(status, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     return output
+
+
+def _main_model_blocker_explanation(blockers: list[str]) -> str:
+    if "insufficient_history" in blockers:
+        return (
+            "历史 run 不足只影响主评分/主风险接入判断，不影响 daily research、"
+            "dashboard、继续开发和证据积累。"
+        )
+    if blockers:
+        return "当前 blocker 仅用于主模型接入审查；daily ops 和非主模型功能可继续推进。"
+    return "当前没有主模型接入 blocker；仍需人工 review gate 后才能考虑主评分/主风险变更。"
+
+
+def _suggested_next_actions(*, ops_ready: bool, dashboard_ready: bool, main_model_ready: bool) -> list[str]:
+    actions: list[str] = []
+    if ops_ready:
+        actions.append("continue_daily_runs")
+    if dashboard_ready:
+        actions.append("review_dashboard")
+    actions.append("continue_feature_development")
+    if not main_model_ready:
+        actions.append("do_not_promote_to_main_model_yet")
+    return actions
 
 
 def _latest_run(runs_dir: Path) -> dict[str, Any]:

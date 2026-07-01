@@ -6,15 +6,23 @@ PYTHON_BIN="${PYTHON_BIN:-python}"
 OUTPUT_DIR="${OUTPUT_DIR:-outputs}"
 REVIEW_STATE="${REVIEW_STATE:-${OUTPUT_DIR}/manual_review_state.json}"
 DAYS="${DAYS:-30}"
+AS_OF="${AS_OF:-$(date +%F)}"
 
 cd "${PROJECT_DIR}"
+
+mkdir -p "${OUTPUT_DIR}/logs"
+# default log: outputs/logs/weekly-ops-YYYY-MM-DD.log
+LOG_FILE="${OUTPUT_DIR}/logs/weekly-ops-${AS_OF}.log"
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
+echo "weekly ops started: as_of=${AS_OF} output_dir=${OUTPUT_DIR} days=${DAYS}"
 
 "${PYTHON_BIN}" -m fund_agent.cli weekly-research \
   --runs-dir "${OUTPUT_DIR}/runs" \
   --review-state "${REVIEW_STATE}" \
   --output "${OUTPUT_DIR}/weekly_research_summary.md" \
   --json-output "${OUTPUT_DIR}/weekly_research_summary.json" \
-  --days 7
+  --days "${DAYS}"
 
 "${PYTHON_BIN}" -m fund_agent.cli generate-evidence-dashboard \
   --runs-dir "${OUTPUT_DIR}/runs" \
@@ -31,3 +39,5 @@ cd "${PROJECT_DIR}"
   --output-dir "${OUTPUT_DIR}" \
   --json-output "${OUTPUT_DIR}/ops_status.json" \
   --write-latest-summary
+
+echo "weekly ops log: ${LOG_FILE}"

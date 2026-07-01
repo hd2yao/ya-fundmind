@@ -1,0 +1,9 @@
+# YA FundMind daily local research loop.
+# Replace /absolute/path/to/ya-fundmind before installing with crontab.
+YA_FUNDMIND_PROJECT_DIR=/absolute/path/to/ya-fundmind
+PYTHON_BIN=python
+OUTPUT_DIR=outputs
+PROVIDER=fixture
+
+# Run every day at 18:30 local time.
+30 18 * * * cd "$YA_FUNDMIND_PROJECT_DIR" && "$YA_FUNDMIND_PROJECT_DIR/scripts/run_daily_ops.sh" >> "$YA_FUNDMIND_PROJECT_DIR/outputs/logs/cron-daily.out.log" 2>> "$YA_FUNDMIND_PROJECT_DIR/outputs/logs/cron-daily.err.log"

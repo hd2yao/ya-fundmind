@@ -320,9 +320,34 @@ def build_weekly_research_summary(
             readiness_status[key] += int(readiness.get(key, 0) or 0)
     queue_summary = aggregate_manual_review_queues(run_dirs)
     state_summary = _review_state_summary(review_state_path)
+    run_continuity = {
+        "days": days,
+        "runs_processed": len(summaries),
+        "missing_runs": missing_runs,
+        "has_missing_runs": bool(missing_runs),
+        "scope": "run_continuity_only",
+    }
+    main_model_blockers = []
+    if missing_runs:
+        main_model_blockers.append("run_continuity_issue")
+    if readiness_status.get("needs_more_data_count", 0):
+        main_model_blockers.append("needs_more_data")
     return {
         "runs_processed": len(summaries),
         "missing_runs": missing_runs,
+        "run_continuity": run_continuity,
+        "main_model_readiness": {
+            "ready": not main_model_blockers,
+            "blockers": main_model_blockers,
+            "scope": "main_model_promotion_only",
+            "explanation": "缺失 run 或历史不足只影响主评分/主风险接入判断，不阻塞 daily research、dashboard 或功能开发。",
+        },
+        "normal_development_next_actions": [
+            "continue_daily_runs",
+            "review_dashboard",
+            "continue_feature_development",
+            "do_not_promote_to_main_model_yet",
+        ],
         "data_quality_trend": [
             {"as_of": item.get("as_of"), "data_quality_grade": item.get("data_quality_grade")}
             for item in summaries
@@ -348,6 +373,7 @@ def build_weekly_research_summary(
             "继续积累 daily-research 证据文件。",
             "优先减少 repeated manual review items。",
             "补齐缺失 run 和缺失历史样本后再讨论主模型接入。",
+            "缺失 run 不阻塞 Market Intelligence / Fund Detail / Research Console 开发。",
         ],
         "not_production_model": True,
         "no_trading_simulation": True,
@@ -357,12 +383,28 @@ def build_weekly_research_summary(
 def render_weekly_research_markdown(payload: dict[str, Any]) -> str:
     queue = payload.get("manual_review_queue_summary") or {}
     state = payload.get("manual_review_state_summary") or {}
+    run_continuity = payload.get("run_continuity") or {}
+    main_readiness = payload.get("main_model_readiness") or {}
     lines = [
         "# Weekly Research Summary",
         "",
         f"- runs_processed: {payload.get('runs_processed')}",
         f"- missing_runs: {', '.join(payload.get('missing_runs') or []) or 'none'}",
         "- 本周汇总只用于证据积累和人工审核，不修改主评分/主风险。",
+        "- 缺失 run 或历史不足不阻塞 Market Intelligence / Fund Detail / Research Console 开发。",
+        "",
+        "## Run Continuity",
+        "",
+        f"- has_missing_runs: {run_continuity.get('has_missing_runs', False)}",
+        f"- missing_runs: {', '.join(run_continuity.get('missing_runs') or []) or 'none'}",
+        f"- scope: {run_continuity.get('scope', 'run_continuity_only')}",
+        "",
+        "## Main Model Readiness",
+        "",
+        f"- ready: {main_readiness.get('ready', False)}",
+        f"- blockers: {', '.join(main_readiness.get('blockers') or []) or 'none'}",
+        f"- scope: {main_readiness.get('scope', 'main_model_promotion_only')}",
+        f"- explanation: {main_readiness.get('explanation', '')}",
         "",
         "## Manual Review Queue",
         "",

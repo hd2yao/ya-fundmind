@@ -72,6 +72,8 @@ def _write_page(path: Path, title: str, body: str) -> None:
 def _index_body(context: dict[str, Any]) -> str:
     summaries = context["summaries"]
     latest = summaries[-1] if summaries else {}
+    research_ready = str(bool(latest.get("status") == "success")).lower()
+    dashboard_ready = "true"
     return """
 <h1>Evidence Dashboard</h1>
 <ul>
@@ -80,12 +82,18 @@ def _index_body(context: dict[str, Any]) -> str:
   <li>data_quality: {quality}</li>
   <li>applied_signals: {applied}</li>
   <li>recommend_main_model: no</li>
+  <li>research_loop_ready: {research_ready}</li>
+  <li>dashboard_ready: {dashboard_ready}</li>
 </ul>
+<p>当前系统可继续运行，dashboard 可继续查看，research loop 可继续积累证据。</p>
+<p>insufficient_history 只影响主评分/主风险接入判断，不表示系统级失败。</p>
 """.format(
         runs=len(summaries),
         status=html.escape(str(latest.get("status", "unknown"))),
         quality=html.escape(str(latest.get("data_quality_grade", "unknown"))),
         applied=html.escape(str((latest.get("experiment_scoring") or {}).get("applied_signal_count", 0))),
+        research_ready=research_ready,
+        dashboard_ready=dashboard_ready,
     )
 
 

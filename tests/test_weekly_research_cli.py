@@ -54,7 +54,14 @@ def test_weekly_research_cli_aggregates_runs_and_missing_dates(tmp_path):
     assert exit_code == 0
     assert payload["runs_processed"] == 2
     assert payload["missing_runs"] == ["2026-06-22"]
+    assert payload["run_continuity"]["missing_runs"] == ["2026-06-22"]
+    assert payload["main_model_readiness"]["ready"] is False
+    assert "run_continuity_issue" in payload["main_model_readiness"]["blockers"]
+    assert "continue_feature_development" in payload["normal_development_next_actions"]
     assert payload["manual_review_queue_summary"]["total_review_items"] == 1
+    assert "Run Continuity" in markdown
+    assert "Main Model Readiness" in markdown
+    assert "不阻塞 Market Intelligence / Fund Detail / Research Console 开发" in markdown
     assert "买入" not in markdown
     assert "卖出" not in markdown
 

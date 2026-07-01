@@ -28,6 +28,12 @@ def test_long_horizon_stability_requires_twenty_runs(tmp_path):
     assert result["runs_processed"] == 1
     assert result["minimum_required_runs"] == 20
     assert result["enough_history"] is False
+    assert result["main_model_ready"] is False
+    assert result["main_model_blockers"] == ["insufficient_history"]
+    assert result["readiness_scope"] == "main_model_promotion_only"
+    assert "daily_research" in result["non_blocking_for"]
+    assert "dashboard" in result["non_blocking_for"]
+    assert "feature_development" in result["non_blocking_for"]
     assert result["suggested_review_status"]["akshare:display"] == "rejected"
     assert "insufficient_history" in result["blockers"]
 
@@ -58,5 +64,7 @@ def test_long_horizon_stability_blocks_recurring_missing_or_stale(tmp_path):
     result = evaluate_long_horizon_stability(runs_dir=runs_dir, days=30)
 
     assert result["enough_history"] is True
+    assert result["main_model_ready"] is False
+    assert "recurring_data_quality_blocker" in result["main_model_blockers"]
     assert result["suggested_review_status"]["tiantian:return"] == "blocked"
     assert "recurring_data_quality_blocker" in result["blockers"]

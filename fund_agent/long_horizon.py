@@ -19,6 +19,16 @@ BLOCKING_REASONS = {
     "annualized_return_unstable",
 }
 
+NON_BLOCKING_FOR = [
+    "daily_research",
+    "weekly_research",
+    "dashboard",
+    "market_intelligence_development",
+    "fund_detail_development",
+    "research_console_development",
+    "feature_development",
+]
+
 
 def evaluate_long_horizon_stability(
     *,
@@ -93,10 +103,15 @@ def evaluate_long_horizon_stability(
             "display_only_count": int(stats.get("display_only", 0)),
             "eligible_rate": rate,
         }
+    main_model_blockers = sorted(blockers)
     return {
         "runs_processed": len(run_dirs),
         "minimum_required_runs": minimum_required_runs,
         "enough_history": enough_history,
+        "main_model_ready": enough_history and not main_model_blockers,
+        "main_model_blockers": main_model_blockers,
+        "non_blocking_for": NON_BLOCKING_FOR,
+        "readiness_scope": "main_model_promotion_only",
         "signal_stability_by_id": stability_by_id,
         "eligible_rate_by_signal": eligible_rate,
         "exclusion_reason_consistency": dict(reason_counts.most_common(10)),
