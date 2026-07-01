@@ -5,6 +5,7 @@ PROJECT_DIR="${YA_FUNDMIND_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.."
 PYTHON_BIN="${PYTHON_BIN:-python}"
 OUTPUT_DIR="${OUTPUT_DIR:-outputs}"
 PROVIDER="${PROVIDER:-fixture}"
+ENABLE_MARKET_INTELLIGENCE="${ENABLE_MARKET_INTELLIGENCE:-false}"
 DAILY_HOUR="${DAILY_HOUR:-18}"
 DAILY_MINUTE="${DAILY_MINUTE:-30}"
 WEEKLY_WEEKDAY="${WEEKLY_WEEKDAY:-6}"
@@ -21,6 +22,7 @@ Usage: scripts/install_launchd_scheduler.sh [--daily] [--weekly] [--dry-run]
 
 Environment:
   PROVIDER=fixture|akshare
+  ENABLE_MARKET_INTELLIGENCE=false|true
   OUTPUT_DIR=outputs
   PYTHON_BIN=python
   DAILY_HOUR=18 DAILY_MINUTE=30
@@ -61,6 +63,7 @@ render_plist() {
   PYTHON_BIN="${PYTHON_BIN}" \
   OUTPUT_DIR="${OUTPUT_DIR}" \
   PROVIDER="${PROVIDER}" \
+  ENABLE_MARKET_INTELLIGENCE="${ENABLE_MARKET_INTELLIGENCE}" \
   DAILY_HOUR="${DAILY_HOUR}" \
   DAILY_MINUTE="${DAILY_MINUTE}" \
   WEEKLY_WEEKDAY="${WEEKLY_WEEKDAY}" \
@@ -82,6 +85,7 @@ text = (
 )
 text = text.replace("<string>outputs</string>", f"<string>{os.environ['OUTPUT_DIR']}</string>", 1)
 text = text.replace("<string>fixture</string>", f"<string>{os.environ['PROVIDER']}</string>", 1)
+text = text.replace("<string>false</string>", f"<string>{os.environ['ENABLE_MARKET_INTELLIGENCE']}</string>", 1)
 if kind == "daily":
     text = text.replace("<integer>18</integer>", f"<integer>{hour}</integer>", 1)
     text = text.replace("<integer>30</integer>", f"<integer>{minute}</integer>", 1)
@@ -128,5 +132,9 @@ install_one() {
   fi
 }
 
-[[ "${INSTALL_DAILY}" == "true" ]] && install_one daily
-[[ "${INSTALL_WEEKLY}" == "true" ]] && install_one weekly
+if [[ "${INSTALL_DAILY}" == "true" ]]; then
+  install_one daily
+fi
+if [[ "${INSTALL_WEEKLY}" == "true" ]]; then
+  install_one weekly
+fi

@@ -1,0 +1,66 @@
+themes:
+  - name: 宽基
+    keywords: 沪深300,中证500,中证1000,创业板,科创,上证50
+  - name: 沪深300
+    keywords: 沪深300,HS300,300ETF
+  - name: 中证500
+    keywords: 中证500,500ETF
+  - name: 中证1000
+    keywords: 中证1000,1000ETF
+  - name: 创业板
+    keywords: 创业板,创业板指
+  - name: 科创
+    keywords: 科创,科创板
+  - name: 半导体
+    keywords: 半导体
+  - name: 芯片
+    keywords: 芯片
+  - name: 人工智能
+    keywords: 人工智能,AI,智能
+  - name: 机器人
+    keywords: 机器人
+  - name: 医药
+    keywords: 医药,医疗,生物
+  - name: 创新药
+    keywords: 创新药
+  - name: 消费
+    keywords: 消费,食品饮料
+  - name: 白酒
+    keywords: 白酒
+  - name: 新能源
+    keywords: 新能源,电池,电动车
+  - name: 光伏
+    keywords: 光伏
+  - name: 储能
+    keywords: 储能
+  - name: 军工
+    keywords: 军工,国防
+  - name: 港股
+    keywords: 港股,香港,恒生
+  - name: 恒生科技
+    keywords: 恒生科技,HSTECH
+  - name: 纳指
+    keywords: 纳斯达克,纳指,NASDAQ
+  - name: 标普500
+    keywords: 标普500,S&P500
+  - name: 黄金
+    keywords: 黄金
+  - name: 债券
+    keywords: 债
+    fund_types: 债券
+  - name: 红利
+    keywords: 红利
+  - name: 低波
+    keywords: 低波
+  - name: QDII
+    keywords: QDII
+    fund_types: QDII
+  - name: 货币
+    keywords: 货币
+    fund_types: 货币
+  - name: LOF
+    keywords: LOF
+    fund_types: LOF
+  - name: ETF联接
+    keywords: ETF联接,联接
+    fund_types: ETF联接

@@ -21,6 +21,8 @@
     <string>outputs</string>
     <key>PROVIDER</key>
     <string>fixture</string>
+    <key>ENABLE_MARKET_INTELLIGENCE</key>
+    <string>false</string>
     <key>FUND_AGENT_SKIP_TIANTIAN_SMOKE</key>
     <string>true</string>
   </dict>

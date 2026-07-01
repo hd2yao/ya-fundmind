@@ -12,6 +12,7 @@ REVIEW_STATE="${REVIEW_STATE:-${OUTPUT_DIR}/manual_review_state.json}"
 DAYS="${DAYS:-30}"
 WEEKLY_DAYS="${WEEKLY_DAYS:-7}"
 REFRESH_DASHBOARD="${REFRESH_DASHBOARD:-true}"
+ENABLE_MARKET_INTELLIGENCE="${ENABLE_MARKET_INTELLIGENCE:-false}"
 
 cd "${PROJECT_DIR}"
 
@@ -28,6 +29,17 @@ echo "daily ops started: as_of=${AS_OF} provider=${PROVIDER} output_dir=${OUTPUT
   --portfolio-config "${PORTFOLIO_CONFIG}" \
   --output-dir "${OUTPUT_DIR}" \
   --as-of "${AS_OF}"
+
+if [[ "${ENABLE_MARKET_INTELLIGENCE}" == "true" ]]; then
+  if ! "${PYTHON_BIN}" -m fund_agent.cli market-scan \
+    --provider "${PROVIDER}" \
+    --output-dir "${OUTPUT_DIR}" \
+    --as-of "${AS_OF}"; then
+    echo "market intelligence warning: market-scan failed; daily ops will continue"
+  fi
+else
+  echo "market intelligence skipped: ENABLE_MARKET_INTELLIGENCE=${ENABLE_MARKET_INTELLIGENCE}"
+fi
 
 "${PYTHON_BIN}" -m fund_agent.cli weekly-research \
   --runs-dir "${OUTPUT_DIR}/runs" \

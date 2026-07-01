@@ -80,6 +80,12 @@ Install using AKShare:
 PROVIDER=akshare bash scripts/install_launchd_scheduler.sh --daily --weekly
 ```
 
+Enable Market Intelligence during the daily job:
+
+```bash
+PROVIDER=akshare ENABLE_MARKET_INTELLIGENCE=true bash scripts/install_launchd_scheduler.sh --daily
+```
+
 Override schedule:
 
 ```bash

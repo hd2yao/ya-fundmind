@@ -14,6 +14,8 @@ def test_daily_and_weekly_launchd_templates_exist_and_reference_scripts():
     assert "scripts/run_weekly_ops.sh" in weekly_text
     assert "PROVIDER" in daily_text
     assert "PROVIDER" in weekly_text
+    assert "ENABLE_MARKET_INTELLIGENCE" in daily_text
+    assert "<string>false</string>" in daily_text
     assert "<integer>18</integer>" in daily_text
     assert "<integer>30</integer>" in daily_text
     assert "<key>Weekday</key>" in weekly_text

@@ -10,7 +10,7 @@ from .research_loop import aggregate_manual_review_queues
 from .review_state import list_review_state, summarize_review_state
 
 
-PAGES = ("index.html", "runs.html", "signals.html", "review.html", "data_quality.html")
+PAGES = ("index.html", "runs.html", "signals.html", "review.html", "data_quality.html", "market.html")
 
 
 def generate_evidence_dashboard(
@@ -34,12 +34,14 @@ def generate_evidence_dashboard(
         "review_items": review_items,
         "queue_summary": queue_summary,
         "state_summary": state_summary,
+        "market_report": _latest_market_report(run_dirs, output),
     }
     _write_page(output / "index.html", "Evidence Dashboard", _index_body(context))
     _write_page(output / "runs.html", "Runs", _runs_body(context))
     _write_page(output / "signals.html", "Signals", _signals_body(context))
     _write_page(output / "review.html", "Manual Review", _review_body(context))
     _write_page(output / "data_quality.html", "Data Quality", _data_quality_body(context))
+    _write_page(output / "market.html", "Market Intelligence", _market_body(context))
     manifest = {
         "schema_version": "1.0",
         "generator": "fund_agent",
@@ -59,7 +61,7 @@ def _write_page(path: Path, title: str, body: str) -> None:
                 "<!doctype html>",
                 "<html><head><meta charset=\"utf-8\"><title>{}</title></head>".format(html.escape(title)),
                 "<body>",
-                "<nav><a href=\"index.html\">Index</a> <a href=\"runs.html\">Runs</a> <a href=\"signals.html\">Signals</a> <a href=\"review.html\">Review</a> <a href=\"data_quality.html\">Data Quality</a></nav>",
+                "<nav><a href=\"index.html\">Index</a> <a href=\"runs.html\">Runs</a> <a href=\"signals.html\">Signals</a> <a href=\"review.html\">Review</a> <a href=\"data_quality.html\">Data Quality</a> <a href=\"market.html\">Market</a></nav>",
                 "<p><strong>not_production_model=true</strong></p>",
                 body,
                 "</body></html>",
@@ -87,6 +89,7 @@ def _index_body(context: dict[str, Any]) -> str:
 </ul>
 <p>当前系统可继续运行，dashboard 可继续查看，research loop 可继续积累证据。</p>
 <p>insufficient_history 只影响主评分/主风险接入判断，不表示系统级失败。</p>
+<p><a href="market.html">Market Intelligence 市场观察页</a></p>
 """.format(
         runs=len(summaries),
         status=html.escape(str(latest.get("status", "unknown"))),
@@ -184,6 +187,64 @@ def _data_quality_body(context: dict[str, Any]) -> str:
     )
 
 
+def _market_body(context: dict[str, Any]) -> str:
+    report = context.get("market_report") or {}
+    if not report:
+        return """
+<h1>Market Intelligence</h1>
+<p>Market Intelligence 尚未运行。</p>
+<p>运行后将展示全市场基金/ETF 数量、主题排行榜、热门主题候选和数据质量摘要。</p>
+"""
+    hot_rows = "".join(
+        "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+            html.escape(str(item.get("theme"))),
+            html.escape(str(item.get("sample_size"))),
+            html.escape(str(item.get("avg_return_1m"))),
+        )
+        for item in report.get("hot_theme_candidates") or []
+    )
+    insufficient_rows = "".join(
+        "<tr><td>{}</td><td>{}</td></tr>".format(
+            html.escape(str(item.get("theme"))),
+            html.escape(str(item.get("sample_size"))),
+        )
+        for item in report.get("insufficient_sample_themes") or []
+    )
+    warnings = "".join(f"<li>{html.escape(str(item))}</li>" for item in report.get("warnings") or [])
+    data_quality = report.get("data_quality_summary") or {}
+    return """
+<h1>Market Intelligence</h1>
+<ul>
+  <li>as_of: {as_of}</li>
+  <li>source: {source}</li>
+  <li>total_funds: {funds}</li>
+  <li>total_etfs: {etfs}</li>
+  <li>theme_count: {themes}</li>
+  <li>data_quality: {quality}</li>
+  <li>latest_market_report_path: {path}</li>
+  <li>not_production_model=true</li>
+</ul>
+<p>市场观察页只展示候选主题和数据质量，不输出买卖建议，不接入主评分/主风险。</p>
+<h2>Hot Theme Candidates</h2>
+<table><tr><th>Theme</th><th>Sample Size</th><th>Avg Return 1M</th></tr>{hot_rows}</table>
+<h2>Insufficient Sample Themes</h2>
+<table><tr><th>Theme</th><th>Sample Size</th></tr>{insufficient_rows}</table>
+<h2>Warnings</h2>
+<ul>{warnings}</ul>
+""".format(
+        as_of=html.escape(str(report.get("as_of"))),
+        source=html.escape(str(report.get("source"))),
+        funds=html.escape(str(report.get("total_funds"))),
+        etfs=html.escape(str(report.get("total_etfs"))),
+        themes=html.escape(str(len(report.get("themes") or []))),
+        quality=html.escape(str(data_quality.get("grade", "unknown"))),
+        path=html.escape(str(report.get("_path", ""))),
+        hot_rows=hot_rows,
+        insufficient_rows=insufficient_rows,
+        warnings=warnings or "<li>none</li>",
+    )
+
+
 def _recent_run_dirs(runs_dir: Path, days: int) -> list[Path]:
     if not runs_dir.exists():
         return []
@@ -209,3 +270,14 @@ def _load_json(path: Path) -> dict[str, Any]:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {}
+
+
+def _latest_market_report(run_dirs: list[Path], output_dir: Path) -> dict[str, Any]:
+    candidates = [output_dir.parent / "market" / "market_intelligence_report.json"]
+    candidates.extend(path / "market_intelligence_report.json" for path in reversed(run_dirs))
+    for path in candidates:
+        payload = _load_json(path)
+        if payload:
+            payload["_path"] = str(path)
+            return payload
+    return {}

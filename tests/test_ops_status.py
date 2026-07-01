@@ -16,6 +16,16 @@ def test_build_ops_status_reports_latest_run_and_required_artifacts(tmp_path):
     _write_json(output_dir / "weekly_research_summary.json", {"runs_processed": 1})
     _write_json(output_dir / "dashboard" / "manifest.json", {"runs_processed": 1, "pages": ["index.html"]})
     _write_json(output_dir / "long_horizon_stability.json", {"enough_history": False, "blockers": ["insufficient_history"]})
+    _write_json(
+        output_dir / "market" / "market_intelligence_report.json",
+        {
+            "as_of": "2026-06-23",
+            "total_funds": 6,
+            "total_etfs": 2,
+            "themes": [{"theme": "沪深300"}],
+            "data_quality_summary": {"grade": "warning"},
+        },
+    )
 
     status = build_ops_status(output_dir)
 
@@ -32,6 +42,12 @@ def test_build_ops_status_reports_latest_run_and_required_artifacts(tmp_path):
     assert "continue_feature_development" in status["suggested_next_action"]
     assert "do_not_promote_to_main_model_yet" in status["suggested_next_action"]
     assert status["latest_run"]["as_of"] == "2026-06-23"
+    assert status["market_intelligence_available"] is True
+    assert status["latest_market_as_of"] == "2026-06-23"
+    assert status["latest_market_total_funds"] == 6
+    assert status["latest_market_total_etfs"] == 2
+    assert status["latest_market_theme_count"] == 1
+    assert status["latest_market_data_quality_grade"] == "warning"
     assert status["artifacts"]["dashboard_index"]["exists"] is False
     assert status["artifacts"]["dashboard_manifest"]["exists"] is True
 
@@ -56,6 +72,16 @@ def test_write_latest_summary_combines_daily_weekly_and_stability(tmp_path):
         },
     )
     _write_json(output_dir / "long_horizon_stability.json", {"enough_history": False, "blockers": ["insufficient_history"]})
+    _write_json(
+        output_dir / "market" / "market_intelligence_report.json",
+        {
+            "as_of": "2026-06-23",
+            "total_funds": 6,
+            "total_etfs": 2,
+            "themes": [{"theme": "沪深300"}],
+            "data_quality_summary": {"grade": "warning"},
+        },
+    )
 
     path = write_latest_summary(output_dir)
     markdown = path.read_text(encoding="utf-8")
@@ -69,5 +95,8 @@ def test_write_latest_summary_combines_daily_weekly_and_stability(tmp_path):
     assert "main_model_ready: False" in markdown
     assert "main_model_blockers: insufficient_history" in markdown
     assert "历史 run 不足只影响主评分/主风险接入判断" in markdown
+    assert "Market Intelligence" in markdown
+    assert "market_total_funds: 6" in markdown
+    assert "market_theme_count: 1" in markdown
     assert "insufficient_history" in markdown
     assert "不修改主评分/主风险" in markdown

@@ -26,6 +26,7 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
     daily = _load_json(root / "daily_research_summary.json")
     weekly = _load_json(root / "weekly_research_summary.json")
     stability = _load_json(root / "long_horizon_stability.json")
+    market = _latest_market_report(root)
     latest_run_status = latest_run.get("status")
     daily_success = daily.get("status") == "success" or latest_run_status == "success"
     dashboard_ready = artifacts["dashboard_index"]["exists"]
@@ -41,6 +42,13 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
         "research_loop_ready": bool(daily_success),
         "latest_run_available": bool(latest_run),
         "latest_run_status": latest_run_status,
+        "market_intelligence_available": bool(market),
+        "latest_market_report_path": market.get("_path"),
+        "latest_market_as_of": market.get("as_of"),
+        "latest_market_total_funds": market.get("total_funds"),
+        "latest_market_total_etfs": market.get("total_etfs"),
+        "latest_market_theme_count": len(market.get("themes") or []) if market else 0,
+        "latest_market_data_quality_grade": (market.get("data_quality_summary") or {}).get("grade") if market else None,
         "main_model_ready": main_model_ready,
         "main_model_blockers": main_model_blockers,
         "main_model_blocker_explanation": blocker_explanation,
@@ -91,6 +99,20 @@ def write_latest_summary(output_dir: Path | str) -> Path:
     manual = weekly.get("manual_review_state_summary") or {}
     queue = weekly.get("manual_review_queue_summary") or daily.get("manual_review_queue") or {}
     main_model_blockers = status.get("main_model_blockers") or []
+    market_lines = []
+    if status.get("market_intelligence_available"):
+        market_lines = [
+            "",
+            "## Market Intelligence",
+            "",
+            f"- market_as_of: {status.get('latest_market_as_of')}",
+            f"- market_report: {status.get('latest_market_report_path')}",
+            f"- market_total_funds: {status.get('latest_market_total_funds')}",
+            f"- market_total_etfs: {status.get('latest_market_total_etfs')}",
+            f"- market_theme_count: {status.get('latest_market_theme_count')}",
+            f"- market_data_quality: {status.get('latest_market_data_quality_grade')}",
+            "- 市场观察只用于主题/板块观察，不修改主评分/主风险，不构成投资建议。",
+        ]
     lines = [
         "# YA FundMind Latest Summary",
         "",
@@ -112,6 +134,7 @@ def write_latest_summary(output_dir: Path | str) -> Path:
         f"- suggested_next_action: {', '.join(status.get('suggested_next_action') or []) or 'none'}",
         "",
         status.get("main_model_blocker_explanation", ""),
+        *market_lines,
         "",
         "本摘要仅用于本地投研运行状态查看，不修改主评分/主风险，不构成投资建议。",
     ]
@@ -181,3 +204,19 @@ def _load_json(path: Path) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _latest_market_report(root: Path) -> dict[str, Any]:
+    candidates = [root / "market" / "market_intelligence_report.json"]
+    runs_dir = root / "runs"
+    if runs_dir.exists():
+        candidates.extend(
+            path / "market_intelligence_report.json"
+            for path in reversed(sorted(item for item in runs_dir.iterdir() if item.is_dir()))
+        )
+    for path in candidates:
+        payload = _load_json(path)
+        if payload:
+            payload["_path"] = str(path)
+            return payload
+    return {}

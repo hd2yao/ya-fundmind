@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 
 def test_launchd_scheduler_scripts_exist_and_support_required_flags():
@@ -14,6 +15,7 @@ def test_launchd_scheduler_scripts_exist_and_support_required_flags():
     assert "--weekly" in install_text
     assert "--dry-run" in install_text
     assert "PROVIDER" in install_text
+    assert "ENABLE_MARKET_INTELLIGENCE" in install_text
     assert "launchctl bootstrap" in install_text
     assert "plutil" in install_text
     assert "chmod +x" in install_text
@@ -43,3 +45,15 @@ def test_ops_runner_scripts_write_logs_and_keep_expected_steps():
     assert "generate-evidence-dashboard" in weekly
     assert "evaluate-long-horizon-stability" in weekly
     assert "ops-status" in weekly
+
+
+def test_launchd_install_dry_run_daily_only_returns_zero():
+    result = subprocess.run(
+        ["bash", "scripts/install_launchd_scheduler.sh", "--daily", "--dry-run"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "dry-run daily" in result.stdout

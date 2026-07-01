@@ -25,6 +25,11 @@ from .experiment_scoring import (
     run_experiment_scoring_file,
 )
 from .long_horizon import evaluate_long_horizon_stability, write_long_horizon_stability
+from .market_intelligence import (
+    build_market_intelligence_report,
+    fund_record_to_market_record,
+    write_market_intelligence_outputs,
+)
 from .models import FundRecord, ProviderHealth, ProviderWarning
 from .nav_summary import build_nav_history_windows_summary, parse_nav_windows
 from .ops import build_ops_status, write_latest_summary, write_ops_status
@@ -70,6 +75,7 @@ DEFAULT_SIGNAL_THRESHOLD_CONFIG = Path("configs/signal_threshold_candidates.yaml
 DEFAULT_RESEARCH_LOOP_CONFIG = Path("configs/research_loop.yaml")
 DEFAULT_REVIEW_STATE_FILE = Path("outputs/manual_review_state.json")
 DEFAULT_CACHE_FILE = Path("data/cache/funds.sqlite")
+DEFAULT_MARKET_THEMES_CONFIG = Path("configs/market_themes.yaml")
 
 
 def _write_reports(result, output_dir: Path) -> tuple[Path, Path]:
@@ -438,6 +444,62 @@ def _run_generate_signal_promotion_proposal(args) -> int:
     )
     print(f"Signal promotion proposal: {path}")
     return 0
+
+
+def _run_market_scan(args) -> int:
+    as_of = args.as_of or date.today().isoformat()
+    try:
+        funds = _load_market_scan_funds(args, as_of=as_of)
+    except ProviderUnavailable as exc:
+        print(f"No market fund data available: {exc}")
+        return 2
+    except Exception as exc:
+        print(f"Market scan failed: {exc}")
+        return 2
+    if not funds:
+        print("No market fund data available from provider or cache.")
+        return 2
+    records = [fund_record_to_market_record(fund, as_of=as_of) for fund in funds]
+    report = build_market_intelligence_report(
+        records,
+        as_of=as_of,
+        source=args.provider,
+        themes_config=args.themes_config,
+        top_n=args.top_n,
+        min_theme_sample_size=args.min_theme_sample_size,
+    )
+    outputs = write_market_intelligence_outputs(report, args.output_dir)
+    print(f"Market intelligence report: {outputs.report_path}")
+    print(f"Market intelligence summary: {outputs.summary_path}")
+    print(f"Market theme rankings: {outputs.theme_rankings_path}")
+    print(f"Market fund candidates: {outputs.fund_candidates_path}")
+    print(f"Run bundle market report: {outputs.run_report_path}")
+    return 0
+
+
+def _load_market_scan_funds(args, *, as_of: str) -> list[FundRecord]:
+    if args.provider == "fixture":
+        provider = FixtureProvider(args.funds_file)
+        return provider.fetch_funds(as_of=as_of)
+    cache = FundCache(args.cache_file)
+    provider_config = load_provider_config(args.provider_config).akshare
+    provider = AkshareProvider(
+        cache=cache,
+        allow_stale_cache=True,
+        verbose=bool(getattr(args, "provider_verbose", False) or provider_config.verbose),
+        timeout_seconds=provider_config.timeout_seconds,
+        retry_count=provider_config.retry_count,
+        retry_backoff_seconds=provider_config.retry_backoff_seconds,
+    )
+    try:
+        funds = provider.fetch_funds(as_of=as_of)
+    except ProviderUnavailable:
+        funds = cache.load_funds(as_of=as_of, allow_stale=True) or cache.load_funds(allow_stale=True)
+    if not funds:
+        funds = cache.load_funds(as_of=as_of, allow_stale=True) or cache.load_funds(allow_stale=True)
+    if not funds:
+        raise ProviderUnavailable("provider returned no rows and cache is empty")
+    return funds
 
 
 def _run_daily_research(args) -> int:
@@ -1057,6 +1119,19 @@ def build_parser() -> argparse.ArgumentParser:
     daily_research.add_argument("--thresholds", type=Path, default=DEFAULT_SIGNAL_THRESHOLD_CONFIG)
     daily_research.add_argument("--research-loop-config", type=Path, default=DEFAULT_RESEARCH_LOOP_CONFIG)
     daily_research.set_defaults(func=_run_daily_research)
+
+    market_scan = subparsers.add_parser("market-scan", help="生成全市场基金/ETF 观察层，不修改主评分/风险")
+    market_scan.add_argument("--provider", choices=["fixture", "akshare"], default="fixture")
+    market_scan.add_argument("--funds-file", type=Path, default=DEFAULT_FUNDS_FILE)
+    market_scan.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
+    market_scan.add_argument("--provider-config", type=Path, default=DEFAULT_PROVIDER_CONFIG)
+    market_scan.add_argument("--themes-config", type=Path, default=DEFAULT_MARKET_THEMES_CONFIG)
+    market_scan.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    market_scan.add_argument("--as-of", default="")
+    market_scan.add_argument("--top-n", type=int, default=20)
+    market_scan.add_argument("--min-theme-sample-size", type=int, default=5)
+    market_scan.add_argument("--provider-verbose", action="store_true")
+    market_scan.set_defaults(func=_run_market_scan)
 
     weekly_research = subparsers.add_parser("weekly-research", help="聚合 daily-research run bundle，生成每周证据摘要")
     weekly_research.add_argument("--runs-dir", type=Path, default=Path("outputs/runs"))
