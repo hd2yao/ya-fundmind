@@ -9,10 +9,12 @@ def test_daily_ops_script_keeps_market_intelligence_disabled_by_default():
     assert "market-trend" in text
     assert "watchlist-detail" in text
     assert "portfolio-analysis" in text
+    assert "collect-news-evidence" in text
     assert "market intelligence warning" in text
     assert "market trend warning" in text
     assert "watchlist detail warning" in text
     assert "portfolio analysis warning" in text
+    assert "news evidence warning" in text
     assert "--provider \"${PROVIDER}\"" in text
     assert "--watchlist-file \"${WATCHLIST_FILE}\"" in text
     assert "REFRESH_DASHBOARD" in text

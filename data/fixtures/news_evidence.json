@@ -1,0 +1,37 @@
+[
+  {
+    "title": "半导体产业链景气度观察样例",
+    "source": "fixture-news",
+    "published_at": "2026-06-23",
+    "url": "https://example.com/news/semiconductor-observation",
+    "related_themes": ["半导体", "国产算力"],
+    "related_funds": ["021511", "019548"],
+    "evidence_strength": "medium",
+    "metadata": {
+      "fixture": true
+    }
+  },
+  {
+    "title": "人工智能主题 ETF 资金关注度样例",
+    "source": "fixture-news",
+    "published_at": "2026-06-23T09:30:00+08:00",
+    "url": "https://example.com/news/ai-etf-observation",
+    "related_themes": ["人工智能"],
+    "related_funds": ["014163"],
+    "evidence_strength": "medium",
+    "metadata": {
+      "fixture": true
+    }
+  },
+  {
+    "title": "消费行业基金月度观点样例",
+    "source": "unknown-fixture",
+    "published_at": "2026-06-22",
+    "related_themes": ["消费"],
+    "related_funds": [],
+    "evidence_strength": "low",
+    "metadata": {
+      "fixture": true
+    }
+  }
+]

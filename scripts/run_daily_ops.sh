@@ -39,6 +39,12 @@ if ! "${PYTHON_BIN}" -m fund_agent.cli portfolio-analysis \
   echo "portfolio analysis warning: portfolio-analysis failed; daily ops will continue"
 fi
 
+if ! "${PYTHON_BIN}" -m fund_agent.cli collect-news-evidence \
+  --output-dir "${OUTPUT_DIR}" \
+  --as-of "${AS_OF}"; then
+  echo "news evidence warning: collect-news-evidence failed; daily ops will continue"
+fi
+
 if [[ "${ENABLE_MARKET_INTELLIGENCE}" == "true" ]]; then
   if ! "${PYTHON_BIN}" -m fund_agent.cli market-scan \
     --provider "${PROVIDER}" \

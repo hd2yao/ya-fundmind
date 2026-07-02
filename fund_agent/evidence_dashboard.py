@@ -19,6 +19,7 @@ PAGES = (
     "market.html",
     "funds.html",
     "portfolio.html",
+    "news.html",
 )
 
 
@@ -47,6 +48,7 @@ def generate_evidence_dashboard(
         "market_trend": _latest_market_trend(output),
         "fund_details": _latest_fund_details(output),
         "portfolio_report": _latest_portfolio_report(output),
+        "news_evidence": _latest_news_evidence(output),
     }
     _write_page(output / "index.html", "Evidence Dashboard", _index_body(context))
     _write_page(output / "runs.html", "Runs", _runs_body(context))
@@ -56,6 +58,7 @@ def generate_evidence_dashboard(
     _write_page(output / "market.html", "Market Intelligence", _market_body(context))
     _write_page(output / "funds.html", "Watchlist Fund Details", _funds_body(context))
     _write_page(output / "portfolio.html", "Portfolio Analysis", _portfolio_body(context))
+    _write_page(output / "news.html", "News Evidence", _news_body(context))
     _write_fund_detail_pages(output, context.get("fund_details") or {})
     manifest = {
         "schema_version": "1.0",
@@ -76,7 +79,7 @@ def _write_page(path: Path, title: str, body: str) -> None:
                 "<!doctype html>",
                 "<html><head><meta charset=\"utf-8\"><title>{}</title></head>".format(html.escape(title)),
                 "<body>",
-                "<nav><a href=\"index.html\">Index</a> <a href=\"runs.html\">Runs</a> <a href=\"signals.html\">Signals</a> <a href=\"review.html\">Review</a> <a href=\"data_quality.html\">Data Quality</a> <a href=\"market.html\">Market</a> <a href=\"funds.html\">Funds</a> <a href=\"portfolio.html\">Portfolio</a></nav>",
+                "<nav><a href=\"index.html\">Index</a> <a href=\"runs.html\">Runs</a> <a href=\"signals.html\">Signals</a> <a href=\"review.html\">Review</a> <a href=\"data_quality.html\">Data Quality</a> <a href=\"market.html\">Market</a> <a href=\"funds.html\">Funds</a> <a href=\"portfolio.html\">Portfolio</a> <a href=\"news.html\">News</a></nav>",
                 "<p><strong>not_production_model=true</strong></p>",
                 body,
                 "</body></html>",
@@ -93,6 +96,7 @@ def _index_body(context: dict[str, Any]) -> str:
     market_trend = context.get("market_trend") or {}
     fund_details = context.get("fund_details") or {}
     portfolio_report = context.get("portfolio_report") or {}
+    news_evidence = context.get("news_evidence") or {}
     research_ready = str(bool(latest.get("status") == "success")).lower()
     dashboard_ready = "true"
     return """
@@ -113,12 +117,15 @@ def _index_body(context: dict[str, Any]) -> str:
   <li>watchlist_detail_count: {fund_count}</li>
   <li>portfolio_analysis_available: {portfolio_available}</li>
   <li>portfolio_status: {portfolio_status}</li>
+  <li>news_evidence_available: {news_available}</li>
+  <li>news_evidence_count: {news_count}</li>
 </ul>
 <p>当前系统可继续运行，dashboard 可继续查看，research loop 可继续积累证据。</p>
 <p>insufficient_history 只影响主评分/主风险接入判断，不表示系统级失败。</p>
 <p><a href="market.html">Market Intelligence 市场观察页</a></p>
 <p><a href="funds.html">Watchlist Fund Details 自选基金详情页</a></p>
 <p><a href="portfolio.html">Portfolio Analysis 组合观察页</a></p>
+<p><a href="news.html">News Evidence 新闻证据观察页</a></p>
 """.format(
         runs=len(summaries),
         status=html.escape(str(latest.get("status", "unknown"))),
@@ -134,6 +141,8 @@ def _index_body(context: dict[str, Any]) -> str:
         fund_count=html.escape(str(fund_details.get("detail_count", 0))),
         portfolio_available=str(bool(portfolio_report)).lower(),
         portfolio_status=html.escape(str(portfolio_report.get("status", "unknown"))),
+        news_available=str(bool(news_evidence)).lower(),
+        news_count=html.escape(str(news_evidence.get("evidence_count", 0))),
     )
 
 
@@ -481,6 +490,77 @@ def _portfolio_body(context: dict[str, Any]) -> str:
     )
 
 
+def _news_body(context: dict[str, Any]) -> str:
+    payload = context.get("news_evidence") or {}
+    if not payload:
+        return """
+<h1>News Evidence</h1>
+<p>News Evidence 尚未运行。</p>
+<p>运行 collect-news-evidence 后将展示新闻/公告证据候选、关联主题、关联基金和低置信度标记。</p>
+"""
+    theme_rows = _key_count_rows(payload.get("by_theme") or {})
+    fund_rows = _key_count_rows(payload.get("by_fund") or {})
+    item_rows = []
+    for item in payload.get("items") or []:
+        warnings = ", ".join(item.get("warnings") or []) or "none"
+        item_rows.append(
+            "<tr><td>{title}</td><td>{source}</td><td>{published}</td><td>{themes}</td><td>{funds}</td><td>{strength}</td><td>{quality}</td><td>{low}</td><td>{warnings}</td></tr>".format(
+                title=html.escape(str(item.get("title") or "")),
+                source=html.escape(str(item.get("source") or "")),
+                published=html.escape(str(item.get("published_at") or "")),
+                themes=html.escape(", ".join(item.get("related_themes") or [])),
+                funds=html.escape(", ".join(item.get("related_funds") or [])),
+                strength=html.escape(str(item.get("evidence_strength") or "")),
+                quality=html.escape(str(item.get("source_quality") or "")),
+                low=html.escape(str(item.get("low_confidence", False))),
+                warnings=html.escape(warnings),
+            )
+        )
+    warnings = "".join(f"<li>{html.escape(str(item))}</li>" for item in payload.get("warnings") or [])
+    return """
+<h1>News Evidence</h1>
+<ul>
+  <li>as_of: {as_of}</li>
+  <li>source: {source}</li>
+  <li>evidence_count: {count}</li>
+  <li>duplicate_count: {duplicates}</li>
+  <li>low_confidence_count: {low_count}</li>
+  <li>not_production_model=true</li>
+</ul>
+<p>新闻证据页只整理外部证据候选，不修改主评分/主风险，不构成投资建议。</p>
+<h2>Related Themes</h2>
+<table><tr><th>Theme</th><th>Count</th></tr>{theme_rows}</table>
+<h2>Related Funds</h2>
+<table><tr><th>Fund</th><th>Count</th></tr>{fund_rows}</table>
+<h2>Evidence Items</h2>
+<table><tr><th>Title</th><th>Source</th><th>Published</th><th>Themes</th><th>Funds</th><th>Strength</th><th>Quality</th><th>Low Confidence</th><th>Warnings</th></tr>{item_rows}</table>
+<h2>Warnings</h2>
+<ul>{warnings}</ul>
+""".format(
+        as_of=html.escape(str(payload.get("as_of") or "")),
+        source=html.escape(str(payload.get("source") or "")),
+        count=html.escape(str(payload.get("evidence_count", 0))),
+        duplicates=html.escape(str(payload.get("duplicate_count", 0))),
+        low_count=html.escape(str(payload.get("low_confidence_count", 0))),
+        theme_rows=theme_rows,
+        fund_rows=fund_rows,
+        item_rows="".join(item_rows) or "<tr><td colspan=\"9\">none</td></tr>",
+        warnings=warnings or "<li>none</li>",
+    )
+
+
+def _key_count_rows(values: dict[str, Any]) -> str:
+    if not values:
+        return "<tr><td colspan=\"2\">none</td></tr>"
+    return "".join(
+        "<tr><td>{}</td><td>{}</td></tr>".format(
+            html.escape(str(key)),
+            html.escape(str(count)),
+        )
+        for key, count in sorted(values.items())
+    )
+
+
 def _exposure_rows(exposure: dict[str, Any]) -> str:
     if not exposure:
         return "<tr><td colspan=\"4\">none</td></tr>"
@@ -662,6 +742,14 @@ def _latest_fund_details(output_dir: Path) -> dict[str, Any]:
 
 def _latest_portfolio_report(output_dir: Path) -> dict[str, Any]:
     path = output_dir.parent / "portfolio" / "portfolio_report.json"
+    payload = _load_json(path)
+    if payload:
+        payload["_path"] = str(path)
+    return payload
+
+
+def _latest_news_evidence(output_dir: Path) -> dict[str, Any]:
+    path = output_dir.parent / "news" / "news_evidence_report.json"
     payload = _load_json(path)
     if payload:
         payload["_path"] = str(path)

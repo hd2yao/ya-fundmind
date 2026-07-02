@@ -25,14 +25,15 @@ V1 Todo 用来防止主线被零散优化打断。
 
 ## P1 Current Milestone
 
-当前 Milestone: M4 News / Announcement Evidence 新闻公告证据层。
+当前 Milestone: M5 Web Console v1。
 
-- 新增 `news_evidence` 模块和独立 CLI。
-- 接入稳定来源或 fixture/mock 路径，默认测试不依赖真实网络。
-- 输出 `news_evidence_report.json` / `news_evidence_summary.md`。
-- dashboard 增加 `news.html`。
-- 证据必须包含来源、时间、关联主题/基金和置信度。
-- M4 验收前补齐必要测试。
+- 新增本地 Web Console 入口。
+- 首页展示 ops status。
+- 页面入口覆盖 Market / Funds / Portfolio / News / Review / Reports。
+- 支持触发 daily ops 和刷新 dashboard。
+- 支持查看 latest summary 和 manual review queue。
+- 支持更新 manual review state。
+- 原 CLI 必须继续可用。
 
 ## P2 Later Polish
 
@@ -54,6 +55,7 @@ V1 Todo 用来防止主线被零散优化打断。
 - M1 Fund Detail 通用化收尾：完成 `unknown_reason`、`data_coverage`、`peer_comparison`、dashboard coverage/peer 展示、ops-status/latest_summary coverage 摘要。
 - M2 Historical Backfill 历史回填层：完成 `historical-backfill` CLI、`run_type=historical_backfill` 标记、market snapshots 回填、NAV summary 回填、market trend/fund detail 回填读取和 live/backfill 隔离测试。
 - M3 Portfolio Analysis 组合分析层：完成独立 `portfolio-analysis` CLI、`portfolio_report.json/md`、主题/类型暴露、集中度/重叠观察风险、dashboard `portfolio.html`、ops-status/latest_summary portfolio 摘要。
+- M4 News / Announcement Evidence 新闻公告证据层：完成独立 `collect-news-evidence` CLI、fixture 新闻证据源、去重、时间戳对齐、source quality / low confidence 标记、`news_evidence_report.json/md`、dashboard `news.html` 和 daily ops 集成。
 
 ## 不进入 V1 Todo 的事项
 

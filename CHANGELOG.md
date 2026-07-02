@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.16.0 - 2026-07-02
+
+V1 M4 News / Announcement Evidence release checkpoint.
+
+- Added `collect-news-evidence` CLI for local fixture-backed news/announcement evidence collection.
+- Writes `outputs/news/news_evidence_report.json`, `outputs/news/news_evidence_summary.md`, and `outputs/runs/YYYY-MM-DD/news_evidence_report.json`.
+- Normalizes source, timestamps, related themes, related funds, evidence strength, source quality, and low-confidence warnings.
+- Deduplicates repeated evidence rows and keeps skipped/mapping warnings in the output.
+- Adds dashboard `news.html` and index links for News Evidence.
+- Adds daily ops integration; news evidence failures are warnings and do not stop the daily run.
+- Updated V1 roadmap/backlog status: M4 complete, M5 Web Console v1 next.
+- No scoring, risk, watchlist, portfolio config, provider default, Web Console, trading, or main-report conclusion changes.
+
 ## v0.15.0 - 2026-07-02
 
 V1 M3 Portfolio Analysis release checkpoint.
