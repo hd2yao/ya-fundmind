@@ -29,6 +29,7 @@ from .fund_detail import (
     write_single_fund_detail,
     write_watchlist_fund_details,
 )
+from .historical_backfill import run_historical_backfill
 from .long_horizon import evaluate_long_horizon_stability, write_long_horizon_stability
 from .market_intelligence import (
     build_market_intelligence_report,
@@ -483,6 +484,39 @@ def _run_market_scan(args) -> int:
     print(f"Market snapshot: {outputs.snapshot_path}")
     print(f"Run bundle market report: {outputs.run_report_path}")
     return 0
+
+
+def _run_historical_backfill(args) -> int:
+    try:
+        nav_windows = parse_nav_windows(args.nav_windows)
+        result = run_historical_backfill(
+            provider=args.provider,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            funds_file=args.funds_file,
+            cache_file=args.cache_file,
+            themes_config=args.themes_config,
+            top_n=args.top_n,
+            min_theme_sample_size=args.min_theme_sample_size,
+            nav_windows=nav_windows,
+        )
+    except ValueError as exc:
+        print(str(exc))
+        return 2
+    print(f"Historical backfill report: {result.report_path}")
+    print(f"Historical backfill summary: {result.summary_path}")
+    print(f"Historical NAV summary: {result.nav_summary_path}")
+    print(
+        "Historical backfill: dates={dates} market_snapshots={snapshots} nav_summaries={nav}".format(
+            dates=len(result.dates_processed),
+            snapshots=result.market_snapshot_count,
+            nav=result.nav_summary_count,
+        )
+    )
+    if result.warnings:
+        print("Historical backfill warnings: " + ", ".join(result.warnings))
+    return 0 if result.status == "success" else 2
 
 
 def _run_market_trend(args) -> int:
@@ -1226,6 +1260,19 @@ def build_parser() -> argparse.ArgumentParser:
     market_scan.add_argument("--min-theme-sample-size", type=int, default=5)
     market_scan.add_argument("--provider-verbose", action="store_true")
     market_scan.set_defaults(func=_run_market_scan)
+
+    historical = subparsers.add_parser("historical-backfill", help="生成历史回填观察数据，不修改主评分/风险")
+    historical.add_argument("--provider", choices=["fixture", "cache"], default="fixture")
+    historical.add_argument("--start-date", required=True)
+    historical.add_argument("--end-date", required=True)
+    historical.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    historical.add_argument("--funds-file", type=Path, default=DEFAULT_FUNDS_FILE)
+    historical.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
+    historical.add_argument("--themes-config", type=Path, default=DEFAULT_MARKET_THEMES_CONFIG)
+    historical.add_argument("--top-n", type=int, default=20)
+    historical.add_argument("--min-theme-sample-size", type=int, default=5)
+    historical.add_argument("--nav-windows", default="1m,3m,6m")
+    historical.set_defaults(func=_run_historical_backfill)
 
     market_trend = subparsers.add_parser("market-trend", help="基于 market snapshots 生成板块趋势观察，不修改主评分/风险")
     market_trend.add_argument("--market-dir", type=Path, default=Path("outputs/market"))

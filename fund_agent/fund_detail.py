@@ -253,6 +253,9 @@ def render_fund_detail_markdown(detail: FundDetailView) -> str:
         f"- available_fields: {', '.join(detail.data_coverage.available_fields) or 'none'}",
         f"- missing_fields: {', '.join(detail.data_coverage.missing_fields) or 'none'}",
         f"- return_window_count: {detail.data_coverage.return_window_count}",
+        f"- nav_history_source: {detail.nav_history_summary.get('source', '--') if detail.nav_history_summary else '--'}",
+        f"- nav_history_run_type: {detail.nav_history_summary.get('run_type', '--') if detail.nav_history_summary else '--'}",
+        f"- nav_history_backfill: {detail.nav_history_summary.get('backfill', False) if detail.nav_history_summary else False}",
         "",
         "## 收益窗口",
         "",
@@ -489,6 +492,7 @@ def _load_artifacts(root: Path) -> dict[str, Any]:
     market = _load_json(root / "market" / "market_intelligence_report.json")
     candidates = _load_json(root / "market" / "market_fund_candidates.json")
     report = _load_json(root / "fund_agent_report.json")
+    backfill_nav = _load_json(root / "backfill" / "nav_history_summary.json")
     signals = _load_json(root / "signal_candidates.json")
     manual_queue = _load_json(root / "manual_review_queue.json", default=[])
     manual_state = _load_json(root / "manual_review_state.json")
@@ -500,7 +504,7 @@ def _load_artifacts(root: Path) -> dict[str, Any]:
         "themes": market.get("themes") or [],
         "top_themes": market.get("top_themes") or [],
         "report_details": {normalize_fund_code(item.get("code")): item for item in report.get("fund_details") or [] if isinstance(item, dict)},
-        "nav_history_summary": report.get("nav_history_summary") or {},
+        "nav_history_summary": report.get("nav_history_summary") or backfill_nav.get("nav_history_summary") or {},
         "signals": signals,
         "manual_queue": manual_queue if isinstance(manual_queue, list) else [],
         "manual_state": manual_state.get("items") or [],

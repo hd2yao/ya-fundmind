@@ -25,15 +25,14 @@ V1 Todo 用来防止主线被零散优化打断。
 
 ## P1 Current Milestone
 
-当前 Milestone: M2 Historical Backfill 历史回填层。
+当前 Milestone: M3 Portfolio Analysis 组合分析层。
 
-- 设计并实现 `historical-backfill` CLI。
-- 明确 `run_type=historical_backfill`，并与 live daily run 严格区分。
-- 支持 fund NAV 历史回填。
-- 支持 market snapshot 历史回填。
-- 防止用今天 live 数据伪造过去日期。
-- 让 market trend / fund detail 能读取 backfill 数据，并明确展示 backfill 标记。
-- M2 验收前补齐必要测试。
+- 读取 `configs/portfolio.yaml`，兼容现有 daily/fixture 路径。
+- 输出独立 `portfolio_report.json` / `portfolio_report.md`，不覆盖主报告结论。
+- 计算主题暴露、基金类型暴露、集中度、重复主题和数据新鲜度。
+- dashboard 增加 `portfolio.html`。
+- `ops-status` / `latest_summary` 增加 portfolio 状态。
+- M3 验收前补齐必要测试。
 
 ## P2 Later Polish
 
@@ -53,6 +52,7 @@ V1 Todo 用来防止主线被零散优化打断。
 ## Completed Milestones
 
 - M1 Fund Detail 通用化收尾：完成 `unknown_reason`、`data_coverage`、`peer_comparison`、dashboard coverage/peer 展示、ops-status/latest_summary coverage 摘要。
+- M2 Historical Backfill 历史回填层：完成 `historical-backfill` CLI、`run_type=historical_backfill` 标记、market snapshots 回填、NAV summary 回填、market trend/fund detail 回填读取和 live/backfill 隔离测试。
 
 ## 不进入 V1 Todo 的事项
 

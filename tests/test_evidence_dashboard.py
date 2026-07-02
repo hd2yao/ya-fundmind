@@ -110,6 +110,8 @@ def test_generate_evidence_dashboard_renders_market_page_from_json(tmp_path):
             "insufficient_history_themes": [{"theme": "沪深300"}],
             "data_quality_trend": [{"as_of": "2026-06-23", "data_quality_grade": "warning"}],
             "warnings": ["insufficient_market_history"],
+            "run_type_counts": {"historical_backfill": 1},
+            "backfill_snapshot_count": 1,
             "not_production_model": True,
         },
     )
@@ -127,6 +129,8 @@ def test_generate_evidence_dashboard_renders_market_page_from_json(tmp_path):
     assert "Market Intelligence" in market_html
     assert "Market Trend Summary" in market_html
     assert "snapshots_processed: 1" in market_html
+    assert "backfill_snapshot_count: 1" in market_html
+    assert "historical_backfill=1" in market_html
     assert "趋势样本不足，但 Market Intelligence 可继续运行" in market_html
     assert "沪深300" in market_html
     assert "白酒" in market_html

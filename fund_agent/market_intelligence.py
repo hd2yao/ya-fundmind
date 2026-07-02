@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -146,6 +146,8 @@ class MarketTrendReport:
     insufficient_history_themes: tuple[dict[str, Any], ...]
     data_quality_trend: tuple[dict[str, Any], ...]
     warnings: tuple[str, ...]
+    run_type_counts: dict[str, int] = field(default_factory=dict)
+    backfill_snapshot_count: int = 0
     not_production_model: bool = True
 
 
@@ -447,6 +449,8 @@ def build_market_trend_report(
 ) -> MarketTrendReport:
     snapshots = _load_market_snapshots(Path(market_dir), days=days)
     processed = len(snapshots)
+    run_type_counts = Counter(str(snapshot.get("run_type") or "unknown") for snapshot in snapshots)
+    backfill_snapshot_count = run_type_counts.get("historical_backfill", 0)
     enough_history = processed >= max(min_snapshots, 1)
     latest = snapshots[-1] if snapshots else {}
     latest_as_of = str(latest.get("as_of")) if latest.get("as_of") else None
@@ -568,6 +572,8 @@ def build_market_trend_report(
         insufficient_history_themes=insufficient,
         data_quality_trend=_build_market_data_quality_trend(snapshots),
         warnings=tuple(warnings),
+        run_type_counts=dict(run_type_counts),
+        backfill_snapshot_count=backfill_snapshot_count,
         not_production_model=True,
     )
 
@@ -588,6 +594,8 @@ def write_market_trend_outputs(report: MarketTrendReport, output_dir: Path | str
         "persistent_hot_themes": report.persistent_hot_themes,
         "new_hot_themes": report.new_hot_themes,
         "disappeared_hot_themes": report.disappeared_hot_themes,
+        "run_type_counts": report.run_type_counts,
+        "backfill_snapshot_count": report.backfill_snapshot_count,
         "not_production_model": True,
     }
     summary = render_market_trend_summary(report)
@@ -631,6 +639,8 @@ def render_market_trend_summary(report: MarketTrendReport) -> str:
         f"- snapshots_processed: {report.snapshots_processed}",
         f"- minimum_required_snapshots: {report.minimum_required_snapshots}",
         f"- enough_market_history: {report.enough_market_history}",
+        f"- backfill_snapshot_count: {report.backfill_snapshot_count}",
+        f"- run_type_counts: {_format_run_type_counts(report.run_type_counts)}",
         "- 这是市场趋势观察，不是买卖建议。",
         "- 本阶段不接入主评分/主风险，不改变主报告结论。",
         "",
@@ -792,6 +802,12 @@ def _theme_summary_lines(items: tuple[dict[str, Any], ...], *, empty: str) -> li
             )
         )
     return rows
+
+
+def _format_run_type_counts(value: dict[str, int]) -> str:
+    if not value:
+        return "none"
+    return ", ".join(f"{key}={count}" for key, count in sorted(value.items()))
 
 
 def _theme_name(item: dict[str, Any]) -> str:

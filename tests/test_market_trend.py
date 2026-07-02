@@ -101,3 +101,33 @@ def test_market_trend_one_snapshot_is_insufficient_but_writable(tmp_path):
     assert "趋势样本不足" in outputs.summary_path.read_text(encoding="utf-8")
     assert "买入" not in outputs.summary_path.read_text(encoding="utf-8")
     assert "卖出" not in outputs.summary_path.read_text(encoding="utf-8")
+
+
+def test_market_trend_counts_backfill_snapshots(tmp_path):
+    snapshots = tmp_path / "market" / "snapshots"
+    _write_snapshot(
+        snapshots / "2026-06-22.json",
+        as_of="2026-06-22",
+        themes=[{"theme": "半导体", "sample_size": 8, "avg_return_1m": 6.0, "data_quality_grade": "normal"}],
+        hot=["半导体"],
+    )
+    _write_snapshot(
+        snapshots / "2026-06-23.json",
+        as_of="2026-06-23",
+        themes=[{"theme": "半导体", "sample_size": 9, "avg_return_1m": 7.0, "data_quality_grade": "normal"}],
+        hot=["半导体"],
+    )
+    for path in snapshots.glob("*.json"):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["run_type"] = "historical_backfill"
+        payload["backfill"] = True
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    report = build_market_trend_report(tmp_path / "market", days=30, min_snapshots=2, top_n=5)
+    outputs = write_market_trend_outputs(report, tmp_path)
+    payload = json.loads(outputs.report_path.read_text(encoding="utf-8"))
+
+    assert report.backfill_snapshot_count == 2
+    assert report.run_type_counts["historical_backfill"] == 2
+    assert payload["backfill_snapshot_count"] == 2
+    assert "backfill_snapshot_count: 2" in outputs.summary_path.read_text(encoding="utf-8")
