@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.12.1 - 2026-07-02
+
+Environment and scheduler patch release.
+
+- Added a project-local `.venv` runtime for local execution, dependency isolation, and launchd stability.
+- Installed AKShare and test dependencies into the project `.venv`.
+- Reinstalled daily launchd with `PYTHON_BIN` pinned to the project `.venv` Python path.
+- Verified `.venv` test and compile checks pass.
+- No scoring, risk, watchlist, provider default, or trading behavior changes.
+
 ## v0.12.0 - 2026-07-01
 
 Phase 12 release checkpoint.
