@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
+import subprocess
+import sys
 from dataclasses import asdict, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -73,6 +76,7 @@ from .signal_review import (
 from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
 from .tiantian_diagnostics import build_tiantian_cache_diagnostics, write_tiantian_cache_diagnostics
 from .trace import write_provider_trace
+from .web_console import build_web_console_state
 
 
 DEFAULT_FUNDS_FILE = Path("data/fixtures/funds.json")
@@ -959,6 +963,50 @@ def _run_ops_status(args) -> int:
     return 0 if status["overall_status"] in {"ok", "warning"} else 1
 
 
+def _run_web_console(args) -> int:
+    if args.dry_run:
+        state = build_web_console_state(output_dir=args.output_dir, review_state_path=args.review_state)
+        print(
+            "Web console ready: output_dir={output_dir} ops_ready={ops_ready} dashboard_ready={dashboard_ready}".format(
+                output_dir=state["output_dir"],
+                ops_ready=state["ops_status"].get("ops_ready"),
+                dashboard_ready=state["ops_status"].get("dashboard_ready"),
+            )
+        )
+        print("not_production_model=true")
+        print("main_score_changed=false")
+        print("main_risk_changed=false")
+        return 0
+    if not _streamlit_available():
+        print("Streamlit is not installed; install streamlit or run web-console --dry-run to validate local outputs.")
+        return 2
+    script = Path(__file__).with_name("web_console.py")
+    command = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(script),
+        "--server.address",
+        args.host,
+        "--server.port",
+        str(args.port),
+        "--",
+        "--output-dir",
+        str(args.output_dir),
+        "--review-state",
+        str(args.review_state),
+        "--daily-provider",
+        args.provider,
+    ]
+    result = subprocess.run(command, check=False)
+    return int(getattr(result, "returncode", result if isinstance(result, int) else 0))
+
+
+def _streamlit_available() -> bool:
+    return importlib.util.find_spec("streamlit") is not None
+
+
 def _raise_if_contract_invalid(output_dir: Path) -> int:
     summary = validate_output_dir(output_dir)
     if not summary.results:
@@ -1423,6 +1471,15 @@ def build_parser() -> argparse.ArgumentParser:
     ops_status.add_argument("--json-output", type=Path)
     ops_status.add_argument("--write-latest-summary", action="store_true")
     ops_status.set_defaults(func=_run_ops_status)
+
+    web_console = subparsers.add_parser("web-console", help="启动本地 Web Console v1，不修改主评分/风险")
+    web_console.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    web_console.add_argument("--review-state", type=Path, default=DEFAULT_REVIEW_STATE_FILE)
+    web_console.add_argument("--provider", choices=["fixture", "akshare"], default="fixture")
+    web_console.add_argument("--host", default="127.0.0.1")
+    web_console.add_argument("--port", type=int, default=8501)
+    web_console.add_argument("--dry-run", action="store_true")
+    web_console.set_defaults(func=_run_web_console)
 
     smoke = subparsers.add_parser("smoke-akshare", help="可选：使用 AKShare 真实数据跑 live smoke")
     add_report_args(

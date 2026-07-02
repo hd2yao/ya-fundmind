@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.17.0 - 2026-07-02
+
+V1 M5 Web Console v1 release checkpoint.
+
+- Added `web-console` CLI with Streamlit-backed local console startup.
+- Added dry-run mode so default tests and local validation do not require a long-running web server.
+- Added `fund_agent/web_console.py` with ops status, latest summary, Market, Funds, Portfolio, News, Review, and Reports views.
+- Added Web Console helpers to refresh dashboard, trigger daily ops, and update manual review state.
+- Added optional `web` dependency group for Streamlit.
+- Updated V1 roadmap/backlog status: M5 complete, M6 V1 Release next.
+- No scoring, risk, watchlist, portfolio config, provider default, trading, or main-report conclusion changes.
+
 ## v0.16.0 - 2026-07-02
 
 V1 M4 News / Announcement Evidence release checkpoint.

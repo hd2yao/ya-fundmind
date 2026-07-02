@@ -21,7 +21,8 @@ V1 基准文档：
 - M2 Historical Backfill 历史回填层：已完成。
 - M3 Portfolio Analysis 组合分析层：已完成。
 - M4 News / Announcement Evidence 新闻公告证据层：已完成。
-- 下一步：M5 Web Console v1。
+- M5 Web Console v1：已完成。
+- 下一步：M6 V1 Release 收口。
 
 ## 能力
 
@@ -77,6 +78,9 @@ python -m fund_agent.cli portfolio-analysis --portfolio-config configs/portfolio
 # 收集新闻/公告证据候选
 python -m fund_agent.cli collect-news-evidence --output-dir outputs
 
+# 启动本地 Web Console v1；如未安装 Streamlit，先安装可选 web 依赖
+python -m fund_agent.cli web-console --output-dir outputs
+
 # 可选：尝试 AKShare 实时数据，需要先安装 akshare
 python -m fund_agent.cli screen --source live --output-dir outputs
 ```
@@ -92,6 +96,7 @@ python -m fund_agent.cli screen --source live --output-dir outputs
 - Historical Backfill 输出写入 `outputs/backfill/`、`outputs/market/snapshots/` 和 `outputs/runs/YYYY-MM-DD/`，统一标记 `run_type=historical_backfill`；fixture 回填只用于管线验证，不代表真实历史数据。
 - Portfolio Analysis 输出写入 `outputs/portfolio/portfolio_report.json` 和 `.md`，展示持仓、主题暴露、类型暴露、集中度和观察风险；它是独立观察层，不覆盖主评分/主风险。
 - News Evidence 输出写入 `outputs/news/news_evidence_report.json` 和 `.md`，展示新闻/公告证据候选、来源、时间、关联主题/基金、置信度和低置信度标记；默认 fixture 路径不依赖真实网络，不接主评分/主风险。
+- Web Console v1 使用 Streamlit 本地启动，集中查看 ops status、latest summary、Market、Funds、Portfolio、News、Review 和 Reports，并支持本地触发 daily ops、刷新 dashboard、更新人工审核状态。
 
 ## 测试
 
