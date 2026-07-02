@@ -351,15 +351,20 @@ def _funds_body(context: dict[str, Any]) -> str:
     for item in payload.get("fund_details") or []:
         returns = item.get("return_windows") or {}
         signal = item.get("signal_context") or {}
+        coverage = item.get("data_coverage") or {}
+        peer = item.get("peer_comparison") or {}
         missing = item.get("missing_fields") or []
         code = str(item.get("code"))
         rows.append(
-            "<tr><td><a href=\"funds/{code}.html\">{code}</a></td><td>{name}</td><td>{fund_type}</td><td>{theme}</td><td>{themes}</td><td>{quality}</td><td>{r1m}</td><td>{r3m}</td><td>{r6m}</td><td>{r1y}</td><td>{signal}</td><td>{review}</td><td>{missing}</td><td>{path}</td></tr>".format(
+            "<tr><td><a href=\"funds/{code}.html\">{code}</a></td><td>{name}</td><td>{fund_type}</td><td>{theme}</td><td>{coverage_status}</td><td>{coverage_ratio}</td><td>{peer_sample}</td><td>{peer_status}</td><td>{quality}</td><td>{r1m}</td><td>{r3m}</td><td>{r6m}</td><td>{r1y}</td><td>{signal}</td><td>{review}</td><td>{missing}</td><td>{path}</td></tr>".format(
                 code=html.escape(code),
                 name=html.escape(str(item.get("name") or "")),
                 fund_type=html.escape(str(item.get("fund_type") or "")),
                 theme=html.escape(str(item.get("primary_theme") or "")),
-                themes=html.escape(", ".join(str(value) for value in item.get("themes") or [])),
+                coverage_status=html.escape(str(coverage.get("status", "unknown"))),
+                coverage_ratio=html.escape(str(coverage.get("coverage_ratio", ""))),
+                peer_sample=html.escape(str(peer.get("peer_sample_size", 0))),
+                peer_status=html.escape(str(peer.get("sample_status", "unknown"))),
                 quality=html.escape(str(item.get("data_quality_grade") or "")),
                 r1m=html.escape(_return_value(returns, "1m")),
                 r3m=html.escape(_return_value(returns, "3m")),
@@ -378,15 +383,21 @@ def _funds_body(context: dict[str, Any]) -> str:
   <li>detail_count: {count}</li>
   <li>missing_count: {missing}</li>
   <li>warning_count: {warnings}</li>
+  <li>average_coverage_ratio: {coverage}</li>
+  <li>unknown_theme_count: {unknown_theme}</li>
+  <li>peer_insufficient_count: {peer_insufficient}</li>
   <li>not_production_model=true</li>
 </ul>
 <p>Fund Detail 是观察页，不接主评分/主风险，不构成投资建议。</p>
-<table><tr><th>Code</th><th>Name</th><th>Type</th><th>Primary Theme</th><th>Themes</th><th>Quality</th><th>1M</th><th>3M</th><th>6M</th><th>1Y</th><th>Signal</th><th>Manual Review</th><th>Missing</th><th>Detail JSON</th></tr>{rows}</table>
+<table><tr><th>Code</th><th>Name</th><th>Type</th><th>Primary Theme</th><th>Coverage</th><th>Coverage Ratio</th><th>Peer Sample</th><th>Peer Status</th><th>Quality</th><th>1M</th><th>3M</th><th>6M</th><th>1Y</th><th>Signal</th><th>Manual Review</th><th>Missing</th><th>Detail JSON</th></tr>{rows}</table>
 """.format(
         as_of=html.escape(str(payload.get("as_of") or "")),
         count=html.escape(str(payload.get("detail_count", 0))),
         missing=html.escape(str(payload.get("missing_count", 0))),
         warnings=html.escape(str(payload.get("warning_count", 0))),
+        coverage=html.escape(str((payload.get("coverage_summary") or {}).get("average_coverage_ratio", 0))),
+        unknown_theme=html.escape(str((payload.get("coverage_summary") or {}).get("unknown_theme_count", 0))),
+        peer_insufficient=html.escape(str((payload.get("coverage_summary") or {}).get("peer_insufficient_count", 0))),
         rows="".join(rows),
     )
 
@@ -419,6 +430,8 @@ def _write_fund_detail_pages(output: Path, payload: dict[str, Any]) -> None:
 
 
 def _single_fund_detail_body(item: dict[str, Any]) -> str:
+    coverage = item.get("data_coverage") or {}
+    peer = item.get("peer_comparison") or {}
     rows = "".join(
         "<tr><td>{}</td><td>{}</td><td>{}</td></tr>".format(
             html.escape(str(window)),
@@ -429,6 +442,10 @@ def _single_fund_detail_body(item: dict[str, Any]) -> str:
     )
     missing = "".join(f"<li>{html.escape(str(value))}</li>" for value in item.get("missing_fields") or [])
     warnings = "".join(f"<li>{html.escape(str(value))}</li>" for value in item.get("data_quality_warnings") or [])
+    coverage_rows = "".join(
+        f"<li>{html.escape(str(value))}</li>" for value in coverage.get("available_fields") or []
+    )
+    peer_warnings = "".join(f"<li>{html.escape(str(value))}</li>" for value in peer.get("warnings") or [])
     return """
 <h1>{code} {name}</h1>
 <ul>
@@ -436,9 +453,26 @@ def _single_fund_detail_body(item: dict[str, Any]) -> str:
   <li>source: {source}</li>
   <li>as_of: {as_of}</li>
   <li>primary_theme: {theme}</li>
+  <li>unknown_reason: {unknown_reason}</li>
   <li>data_quality_grade: {quality}</li>
 </ul>
 <p>仅用于观察，不接主评分/主风险，不构成投资建议。</p>
+<h2>Data Coverage</h2>
+<ul>
+  <li>status: {coverage_status}</li>
+  <li>coverage_ratio: {coverage_ratio}</li>
+  <li>return_window_count: {return_window_count}</li>
+  <li>available_fields: <ul>{coverage_rows}</ul></li>
+</ul>
+<h2>Peer Comparison</h2>
+<ul>
+  <li>primary_theme: {peer_theme}</li>
+  <li>peer_sample_size: {peer_sample}</li>
+  <li>sample_status: {peer_status}</li>
+  <li>rank_by_1m_return: {peer_rank_return}</li>
+  <li>rank_by_scale: {peer_rank_scale}</li>
+  <li>warnings: <ul>{peer_warnings}</ul></li>
+</ul>
 <h2>Return Windows</h2>
 <table><tr><th>Window</th><th>Total Return</th><th>Quality</th></tr>{rows}</table>
 <h2>Missing Fields</h2><ul>{missing}</ul>
@@ -450,7 +484,18 @@ def _single_fund_detail_body(item: dict[str, Any]) -> str:
         source=html.escape(str(item.get("source") or "")),
         as_of=html.escape(str(item.get("as_of") or "")),
         theme=html.escape(str(item.get("primary_theme") or "")),
+        unknown_reason=html.escape(str(item.get("unknown_reason") or "")),
         quality=html.escape(str(item.get("data_quality_grade") or "")),
+        coverage_status=html.escape(str(coverage.get("status", "unknown"))),
+        coverage_ratio=html.escape(str(coverage.get("coverage_ratio", ""))),
+        return_window_count=html.escape(str(coverage.get("return_window_count", 0))),
+        coverage_rows=coverage_rows or "<li>none</li>",
+        peer_theme=html.escape(str(peer.get("primary_theme", "unknown"))),
+        peer_sample=html.escape(str(peer.get("peer_sample_size", 0))),
+        peer_status=html.escape(str(peer.get("sample_status", "unknown"))),
+        peer_rank_return=html.escape(str(peer.get("rank_by_1m_return"))),
+        peer_rank_scale=html.escape(str(peer.get("rank_by_scale"))),
+        peer_warnings=peer_warnings or "<li>none</li>",
         rows=rows,
         missing=missing or "<li>none</li>",
         warnings=warnings or "<li>none</li>",

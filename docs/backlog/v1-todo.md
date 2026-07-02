@@ -25,14 +25,15 @@ V1 Todo 用来防止主线被零散优化打断。
 
 ## P1 Current Milestone
 
-当前 Milestone: M1 Fund Detail 通用化收尾。
+当前 Milestone: M2 Historical Backfill 历史回填层。
 
-- 明确 Fund Detail 读取优先级：market artifact、fund_agent_report、watchlist metadata、SQLite cache。
-- Fund Detail 缺字段展示稳定化。
-- Dashboard fund detail 页面补齐更清晰的表格结构和原始 JSON 链接。
-- Watchlist detail 与 run bundle 的产物路径保持一致。
-- Ops status/latest summary 对 fund detail 的字段保持稳定。
-- M1 验收前补齐必要测试。
+- 设计并实现 `historical-backfill` CLI。
+- 明确 `run_type=historical_backfill`，并与 live daily run 严格区分。
+- 支持 fund NAV 历史回填。
+- 支持 market snapshot 历史回填。
+- 防止用今天 live 数据伪造过去日期。
+- 让 market trend / fund detail 能读取 backfill 数据，并明确展示 backfill 标记。
+- M2 验收前补齐必要测试。
 
 ## P2 Later Polish
 
@@ -48,6 +49,10 @@ V1 Todo 用来防止主线被零散优化打断。
 - 更多 fixture 数据样本。
 - 更细的 cache retention 策略。
 - 文档中增加 FAQ。
+
+## Completed Milestones
+
+- M1 Fund Detail 通用化收尾：完成 `unknown_reason`、`data_coverage`、`peer_comparison`、dashboard coverage/peer 展示、ops-status/latest_summary coverage 摘要。
 
 ## 不进入 V1 Todo 的事项
 

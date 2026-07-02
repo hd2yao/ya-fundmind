@@ -29,6 +29,7 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
     market = _latest_market_report(root)
     market_trend = _latest_market_trend(root)
     fund_details = _latest_fund_details(root)
+    fund_coverage = fund_details.get("coverage_summary") or {}
     latest_run_status = latest_run.get("status")
     daily_success = daily.get("status") == "success" or latest_run_status == "success"
     dashboard_ready = artifacts["dashboard_index"]["exists"]
@@ -63,6 +64,9 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
         "watchlist_detail_count": fund_details.get("detail_count", 0) if fund_details else 0,
         "watchlist_detail_missing_count": fund_details.get("missing_count", 0) if fund_details else 0,
         "watchlist_detail_warning_count": fund_details.get("warning_count", 0) if fund_details else 0,
+        "watchlist_detail_average_coverage_ratio": fund_coverage.get("average_coverage_ratio", 0) if fund_details else 0,
+        "watchlist_detail_unknown_theme_count": fund_coverage.get("unknown_theme_count", 0) if fund_details else 0,
+        "watchlist_detail_peer_insufficient_count": fund_coverage.get("peer_insufficient_count", 0) if fund_details else 0,
         "latest_fund_detail_as_of": fund_details.get("as_of") if fund_details else None,
         "main_model_ready": main_model_ready,
         "main_model_blockers": main_model_blockers,
@@ -159,6 +163,9 @@ def write_latest_summary(output_dir: Path | str) -> Path:
             f"- detail_count: {status.get('watchlist_detail_count')}",
             f"- missing_count: {status.get('watchlist_detail_missing_count')}",
             f"- warning_count: {status.get('watchlist_detail_warning_count')}",
+            f"- average_coverage_ratio: {status.get('watchlist_detail_average_coverage_ratio')}",
+            f"- unknown_theme_count: {status.get('watchlist_detail_unknown_theme_count')}",
+            f"- peer_insufficient_count: {status.get('watchlist_detail_peer_insufficient_count')}",
             f"- detail_path: {status.get('latest_watchlist_detail_path')}",
             "- Fund Detail 是观察页，不接主评分/主风险，不构成投资建议。",
         ]

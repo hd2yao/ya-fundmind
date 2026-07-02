@@ -15,6 +15,11 @@ V1 基准文档：
 
 后续任务以架构冻结文档和交付路线图为准。非阻塞优化进入 V1 Todo，不打断当前 Milestone。Agent、Skill、MCP、LLM、自动推荐、自动交易、券商接入、SaaS、移动端和小程序都放入 V2，不阻塞 V1。
 
+当前 V1 进度：
+
+- M1 Fund Detail 通用化收尾：已完成。
+- 下一步：M2 Historical Backfill 历史回填层。
+
 ## 能力
 
 - 基金/ETF 研究优先级评分：收益质量、趋势一致性、动量确认、风险调整、反追高惩罚、规模约束。
@@ -51,6 +56,12 @@ python -m fund_agent.cli portfolio --portfolio-file data/portfolio.example.json 
 # 用 YAML 持仓配置分析组合
 python -m fund_agent.cli portfolio --portfolio-config configs/portfolio.yaml --output-dir outputs
 
+# 生成单基金详情观察层
+python -m fund_agent.cli fund-detail --code 021511 --output-dir outputs
+
+# 生成自选池基金详情观察层
+python -m fund_agent.cli watchlist-detail --watchlist-file configs/watchlist.yaml --output-dir outputs
+
 # 可选：尝试 AKShare 实时数据，需要先安装 akshare
 python -m fund_agent.cli screen --source live --output-dir outputs
 ```
@@ -62,6 +73,7 @@ python -m fund_agent.cli screen --source live --output-dir outputs
 - 自选池配置：`configs/watchlist.yaml`。
 - 持仓配置：`configs/portfolio.yaml`。`demo` 仍默认使用 fixture 和 `data/portfolio.example.json`，便于无配置试运行。
 - 每次成功运行都会写入 `outputs/snapshots/YYYY-MM-DD.json`；当存在上一期 snapshot 时，报告会展示评分、估值、风险和持仓风险变化。
+- Fund Detail 输出包含 `unknown_reason`、`data_coverage`、`peer_comparison`，用于解释自选基金的数据覆盖、主题识别和同主题样本情况。
 
 ## 测试
 

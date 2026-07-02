@@ -44,6 +44,13 @@ def test_build_ops_status_reports_latest_run_and_required_artifacts(tmp_path):
             "detail_count": 2,
             "missing_count": 1,
             "warning_count": 3,
+            "coverage_summary": {
+                "total_count": 2,
+                "average_coverage_ratio": 0.55,
+                "missing_coverage_count": 1,
+                "unknown_theme_count": 1,
+                "peer_insufficient_count": 1,
+            },
             "fund_details": [{"code": "021511"}, {"code": "021580"}],
         },
     )
@@ -79,6 +86,9 @@ def test_build_ops_status_reports_latest_run_and_required_artifacts(tmp_path):
     assert status["watchlist_detail_count"] == 2
     assert status["watchlist_detail_missing_count"] == 1
     assert status["watchlist_detail_warning_count"] == 3
+    assert status["watchlist_detail_average_coverage_ratio"] == 0.55
+    assert status["watchlist_detail_unknown_theme_count"] == 1
+    assert status["watchlist_detail_peer_insufficient_count"] == 1
     assert status["latest_fund_detail_as_of"] == "2026-06-23"
     assert status["artifacts"]["dashboard_index"]["exists"] is False
     assert status["artifacts"]["dashboard_manifest"]["exists"] is True
@@ -132,6 +142,13 @@ def test_write_latest_summary_combines_daily_weekly_and_stability(tmp_path):
             "detail_count": 1,
             "missing_count": 0,
             "warning_count": 1,
+            "coverage_summary": {
+                "total_count": 1,
+                "average_coverage_ratio": 0.8,
+                "missing_coverage_count": 0,
+                "unknown_theme_count": 0,
+                "peer_insufficient_count": 0,
+            },
             "fund_details": [{"code": "021511"}],
         },
     )
@@ -156,6 +173,9 @@ def test_write_latest_summary_combines_daily_weekly_and_stability(tmp_path):
     assert "Watchlist Fund Details" in markdown
     assert "fund_detail_available: True" in markdown
     assert "detail_count: 1" in markdown
+    assert "average_coverage_ratio: 0.8" in markdown
+    assert "unknown_theme_count: 0" in markdown
+    assert "peer_insufficient_count: 0" in markdown
     assert "趋势样本不足只影响板块趋势判断" in markdown
     assert "insufficient_history" in markdown
     assert "不修改主评分/主风险" in markdown

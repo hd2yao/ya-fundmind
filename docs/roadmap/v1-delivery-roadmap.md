@@ -537,4 +537,4 @@ python -m fund_agent.cli ops-status --output-dir outputs --json-output outputs/o
 
 ## 当前定位
 
-当前项目位于 M1。M1 完成并自验通过后，进入 M2 Historical Backfill。
+M1 Fund Detail 通用化收尾已完成并自验通过。当前项目进入 M2 Historical Backfill。

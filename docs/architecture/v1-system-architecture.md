@@ -65,7 +65,7 @@ flowchart TB
     JSONReport["Machine JSON Reports"]
     MarkdownReport["Markdown Reports"]
     HTMLReport["HTML Reports"]
-    Dashboard["Static Dashboard<br/>index/market/funds/review"]
+    Dashboard["Dashboard / Web Console v1<br/>index/market/funds/portfolio/news/review"]
     LatestSummary["outputs/latest_summary.md"]
     RunBundle["outputs/runs/YYYY-MM-DD"]
   end
@@ -155,7 +155,7 @@ flowchart TB
 
 - 下游 Agent/Skill/Web 只能读 JSON report、trace、snapshot，不应解析 Markdown。
 - Markdown/HTML 面向人阅读。
-- Dashboard 是本地静态工作台，不是 SaaS。
+- Dashboard 是本地工作台。M5 会升级为本地 Web Console v1，但仍不做 SaaS、不做公网部署、不接交易。
 - `outputs/runs/YYYY-MM-DD` 是每日可追溯运行包。
 
 ### 运行自动化层

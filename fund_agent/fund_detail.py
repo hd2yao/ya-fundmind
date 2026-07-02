@@ -41,6 +41,35 @@ class MarketRankContext:
 
 
 @dataclass(frozen=True)
+class DataCoverageView:
+    status: str = "missing"
+    coverage_ratio: float = 0.0
+    available_fields: tuple[str, ...] = ()
+    missing_fields: tuple[str, ...] = ()
+    has_market_record: bool = False
+    has_theme_classification: bool = False
+    has_nav_history_summary: bool = False
+    has_fund_detail: bool = False
+    has_cache: bool = False
+    return_window_count: int = 0
+    required_fields_count: int = 0
+    available_fields_count: int = 0
+    warnings: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PeerComparisonView:
+    primary_theme: str = "unknown"
+    peer_sample_size: int = 0
+    sample_status: str = "unknown"
+    rank_by_1m_return: int | None = None
+    percentile_by_1m_return: float | None = None
+    rank_by_scale: int | None = None
+    percentile_by_scale: float | None = None
+    warnings: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class SignalContext:
     in_signal_candidates: bool = False
     signal_status: str = "none"
@@ -62,6 +91,7 @@ class FundDetailView:
     is_portfolio: bool = False
     themes: tuple[str, ...] = ()
     primary_theme: str | None = None
+    unknown_reason: str = ""
     theme_confidence: float | None = None
     price: float | None = None
     nav: float | None = None
@@ -75,6 +105,8 @@ class FundDetailView:
     exchange_traded: bool = False
     return_windows: dict[str, ReturnWindowView] = field(default_factory=dict)
     nav_history_summary: dict[str, Any] = field(default_factory=dict)
+    data_coverage: DataCoverageView = field(default_factory=DataCoverageView)
+    peer_comparison: PeerComparisonView = field(default_factory=PeerComparisonView)
     market_rank_context: MarketRankContext = field(default_factory=MarketRankContext)
     signal_context: SignalContext = field(default_factory=SignalContext)
     data_quality_grade: str = "unknown"
@@ -124,6 +156,7 @@ def build_watchlist_fund_details_payload(
     warnings = sum(len(item.data_quality_warnings) for item in details)
     missing = sum(1 for item in details if item.missing_fields)
     as_of = next((item.as_of for item in details if item.as_of), None)
+    coverage_summary = _build_coverage_summary(details)
     rows: list[dict[str, Any]] = []
     for item in details:
         row = fund_detail_to_dict(item)
@@ -139,6 +172,7 @@ def build_watchlist_fund_details_payload(
         "detail_count": len(details),
         "missing_count": missing,
         "warning_count": warnings,
+        "coverage_summary": coverage_summary,
         "fund_details": rows,
         "not_production_model": True,
         "main_score_changed": False,
@@ -209,7 +243,16 @@ def render_fund_detail_markdown(detail: FundDetailView) -> str:
         f"- as_of: {detail.as_of or '--'}",
         f"- 主题归类: {', '.join(detail.themes) or '--'}",
         f"- primary_theme: {detail.primary_theme or '--'}",
+        f"- unknown_reason: {detail.unknown_reason or '--'}",
         f"- 主题置信度: {_display(detail.theme_confidence)}",
+        "",
+        "## 数据覆盖",
+        "",
+        f"- status: {detail.data_coverage.status}",
+        f"- coverage_ratio: {detail.data_coverage.coverage_ratio}",
+        f"- available_fields: {', '.join(detail.data_coverage.available_fields) or 'none'}",
+        f"- missing_fields: {', '.join(detail.data_coverage.missing_fields) or 'none'}",
+        f"- return_window_count: {detail.data_coverage.return_window_count}",
         "",
         "## 收益窗口",
         "",
@@ -236,6 +279,17 @@ def render_fund_detail_markdown(detail: FundDetailView) -> str:
             f"- percentile_in_theme_by_1m_return: {_display(rank.percentile_in_theme_by_1m_return)}",
             f"- rank_in_theme_by_scale: {_display(rank.rank_in_theme_by_scale)}",
             f"- percentile_in_theme_by_scale: {_display(rank.percentile_in_theme_by_scale)}",
+            "",
+            "## 同主题对比",
+            "",
+            f"- primary_theme: {detail.peer_comparison.primary_theme}",
+            f"- peer_sample_size: {detail.peer_comparison.peer_sample_size}",
+            f"- sample_status: {detail.peer_comparison.sample_status}",
+            f"- rank_by_1m_return: {_display(detail.peer_comparison.rank_by_1m_return)}",
+            f"- percentile_by_1m_return: {_display(detail.peer_comparison.percentile_by_1m_return)}",
+            f"- rank_by_scale: {_display(detail.peer_comparison.rank_by_scale)}",
+            f"- percentile_by_scale: {_display(detail.peer_comparison.percentile_by_scale)}",
+            f"- warnings: {', '.join(detail.peer_comparison.warnings) or 'none'}",
             "",
             "## Signal / Review Context",
             "",
@@ -269,19 +323,24 @@ def render_watchlist_fund_details_markdown(details: list[FundDetailView]) -> str
         f"- detail_count: {payload['detail_count']}",
         f"- missing_count: {payload['missing_count']}",
         f"- warning_count: {payload['warning_count']}",
+        f"- average_coverage_ratio: {payload['coverage_summary']['average_coverage_ratio']}",
+        f"- unknown_theme_count: {payload['coverage_summary']['unknown_theme_count']}",
+        f"- peer_insufficient_count: {payload['coverage_summary']['peer_insufficient_count']}",
         "- Fund Detail 是观察页，不接主评分/主风险，不构成投资建议。",
         "",
-        "| 代码 | 名称 | 类型 | 主题 | 数据质量 | return_1m | missing |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| 代码 | 名称 | 类型 | 主题 | Coverage | Peer Sample | 数据质量 | return_1m | missing |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for detail in details:
         one_month = detail.return_windows.get("1m")
         lines.append(
-            "| {code} | {name} | {fund_type} | {theme} | {grade} | {ret} | {missing} |".format(
+            "| {code} | {name} | {fund_type} | {theme} | {coverage} | {peer} | {grade} | {ret} | {missing} |".format(
                 code=detail.code,
                 name=detail.name or "--",
                 fund_type=detail.fund_type or "--",
                 theme=detail.primary_theme or "--",
+                coverage=detail.data_coverage.status,
+                peer=detail.peer_comparison.peer_sample_size,
                 grade=detail.data_quality_grade,
                 ret=_display(one_month.total_return if one_month else None),
                 missing=len(detail.missing_fields),
@@ -307,9 +366,11 @@ def _build_one_detail(
     returns = _returns_from(market_record)
     missing_fields: list[str] = []
     warnings: list[str] = []
+    unknown_reasons: list[str] = []
     if not market_record:
         missing_fields.append("market_record")
         warnings.append("market artifact missing for fund")
+        unknown_reasons.append("missing_market_record")
     name = (
         market_record.get("name")
         or report_detail.get("name")
@@ -328,9 +389,12 @@ def _build_one_detail(
     as_of = market_record.get("as_of") or report_detail.get("as_of") or artifacts.get("as_of") or cache.get("as_of")
     themes = tuple(str(item) for item in classification.get("themes") or ())
     primary_theme = classification.get("primary_theme")
+    if not classification:
+        unknown_reasons.append("missing_theme_classification")
     if not primary_theme:
         missing_fields.append("primary_theme")
         warnings.append("theme classification missing")
+        unknown_reasons.append("missing_primary_theme")
     return_windows = _build_return_windows(returns, nav_summary)
     for window in RETURN_WINDOWS:
         if return_windows[window].total_return is None:
@@ -345,6 +409,7 @@ def _build_one_detail(
         if value in (None, ""):
             missing_fields.append(field_name)
     market_rank = _build_market_rank_context(code, primary_theme, artifacts)
+    peer_comparison = _build_peer_comparison_context(code, primary_theme, artifacts)
     signal_context = _build_signal_context(code, artifacts)
     notes = [
         "Fund Detail 是展示层、诊断层、观察层。",
@@ -356,7 +421,28 @@ def _build_one_detail(
         notes.append("需要更多 NAV 历史。")
     grade = "normal"
     unique_missing = tuple(dict.fromkeys(missing_fields))
-    unique_warnings = tuple(dict.fromkeys(warnings + list(market_rank.warnings) + list(signal_context.warnings)))
+    data_coverage = _build_data_coverage(
+        market_record=market_record,
+        classification=classification,
+        report_detail=report_detail,
+        cache=cache,
+        nav_summary=nav_summary,
+        return_windows=return_windows,
+        name=name,
+        fund_type=fund_type,
+        source=source,
+        as_of=as_of,
+        detail_fields=detail_fields,
+    )
+    unique_warnings = tuple(
+        dict.fromkeys(
+            warnings
+            + list(market_rank.warnings)
+            + list(peer_comparison.warnings)
+            + list(signal_context.warnings)
+            + list(data_coverage.warnings)
+        )
+    )
     if unique_missing or unique_warnings:
         grade = "degraded" if "market_record" in unique_missing else "warning"
     return FundDetailView(
@@ -368,7 +454,8 @@ def _build_one_detail(
         is_watchlist=code in watchlist_codes,
         is_portfolio=code in portfolio_codes,
         themes=themes,
-        primary_theme=str(primary_theme) if primary_theme else None,
+        primary_theme=str(primary_theme) if primary_theme else "unknown",
+        unknown_reason=",".join(dict.fromkeys(unknown_reasons)),
         theme_confidence=_safe_float(classification.get("confidence")),
         price=_safe_float(market_record.get("price")),
         nav=_safe_float(market_record.get("nav")),
@@ -382,6 +469,8 @@ def _build_one_detail(
         exchange_traded=bool(market_record.get("exchange_traded", False)),
         return_windows=return_windows,
         nav_history_summary=nav_summary,
+        data_coverage=data_coverage,
+        peer_comparison=peer_comparison,
         market_rank_context=market_rank,
         signal_context=signal_context,
         data_quality_grade=grade,
@@ -562,6 +651,127 @@ def _build_market_rank_context(code: str, primary_theme: str | None, artifacts: 
         percentile_in_theme_by_scale=rank_scale[1],
         warnings=tuple(warnings),
     )
+
+
+def _build_peer_comparison_context(code: str, primary_theme: str | None, artifacts: dict[str, Any]) -> PeerComparisonView:
+    if not primary_theme:
+        return PeerComparisonView(warnings=("missing_primary_theme",))
+    classifications = artifacts.get("classifications") or {}
+    records = artifacts.get("records") or {}
+    theme_codes = [
+        item_code
+        for item_code, item in classifications.items()
+        if primary_theme in (item.get("themes") or []) or item.get("primary_theme") == primary_theme
+    ]
+    sample_size = len(theme_codes)
+    rank_return = _rank_code(code, theme_codes, records, key=lambda item: _safe_float(_returns_from(item).get("1m")))
+    rank_scale = _rank_code(code, theme_codes, records, key=lambda item: _safe_float(item.get("scale")))
+    warnings: list[str] = []
+    if sample_size <= 0:
+        sample_status = "unknown"
+        warnings.append("theme_peer_group_missing")
+    elif sample_size < 2:
+        sample_status = "insufficient"
+        warnings.append("peer_sample_insufficient")
+    else:
+        sample_status = "sufficient"
+    return PeerComparisonView(
+        primary_theme=str(primary_theme),
+        peer_sample_size=sample_size,
+        sample_status=sample_status,
+        rank_by_1m_return=rank_return[0],
+        percentile_by_1m_return=rank_return[1],
+        rank_by_scale=rank_scale[0],
+        percentile_by_scale=rank_scale[1],
+        warnings=tuple(warnings),
+    )
+
+
+def _build_data_coverage(
+    *,
+    market_record: dict[str, Any],
+    classification: dict[str, Any],
+    report_detail: dict[str, Any],
+    cache: dict[str, Any],
+    nav_summary: dict[str, Any],
+    return_windows: dict[str, ReturnWindowView],
+    name: Any,
+    fund_type: Any,
+    source: Any,
+    as_of: Any,
+    detail_fields: dict[str, Any],
+) -> DataCoverageView:
+    available: list[str] = []
+    checks = {
+        "market_record": bool(market_record),
+        "theme_classification": bool(classification),
+        "name": bool(name),
+        "fund_type": bool(fund_type),
+        "source": bool(source and source != "unknown"),
+        "as_of": bool(as_of),
+        "return_1m": return_windows.get("1m") is not None and return_windows["1m"].total_return is not None,
+        "return_3m": return_windows.get("3m") is not None and return_windows["3m"].total_return is not None,
+        "return_6m": return_windows.get("6m") is not None and return_windows["6m"].total_return is not None,
+        "return_1y": return_windows.get("1y") is not None and return_windows["1y"].total_return is not None,
+        "nav_history_summary": bool(nav_summary),
+        "fund_company": bool(detail_fields.get("fund_company")),
+        "fund_manager": bool(detail_fields.get("fund_manager")),
+        "inception_date": bool(detail_fields.get("inception_date")),
+        "rating": bool(detail_fields.get("rating")),
+    }
+    for field_name, present in checks.items():
+        if present:
+            available.append(field_name)
+    missing = [field_name for field_name, present in checks.items() if not present]
+    required_count = len(checks)
+    available_count = len(available)
+    ratio = round(available_count / required_count, 4) if required_count else 0.0
+    if ratio >= 0.8:
+        status = "complete"
+    elif ratio >= 0.5:
+        status = "partial"
+    elif ratio > 0:
+        status = "sparse"
+    else:
+        status = "missing"
+    warnings: list[str] = []
+    if status in {"missing", "sparse"}:
+        warnings.append("fund_detail_coverage_low")
+    return DataCoverageView(
+        status=status,
+        coverage_ratio=ratio,
+        available_fields=tuple(available),
+        missing_fields=tuple(missing),
+        has_market_record=bool(market_record),
+        has_theme_classification=bool(classification),
+        has_nav_history_summary=bool(nav_summary),
+        has_fund_detail=bool(report_detail),
+        has_cache=bool(cache),
+        return_window_count=sum(1 for item in return_windows.values() if item.total_return is not None),
+        required_fields_count=required_count,
+        available_fields_count=available_count,
+        warnings=tuple(warnings),
+    )
+
+
+def _build_coverage_summary(details: list[FundDetailView]) -> dict[str, Any]:
+    total = len(details)
+    ratios = [item.data_coverage.coverage_ratio for item in details]
+    status_counts: dict[str, int] = {}
+    for item in details:
+        status_counts[item.data_coverage.status] = status_counts.get(item.data_coverage.status, 0) + 1
+    return {
+        "total_count": total,
+        "average_coverage_ratio": round(sum(ratios) / total, 4) if total else 0.0,
+        "complete_count": status_counts.get("complete", 0),
+        "partial_count": status_counts.get("partial", 0),
+        "sparse_count": status_counts.get("sparse", 0),
+        "missing_coverage_count": status_counts.get("missing", 0),
+        "unknown_theme_count": sum(1 for item in details if item.primary_theme == "unknown"),
+        "peer_insufficient_count": sum(
+            1 for item in details if item.peer_comparison.sample_status in {"insufficient", "unknown"}
+        ),
+    }
 
 
 def _rank_code(code: str, codes: list[str], records: dict[str, dict[str, Any]], *, key) -> tuple[int | None, float | None]:

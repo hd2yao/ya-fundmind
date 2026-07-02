@@ -43,6 +43,11 @@ def test_watchlist_detail_cli_reads_watchlist_and_writes_summary(tmp_path):
     assert payload["detail_count"] == 3
     assert payload["fund_details"][2]["name"] == "华泰柏瑞质量成长混合C"
     assert payload["fund_details"][1]["fund_type"] == "ETF联接"
+    assert "unknown_reason" in payload["fund_details"][1]
+    assert "data_coverage" in payload["fund_details"][1]
+    assert "peer_comparison" in payload["fund_details"][1]
+    assert "coverage_summary" in payload
+    assert payload["coverage_summary"]["total_count"] == 3
     assert payload["fund_details"][1]["latest_detail_json_path"].endswith("fund_detail_021580.json")
     assert payload["not_production_model"] is True
     assert watchlist.read_text(encoding="utf-8") == original

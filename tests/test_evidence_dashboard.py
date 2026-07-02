@@ -154,6 +154,9 @@ def test_generate_evidence_dashboard_renders_funds_page_from_fund_details(tmp_pa
                     "primary_theme": "半导体",
                     "themes": ["半导体"],
                     "data_quality_grade": "warning",
+                    "unknown_reason": "",
+                    "data_coverage": {"status": "partial", "coverage_ratio": 0.75},
+                    "peer_comparison": {"peer_sample_size": 2, "sample_status": "sufficient", "rank_by_1m_return": 1},
                     "return_windows": {"1m": {"total_return": 16.5}, "3m": {"total_return": 21.0}},
                     "signal_context": {"signal_status": "candidate"},
                     "missing_fields": ["rating"],
@@ -178,7 +181,11 @@ def test_generate_evidence_dashboard_renders_funds_page_from_fund_details(tmp_pa
     assert "Watchlist Fund Details" in funds_html
     assert "021511" in funds_html
     assert "半导体" in funds_html
+    assert "Coverage" in funds_html
+    assert "Peer Sample" in funds_html
     assert "fund_detail_021511.json" in funds_html
     assert "宏利半导体产业混合发起C" in detail_html
+    assert "Data Coverage" in detail_html
+    assert "Peer Comparison" in detail_html
     assert "买入" not in funds_html
     assert "卖出" not in funds_html
