@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.0 - 2026-07-02
+
+YA FundMind OS V1 release.
+
+- Finalized the V1 local personal fund/ETF research workstation scope.
+- Rewrote README as the V1 usage manual covering install, configuration, daily/weekly ops, scheduler, Web Console, outputs, dashboard, backfill, fund detail, portfolio, news evidence, and risk boundaries.
+- Added V1 release report at `docs/releases/v1.0.0-release-report.md`.
+- Updated roadmap/backlog status: M1 through M6 complete.
+- V1 remains research-only: no broker integration, no automatic trading, no return promises, no buy/sell advice, and no unauthorized main scoring/risk model changes.
+
 ## v0.17.0 - 2026-07-02
 
 V1 M5 Web Console v1 release checkpoint.

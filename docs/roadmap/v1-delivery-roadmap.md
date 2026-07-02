@@ -537,4 +537,4 @@ python -m fund_agent.cli ops-status --output-dir outputs --json-output outputs/o
 
 ## 当前定位
 
-M1 Fund Detail 通用化收尾、M2 Historical Backfill 历史回填层、M3 Portfolio Analysis 组合分析层、M4 News / Announcement Evidence 新闻公告证据层、M5 Web Console v1 均已完成并自验通过。当前项目进入 M6 V1 Release 收口。
+M1 Fund Detail 通用化收尾、M2 Historical Backfill 历史回填层、M3 Portfolio Analysis 组合分析层、M4 News / Announcement Evidence 新闻公告证据层、M5 Web Console v1、M6 V1 Release 收口均已完成并自验通过。V1 已发布，后续新增能力不再追加 Phase，应进入新路线图或 V2 ideas。
