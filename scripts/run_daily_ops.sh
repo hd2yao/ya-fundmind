@@ -32,6 +32,13 @@ echo "daily ops started: as_of=${AS_OF} provider=${PROVIDER} output_dir=${OUTPUT
   --output-dir "${OUTPUT_DIR}" \
   --as-of "${AS_OF}"
 
+if ! "${PYTHON_BIN}" -m fund_agent.cli portfolio-analysis \
+  --portfolio-config "${PORTFOLIO_CONFIG}" \
+  --output-dir "${OUTPUT_DIR}" \
+  --as-of "${AS_OF}"; then
+  echo "portfolio analysis warning: portfolio-analysis failed; daily ops will continue"
+fi
+
 if [[ "${ENABLE_MARKET_INTELLIGENCE}" == "true" ]]; then
   if ! "${PYTHON_BIN}" -m fund_agent.cli market-scan \
     --provider "${PROVIDER}" \

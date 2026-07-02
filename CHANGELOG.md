@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.15.0 - 2026-07-02
+
+V1 M3 Portfolio Analysis release checkpoint.
+
+- Added independent `portfolio-analysis` CLI for observation-only portfolio reporting.
+- Writes `outputs/portfolio/portfolio_report.json` and `outputs/portfolio/portfolio_report.md`.
+- Copies portfolio analysis outputs into `outputs/runs/YYYY-MM-DD/` when `as_of` is available.
+- Adds theme exposure, fund type exposure, concentration summary, and observation issues such as theme overlap and single-holding concentration.
+- Adds dashboard `portfolio.html` and index links.
+- Adds ops-status/latest-summary portfolio availability, status, holding count, total value, cash, and observation issue fields.
+- Empty portfolio configs now produce a clear non-failing `portfolio_not_configured` report.
+- Updated V1 roadmap/backlog status: M3 complete, M4 News / Announcement Evidence next.
+- No scoring, risk, watchlist, portfolio config, provider default, news ingestion, Web Console, or trading behavior changes.
+
 ## v0.14.0 - 2026-07-02
 
 V1 M2 Historical Backfill release checkpoint.
