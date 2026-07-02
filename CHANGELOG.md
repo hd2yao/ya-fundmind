@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.13.1 - 2026-07-02
+
+M1 Fund Detail unknown theme patch.
+
+- Treat upstream `primary_theme="unknown"` as an unknown theme state.
+- Populate `unknown_reason=theme_classification_unknown` for unknown theme classifications.
+- Added regression coverage for unknown theme strings.
+- No scoring, risk, watchlist, portfolio, provider default, backfill, news, Web Console, or trading behavior changes.
+
 ## v0.13.0 - 2026-07-02
 
 V1 M1 Fund Detail generalization release checkpoint.
