@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.1 - 2026-07-02
+
+V1 documentation and repository structure cleanup.
+
+- Added `PROJECT_STRUCTURE.md` as the quick map for directories, code modules, active docs, and generated outputs.
+- Added `docs/README.md` as the documentation index and retention policy.
+- Moved historical Phase plans, initial research notes, and old review artifacts into `docs/archive/`.
+- Kept active V1 docs focused on architecture, roadmap, backlog, contracts, ops, and release reports.
+- No runtime behavior, scoring, risk, provider default, watchlist, portfolio, scheduler, or trading behavior changes.
+
 ## v1.0.0 - 2026-07-02
 
 YA FundMind OS V1 release.
