@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.12.2 - 2026-07-02
+
+V1 architecture freeze and roadmap baseline.
+
+- Added V1 system architecture document with layer diagram and V1 boundaries.
+- Added V1 delivery roadmap with six milestones from Fund Detail hardening through V1 release.
+- Added V1 Todo backlog rules and V2 ideas backlog to keep non-blocking work out of the V1 delivery path.
+- Updated README to mark the project as V1 delivery mode.
+- No scoring, risk, watchlist, portfolio, provider default, news, backfill, Web Console, or trading behavior changes.
+
 ## v0.12.1 - 2026-07-02
 
 Environment and scheduler patch release.
