@@ -2,6 +2,19 @@
 
 本项目是第一版本地基金/ETF 投研助手，范围只覆盖基金和 ETF，不做个股推荐，不接券商，不自动下单。
 
+## V1 Delivery Mode
+
+当前项目已进入 V1 delivery mode。后续开发不再无限追加 Phase，而是按 V1 可交付系统收敛。
+
+V1 基准文档：
+
+- 架构冻结：`docs/architecture/v1-system-architecture.md`
+- 交付路线图：`docs/roadmap/v1-delivery-roadmap.md`
+- V1 非阻塞 Todo：`docs/backlog/v1-todo.md`
+- V2 想法池：`docs/backlog/v2-ideas.md`
+
+后续任务以架构冻结文档和交付路线图为准。非阻塞优化进入 V1 Todo，不打断当前 Milestone。Agent、Skill、MCP、LLM、自动推荐、自动交易、券商接入、SaaS、移动端和小程序都放入 V2，不阻塞 V1。
+
 ## 能力
 
 - 基金/ETF 研究优先级评分：收益质量、趋势一致性、动量确认、风险调整、反追高惩罚、规模约束。
