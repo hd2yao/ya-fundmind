@@ -212,3 +212,32 @@ def test_peer_comparison_marks_insufficient_sample_without_failure(tmp_path):
     assert detail.peer_comparison.peer_sample_size == 1
     assert detail.peer_comparison.sample_status == "insufficient"
     assert "peer_sample_insufficient" in detail.peer_comparison.warnings
+
+
+def test_unknown_theme_string_outputs_unknown_reason(tmp_path):
+    _write_json(
+        tmp_path / "market" / "market_intelligence_report.json",
+        {
+            "as_of": "2026-06-24",
+            "records": [
+                {
+                    "code": "888888",
+                    "name": "未知主题基金",
+                    "fund_type": "混合型",
+                    "source": "fixture",
+                    "as_of": "2026-06-24",
+                    "metadata": {"returns": {"1m": 1.0}},
+                }
+            ],
+            "classifications": [
+                {"code": "888888", "themes": [], "primary_theme": "unknown", "confidence": 0.0}
+            ],
+            "themes": [],
+        },
+    )
+
+    detail = build_fund_detail_views(codes=["888888"], output_dir=tmp_path)[0]
+
+    assert detail.primary_theme == "unknown"
+    assert "theme_classification_unknown" in detail.unknown_reason
+    assert "theme classification unknown" in detail.data_quality_warnings

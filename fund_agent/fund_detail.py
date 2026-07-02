@@ -391,10 +391,15 @@ def _build_one_detail(
     primary_theme = classification.get("primary_theme")
     if not classification:
         unknown_reasons.append("missing_theme_classification")
-    if not primary_theme:
+    primary_theme_unknown = str(primary_theme).strip().lower() == "unknown" if primary_theme is not None else False
+    if primary_theme_unknown:
+        warnings.append("theme classification unknown")
+        unknown_reasons.append("theme_classification_unknown")
+    if not primary_theme or primary_theme_unknown:
         missing_fields.append("primary_theme")
-        warnings.append("theme classification missing")
-        unknown_reasons.append("missing_primary_theme")
+        if not primary_theme:
+            warnings.append("theme classification missing")
+            unknown_reasons.append("missing_primary_theme")
     return_windows = _build_return_windows(returns, nav_summary)
     for window in RETURN_WINDOWS:
         if return_windows[window].total_return is None:
