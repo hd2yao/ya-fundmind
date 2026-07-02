@@ -41,7 +41,16 @@ def test_generate_evidence_dashboard_writes_static_pages_from_json_only(tmp_path
 
     dashboard = tmp_path / "dashboard"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    for page in ["index.html", "runs.html", "signals.html", "review.html", "data_quality.html", "market.html", "funds.html"]:
+    for page in [
+        "index.html",
+        "runs.html",
+        "signals.html",
+        "review.html",
+        "data_quality.html",
+        "market.html",
+        "funds.html",
+        "portfolio.html",
+    ]:
         html = (dashboard / page).read_text(encoding="utf-8")
         assert "not_production_model=true" in html
         assert "买入" not in html
@@ -63,6 +72,7 @@ def test_generate_evidence_dashboard_writes_static_pages_from_json_only(tmp_path
         "funds.html",
         "index.html",
         "market.html",
+        "portfolio.html",
         "review.html",
         "runs.html",
         "signals.html",
@@ -193,3 +203,51 @@ def test_generate_evidence_dashboard_renders_funds_page_from_fund_details(tmp_pa
     assert "Peer Comparison" in detail_html
     assert "买入" not in funds_html
     assert "卖出" not in funds_html
+
+
+def test_generate_evidence_dashboard_renders_portfolio_page_from_json(tmp_path):
+    runs_dir = tmp_path / "runs"
+    _write_json(
+        runs_dir / "2026-06-23" / "daily_research_summary.json",
+        {"as_of": "2026-06-23", "status": "success"},
+    )
+    _write_json(
+        tmp_path / "portfolio" / "portfolio_report.json",
+        {
+            "as_of": "2026-06-23",
+            "status": "ok",
+            "holding_count": 2,
+            "total_value": 1000.0,
+            "cash_available": 200.0,
+            "theme_exposure": {
+                "宽基": {"holding_count": 2, "weight": 1.0, "current_value": 1000.0},
+            },
+            "fund_type_exposure": {
+                "ETF": {"holding_count": 1, "weight": 0.6, "current_value": 600.0},
+                "ETF联接": {"holding_count": 1, "weight": 0.4, "current_value": 400.0},
+            },
+            "concentration": {"top_holding_code": "510300", "top_holding_weight": 0.6},
+            "observation_issues": [{"issue_type": "theme_overlap", "severity": "warning", "message": "宽基 重叠"}],
+            "not_production_model": True,
+        },
+    )
+    review_state = tmp_path / "manual_review_state.json"
+    _write_json(review_state, {"items": []})
+
+    generate_evidence_dashboard(
+        runs_dir=runs_dir,
+        review_state_path=review_state,
+        output_dir=tmp_path / "dashboard",
+        days=30,
+    )
+
+    portfolio_html = (tmp_path / "dashboard" / "portfolio.html").read_text(encoding="utf-8")
+    index_html = (tmp_path / "dashboard" / "index.html").read_text(encoding="utf-8")
+
+    assert "Portfolio Analysis" in portfolio_html
+    assert "portfolio_status: ok" in portfolio_html
+    assert "宽基" in portfolio_html
+    assert "theme_overlap" in portfolio_html
+    assert "portfolio.html" in index_html
+    assert "买入" not in portfolio_html
+    assert "卖出" not in portfolio_html

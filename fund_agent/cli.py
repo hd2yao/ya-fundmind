@@ -41,6 +41,7 @@ from .market_intelligence import (
 from .models import FundRecord, ProviderHealth, ProviderWarning
 from .nav_summary import build_nav_history_windows_summary, parse_nav_windows
 from .ops import build_ops_status, write_latest_summary, write_ops_status
+from .portfolio_analysis import build_portfolio_analysis_report, write_portfolio_analysis_outputs
 from .providers import (
     AkshareProvider,
     FixtureProvider,
@@ -540,6 +541,30 @@ def _run_market_trend(args) -> int:
         print(f"Run bundle market trend report: {outputs.run_report_path}")
     if not report.enough_market_history:
         print("Market trend warning: insufficient market history; daily ops can continue.")
+    return 0
+
+
+def _run_portfolio_analysis(args) -> int:
+    try:
+        config = load_portfolio_config(args.portfolio_config)
+    except Exception as exc:
+        print(f"Failed to read portfolio config: {exc}")
+        return 2
+    report = build_portfolio_analysis_report(
+        config,
+        output_dir=args.output_dir,
+        as_of=args.as_of or None,
+    )
+    json_path, markdown_path = write_portfolio_analysis_outputs(report, args.output_dir)
+    print(f"Portfolio analysis report: {json_path}")
+    print(f"Portfolio analysis summary: {markdown_path}")
+    print(
+        "Portfolio analysis: status={status} holdings={holdings} issues={issues}".format(
+            status=report.get("status"),
+            holdings=report.get("holding_count"),
+            issues=report.get("observation_issue_count"),
+        )
+    )
     return 0
 
 
@@ -1283,6 +1308,12 @@ def build_parser() -> argparse.ArgumentParser:
     market_trend.add_argument("--json-output", type=Path)
     market_trend.add_argument("--summary-output", type=Path)
     market_trend.set_defaults(func=_run_market_trend)
+
+    portfolio_analysis = subparsers.add_parser("portfolio-analysis", help="生成独立组合观察报告，不修改主评分/风险")
+    portfolio_analysis.add_argument("--portfolio-config", type=Path, default=DEFAULT_PORTFOLIO_CONFIG)
+    portfolio_analysis.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    portfolio_analysis.add_argument("--as-of", default="")
+    portfolio_analysis.set_defaults(func=_run_portfolio_analysis)
 
     fund_detail = subparsers.add_parser("fund-detail", help="生成单只或多只基金详情观察层，不修改主评分/风险")
     fund_detail.add_argument("--code")

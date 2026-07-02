@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ya-fundmind"
-version = "0.14.0"
+version = "0.15.0"
 description = "YA FundMind local fund and ETF research assistant"
 readme = "README.md"
 requires-python = ">=3.10"

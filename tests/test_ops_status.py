@@ -54,6 +54,17 @@ def test_build_ops_status_reports_latest_run_and_required_artifacts(tmp_path):
             "fund_details": [{"code": "021511"}, {"code": "021580"}],
         },
     )
+    _write_json(
+        output_dir / "portfolio" / "portfolio_report.json",
+        {
+            "as_of": "2026-06-23",
+            "status": "ok",
+            "holding_count": 3,
+            "total_value": 901.0,
+            "cash_available": 500.0,
+            "observation_issue_count": 2,
+        },
+    )
 
     status = build_ops_status(output_dir)
 
@@ -90,6 +101,11 @@ def test_build_ops_status_reports_latest_run_and_required_artifacts(tmp_path):
     assert status["watchlist_detail_unknown_theme_count"] == 1
     assert status["watchlist_detail_peer_insufficient_count"] == 1
     assert status["latest_fund_detail_as_of"] == "2026-06-23"
+    assert status["portfolio_analysis_available"] is True
+    assert status["latest_portfolio_status"] == "ok"
+    assert status["latest_portfolio_holding_count"] == 3
+    assert status["latest_portfolio_observation_issue_count"] == 2
+    assert status["latest_portfolio_total_value"] == 901.0
     assert status["artifacts"]["dashboard_index"]["exists"] is False
     assert status["artifacts"]["dashboard_manifest"]["exists"] is True
 
@@ -152,6 +168,17 @@ def test_write_latest_summary_combines_daily_weekly_and_stability(tmp_path):
             "fund_details": [{"code": "021511"}],
         },
     )
+    _write_json(
+        output_dir / "portfolio" / "portfolio_report.json",
+        {
+            "as_of": "2026-06-23",
+            "status": "ok",
+            "holding_count": 1,
+            "total_value": 1000.0,
+            "cash_available": 200.0,
+            "observation_issue_count": 1,
+        },
+    )
 
     path = write_latest_summary(output_dir)
     markdown = path.read_text(encoding="utf-8")
@@ -176,6 +203,10 @@ def test_write_latest_summary_combines_daily_weekly_and_stability(tmp_path):
     assert "average_coverage_ratio: 0.8" in markdown
     assert "unknown_theme_count: 0" in markdown
     assert "peer_insufficient_count: 0" in markdown
+    assert "Portfolio Analysis" in markdown
+    assert "portfolio_status: ok" in markdown
+    assert "portfolio_holding_count: 1" in markdown
+    assert "portfolio_observation_issue_count: 1" in markdown
     assert "趋势样本不足只影响板块趋势判断" in markdown
     assert "insufficient_history" in markdown
     assert "不修改主评分/主风险" in markdown

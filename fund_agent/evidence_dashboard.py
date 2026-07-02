@@ -10,7 +10,16 @@ from .research_loop import aggregate_manual_review_queues
 from .review_state import list_review_state, summarize_review_state
 
 
-PAGES = ("index.html", "runs.html", "signals.html", "review.html", "data_quality.html", "market.html", "funds.html")
+PAGES = (
+    "index.html",
+    "runs.html",
+    "signals.html",
+    "review.html",
+    "data_quality.html",
+    "market.html",
+    "funds.html",
+    "portfolio.html",
+)
 
 
 def generate_evidence_dashboard(
@@ -37,6 +46,7 @@ def generate_evidence_dashboard(
         "market_report": _latest_market_report(run_dirs, output),
         "market_trend": _latest_market_trend(output),
         "fund_details": _latest_fund_details(output),
+        "portfolio_report": _latest_portfolio_report(output),
     }
     _write_page(output / "index.html", "Evidence Dashboard", _index_body(context))
     _write_page(output / "runs.html", "Runs", _runs_body(context))
@@ -45,6 +55,7 @@ def generate_evidence_dashboard(
     _write_page(output / "data_quality.html", "Data Quality", _data_quality_body(context))
     _write_page(output / "market.html", "Market Intelligence", _market_body(context))
     _write_page(output / "funds.html", "Watchlist Fund Details", _funds_body(context))
+    _write_page(output / "portfolio.html", "Portfolio Analysis", _portfolio_body(context))
     _write_fund_detail_pages(output, context.get("fund_details") or {})
     manifest = {
         "schema_version": "1.0",
@@ -65,7 +76,7 @@ def _write_page(path: Path, title: str, body: str) -> None:
                 "<!doctype html>",
                 "<html><head><meta charset=\"utf-8\"><title>{}</title></head>".format(html.escape(title)),
                 "<body>",
-                "<nav><a href=\"index.html\">Index</a> <a href=\"runs.html\">Runs</a> <a href=\"signals.html\">Signals</a> <a href=\"review.html\">Review</a> <a href=\"data_quality.html\">Data Quality</a> <a href=\"market.html\">Market</a> <a href=\"funds.html\">Funds</a></nav>",
+                "<nav><a href=\"index.html\">Index</a> <a href=\"runs.html\">Runs</a> <a href=\"signals.html\">Signals</a> <a href=\"review.html\">Review</a> <a href=\"data_quality.html\">Data Quality</a> <a href=\"market.html\">Market</a> <a href=\"funds.html\">Funds</a> <a href=\"portfolio.html\">Portfolio</a></nav>",
                 "<p><strong>not_production_model=true</strong></p>",
                 body,
                 "</body></html>",
@@ -81,6 +92,7 @@ def _index_body(context: dict[str, Any]) -> str:
     market_report = context.get("market_report") or {}
     market_trend = context.get("market_trend") or {}
     fund_details = context.get("fund_details") or {}
+    portfolio_report = context.get("portfolio_report") or {}
     research_ready = str(bool(latest.get("status") == "success")).lower()
     dashboard_ready = "true"
     return """
@@ -99,11 +111,14 @@ def _index_body(context: dict[str, Any]) -> str:
   <li>market_trend_enough_history: {trend_enough}</li>
   <li>fund_detail_available: {fund_available}</li>
   <li>watchlist_detail_count: {fund_count}</li>
+  <li>portfolio_analysis_available: {portfolio_available}</li>
+  <li>portfolio_status: {portfolio_status}</li>
 </ul>
 <p>当前系统可继续运行，dashboard 可继续查看，research loop 可继续积累证据。</p>
 <p>insufficient_history 只影响主评分/主风险接入判断，不表示系统级失败。</p>
 <p><a href="market.html">Market Intelligence 市场观察页</a></p>
 <p><a href="funds.html">Watchlist Fund Details 自选基金详情页</a></p>
+<p><a href="portfolio.html">Portfolio Analysis 组合观察页</a></p>
 """.format(
         runs=len(summaries),
         status=html.escape(str(latest.get("status", "unknown"))),
@@ -117,6 +132,8 @@ def _index_body(context: dict[str, Any]) -> str:
         trend_enough=html.escape(str(market_trend.get("enough_market_history", False))),
         fund_available=str(bool(fund_details)).lower(),
         fund_count=html.escape(str(fund_details.get("detail_count", 0))),
+        portfolio_available=str(bool(portfolio_report)).lower(),
+        portfolio_status=html.escape(str(portfolio_report.get("status", "unknown"))),
     )
 
 
@@ -413,6 +430,73 @@ def _funds_body(context: dict[str, Any]) -> str:
     )
 
 
+def _portfolio_body(context: dict[str, Any]) -> str:
+    payload = context.get("portfolio_report") or {}
+    if not payload:
+        return """
+<h1>Portfolio Analysis</h1>
+<p>Portfolio Analysis 尚未运行。</p>
+<p>运行 portfolio-analysis 后将展示组合市值、主题暴露、类型暴露、集中度和观察风险。</p>
+"""
+    theme_rows = _exposure_rows(payload.get("theme_exposure") or {})
+    type_rows = _exposure_rows(payload.get("fund_type_exposure") or {})
+    issues = "".join(
+        "<li>{issue_type}: {message}</li>".format(
+            issue_type=html.escape(str(item.get("issue_type"))),
+            message=html.escape(str(item.get("message"))),
+        )
+        for item in payload.get("observation_issues") or []
+    )
+    concentration = payload.get("concentration") or {}
+    return """
+<h1>Portfolio Analysis</h1>
+<ul>
+  <li>portfolio_status: {status}</li>
+  <li>as_of: {as_of}</li>
+  <li>holding_count: {holding_count}</li>
+  <li>total_value: {total_value}</li>
+  <li>cash_available: {cash}</li>
+  <li>top_holding_code: {top_code}</li>
+  <li>top_holding_weight: {top_weight}</li>
+  <li>not_production_model=true</li>
+</ul>
+<p>组合观察页只展示暴露、集中度和数据问题，不输出买卖建议，不接入主评分/主风险。</p>
+<h2>Theme Exposure</h2>
+<table><tr><th>Theme</th><th>Holdings</th><th>Weight</th><th>Value</th></tr>{theme_rows}</table>
+<h2>Fund Type Exposure</h2>
+<table><tr><th>Type</th><th>Holdings</th><th>Weight</th><th>Value</th></tr>{type_rows}</table>
+<h2>Observation Issues</h2>
+<ul>{issues}</ul>
+""".format(
+        status=html.escape(str(payload.get("status"))),
+        as_of=html.escape(str(payload.get("as_of"))),
+        holding_count=html.escape(str(payload.get("holding_count", 0))),
+        total_value=html.escape(str(payload.get("total_value", 0))),
+        cash=html.escape(str(payload.get("cash_available", 0))),
+        top_code=html.escape(str(concentration.get("top_holding_code"))),
+        top_weight=html.escape(str(concentration.get("top_holding_weight", 0))),
+        theme_rows=theme_rows,
+        type_rows=type_rows,
+        issues=issues or "<li>none</li>",
+    )
+
+
+def _exposure_rows(exposure: dict[str, Any]) -> str:
+    if not exposure:
+        return "<tr><td colspan=\"4\">none</td></tr>"
+    rows = []
+    for label, item in sorted(exposure.items()):
+        rows.append(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
+                html.escape(str(label)),
+                html.escape(str(item.get("holding_count", 0))),
+                html.escape(str(item.get("weight", 0))),
+                html.escape(str(item.get("current_value", 0))),
+            )
+        )
+    return "".join(rows)
+
+
 def _write_fund_detail_pages(output: Path, payload: dict[str, Any]) -> None:
     details = payload.get("fund_details") or []
     if not details:
@@ -573,4 +657,12 @@ def _latest_fund_details(output_dir: Path) -> dict[str, Any]:
         for item in payload.get("fund_details") or []:
             code = str(item.get("code") or "")
             item["latest_detail_json_path"] = str(output_dir.parent / "fund_details" / f"fund_detail_{code}.json")
+    return payload
+
+
+def _latest_portfolio_report(output_dir: Path) -> dict[str, Any]:
+    path = output_dir.parent / "portfolio" / "portfolio_report.json"
+    payload = _load_json(path)
+    if payload:
+        payload["_path"] = str(path)
     return payload

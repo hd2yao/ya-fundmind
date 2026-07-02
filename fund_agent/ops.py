@@ -29,6 +29,7 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
     market = _latest_market_report(root)
     market_trend = _latest_market_trend(root)
     fund_details = _latest_fund_details(root)
+    portfolio = _latest_portfolio_report(root)
     fund_coverage = fund_details.get("coverage_summary") or {}
     latest_run_status = latest_run.get("status")
     daily_success = daily.get("status") == "success" or latest_run_status == "success"
@@ -68,6 +69,14 @@ def build_ops_status(output_dir: Path | str) -> dict[str, Any]:
         "watchlist_detail_unknown_theme_count": fund_coverage.get("unknown_theme_count", 0) if fund_details else 0,
         "watchlist_detail_peer_insufficient_count": fund_coverage.get("peer_insufficient_count", 0) if fund_details else 0,
         "latest_fund_detail_as_of": fund_details.get("as_of") if fund_details else None,
+        "portfolio_analysis_available": bool(portfolio),
+        "latest_portfolio_report_path": portfolio.get("_path"),
+        "latest_portfolio_status": portfolio.get("status") if portfolio else None,
+        "latest_portfolio_as_of": portfolio.get("as_of") if portfolio else None,
+        "latest_portfolio_holding_count": portfolio.get("holding_count", 0) if portfolio else 0,
+        "latest_portfolio_total_value": portfolio.get("total_value", 0) if portfolio else 0,
+        "latest_portfolio_cash_available": portfolio.get("cash_available", 0) if portfolio else 0,
+        "latest_portfolio_observation_issue_count": portfolio.get("observation_issue_count", 0) if portfolio else 0,
         "main_model_ready": main_model_ready,
         "main_model_blockers": main_model_blockers,
         "main_model_blocker_explanation": blocker_explanation,
@@ -177,6 +186,30 @@ def write_latest_summary(output_dir: Path | str) -> Path:
             "- fund_detail_available: False",
             "- Fund Detail 尚未运行；不影响 daily ops/dashboard/market-scan 继续运行。",
         ]
+    portfolio_lines = []
+    if status.get("portfolio_analysis_available"):
+        portfolio_lines = [
+            "",
+            "## Portfolio Analysis",
+            "",
+            "- portfolio_analysis_available: True",
+            f"- portfolio_status: {status.get('latest_portfolio_status')}",
+            f"- portfolio_as_of: {status.get('latest_portfolio_as_of')}",
+            f"- portfolio_holding_count: {status.get('latest_portfolio_holding_count')}",
+            f"- portfolio_total_value: {status.get('latest_portfolio_total_value')}",
+            f"- portfolio_cash_available: {status.get('latest_portfolio_cash_available')}",
+            f"- portfolio_observation_issue_count: {status.get('latest_portfolio_observation_issue_count')}",
+            f"- portfolio_report: {status.get('latest_portfolio_report_path')}",
+            "- Portfolio Analysis 是组合观察页，不接主评分/主风险，不构成投资建议。",
+        ]
+    else:
+        portfolio_lines = [
+            "",
+            "## Portfolio Analysis",
+            "",
+            "- portfolio_analysis_available: False",
+            "- Portfolio Analysis 尚未运行；不影响 daily ops/dashboard 继续运行。",
+        ]
     lines = [
         "# YA FundMind Latest Summary",
         "",
@@ -201,6 +234,7 @@ def write_latest_summary(output_dir: Path | str) -> Path:
         *market_lines,
         *trend_lines,
         *fund_detail_lines,
+        *portfolio_lines,
         "",
         "本摘要仅用于本地投研运行状态查看，不修改主评分/主风险，不构成投资建议。",
     ]
@@ -310,6 +344,22 @@ def _latest_fund_details(root: Path) -> dict[str, Any]:
     if runs_dir.exists():
         candidates.extend(
             path / "fund_details" / "watchlist_fund_details.json"
+            for path in reversed(sorted(item for item in runs_dir.iterdir() if item.is_dir()))
+        )
+    for path in candidates:
+        payload = _load_json(path)
+        if payload:
+            payload["_path"] = str(path)
+            return payload
+    return {}
+
+
+def _latest_portfolio_report(root: Path) -> dict[str, Any]:
+    candidates = [root / "portfolio" / "portfolio_report.json"]
+    runs_dir = root / "runs"
+    if runs_dir.exists():
+        candidates.extend(
+            path / "portfolio_report.json"
             for path in reversed(sorted(item for item in runs_dir.iterdir() if item.is_dir()))
         )
     for path in candidates:
