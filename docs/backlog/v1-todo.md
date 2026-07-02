@@ -25,15 +25,13 @@ V1 Todo 用来防止主线被零散优化打断。
 
 ## P1 Current Milestone
 
-当前 Milestone: M5 Web Console v1。
+当前 Milestone: M6 V1 Release 收口。
 
-- 新增本地 Web Console 入口。
-- 首页展示 ops status。
-- 页面入口覆盖 Market / Funds / Portfolio / News / Review / Reports。
-- 支持触发 daily ops 和刷新 dashboard。
-- 支持查看 latest summary 和 manual review queue。
-- 支持更新 manual review state。
-- 原 CLI 必须继续可用。
+- README 重写为正式 V1 使用手册。
+- 补齐安装、配置、daily/weekly scheduler、Web Console、outputs 和 dashboard 说明。
+- 补齐 backfill、news evidence、portfolio、fund detail 使用说明。
+- 输出 V1 验收报告。
+- 打 `v1.0.0` tag。
 
 ## P2 Later Polish
 
@@ -56,6 +54,7 @@ V1 Todo 用来防止主线被零散优化打断。
 - M2 Historical Backfill 历史回填层：完成 `historical-backfill` CLI、`run_type=historical_backfill` 标记、market snapshots 回填、NAV summary 回填、market trend/fund detail 回填读取和 live/backfill 隔离测试。
 - M3 Portfolio Analysis 组合分析层：完成独立 `portfolio-analysis` CLI、`portfolio_report.json/md`、主题/类型暴露、集中度/重叠观察风险、dashboard `portfolio.html`、ops-status/latest_summary portfolio 摘要。
 - M4 News / Announcement Evidence 新闻公告证据层：完成独立 `collect-news-evidence` CLI、fixture 新闻证据源、去重、时间戳对齐、source quality / low confidence 标记、`news_evidence_report.json/md`、dashboard `news.html` 和 daily ops 集成。
+- M5 Web Console v1：完成本地 `web-console` CLI、Streamlit console、ops status/latest summary、Market/Funds/Portfolio/News/Review/Reports 入口、dashboard refresh、daily ops trigger 和 manual review state 更新能力。
 
 ## 不进入 V1 Todo 的事项
 
