@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.13.0 - 2026-07-02
+
+V1 M1 Fund Detail generalization release checkpoint.
+
+- Generalized Fund Detail and Watchlist Detail for arbitrary watchlists without hardcoded fund codes.
+- Added `unknown_reason`, `data_coverage`, and `peer_comparison` to fund detail outputs.
+- Added watchlist-level `coverage_summary` for average coverage, unknown themes, and peer sample sufficiency.
+- Updated dashboard fund pages to show coverage, theme, peer comparison, missing fields, and warnings.
+- Updated ops-status and latest summary with fund detail coverage fields.
+- Updated V1 roadmap/backlog status: M1 complete, M2 Historical Backfill next.
+- No scoring, risk, watchlist, portfolio, provider default, backfill, news, Web Console, or trading behavior changes.
+
 ## v0.12.2 - 2026-07-02
 
 V1 architecture freeze and roadmap baseline.
@@ -43,6 +55,7 @@ Phase 1 through Phase 11 release checkpoint.
 
 Versioning rule for the current pre-1.0 stage:
 
-- Completed Phase N maps to `v0.N.0`.
-- Small fixes inside a phase use patch versions, for example `v0.11.1`.
+- Completed V1 Milestone feature checkpoints use minor versions, for example `v0.13.0`.
+- Small fixes inside a milestone use patch versions, for example `v0.13.1`.
+- V1 release completion maps to `v1.0.0`.
 - Breaking output-contract changes should wait for an explicit major/minor decision before tagging.
