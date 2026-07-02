@@ -40,6 +40,7 @@ def test_ops_runner_scripts_write_logs_and_keep_expected_steps():
     assert "market-trend" in daily
     assert "watchlist-detail" in daily
     assert "portfolio-analysis" in daily
+    assert "collect-news-evidence" in daily
     assert "evaluate-long-horizon-stability" in daily
     assert "ops-status" in daily
 

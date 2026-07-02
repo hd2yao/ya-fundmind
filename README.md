@@ -20,7 +20,8 @@ V1 基准文档：
 - M1 Fund Detail 通用化收尾：已完成。
 - M2 Historical Backfill 历史回填层：已完成。
 - M3 Portfolio Analysis 组合分析层：已完成。
-- 下一步：M4 News / Announcement Evidence 新闻公告证据层。
+- M4 News / Announcement Evidence 新闻公告证据层：已完成。
+- 下一步：M5 Web Console v1。
 
 ## 能力
 
@@ -73,6 +74,9 @@ python -m fund_agent.cli market-trend --market-dir outputs/market --output-dir o
 # 生成独立组合观察报告
 python -m fund_agent.cli portfolio-analysis --portfolio-config configs/portfolio.yaml --output-dir outputs
 
+# 收集新闻/公告证据候选
+python -m fund_agent.cli collect-news-evidence --output-dir outputs
+
 # 可选：尝试 AKShare 实时数据，需要先安装 akshare
 python -m fund_agent.cli screen --source live --output-dir outputs
 ```
@@ -87,6 +91,7 @@ python -m fund_agent.cli screen --source live --output-dir outputs
 - Fund Detail 输出包含 `unknown_reason`、`data_coverage`、`peer_comparison`，用于解释自选基金的数据覆盖、主题识别和同主题样本情况。
 - Historical Backfill 输出写入 `outputs/backfill/`、`outputs/market/snapshots/` 和 `outputs/runs/YYYY-MM-DD/`，统一标记 `run_type=historical_backfill`；fixture 回填只用于管线验证，不代表真实历史数据。
 - Portfolio Analysis 输出写入 `outputs/portfolio/portfolio_report.json` 和 `.md`，展示持仓、主题暴露、类型暴露、集中度和观察风险；它是独立观察层，不覆盖主评分/主风险。
+- News Evidence 输出写入 `outputs/news/news_evidence_report.json` 和 `.md`，展示新闻/公告证据候选、来源、时间、关联主题/基金、置信度和低置信度标记；默认 fixture 路径不依赖真实网络，不接主评分/主风险。
 
 ## 测试
 

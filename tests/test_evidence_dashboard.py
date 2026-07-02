@@ -50,6 +50,7 @@ def test_generate_evidence_dashboard_writes_static_pages_from_json_only(tmp_path
         "market.html",
         "funds.html",
         "portfolio.html",
+        "news.html",
     ]:
         html = (dashboard / page).read_text(encoding="utf-8")
         assert "not_production_model=true" in html
@@ -72,6 +73,7 @@ def test_generate_evidence_dashboard_writes_static_pages_from_json_only(tmp_path
         "funds.html",
         "index.html",
         "market.html",
+        "news.html",
         "portfolio.html",
         "review.html",
         "runs.html",
@@ -251,3 +253,63 @@ def test_generate_evidence_dashboard_renders_portfolio_page_from_json(tmp_path):
     assert "portfolio.html" in index_html
     assert "买入" not in portfolio_html
     assert "卖出" not in portfolio_html
+
+
+def test_generate_evidence_dashboard_renders_news_page_from_json(tmp_path):
+    runs_dir = tmp_path / "runs"
+    _write_json(
+        runs_dir / "2026-06-23" / "daily_research_summary.json",
+        {"as_of": "2026-06-23", "status": "success"},
+    )
+    _write_json(
+        tmp_path / "news" / "news_evidence_report.json",
+        {
+            "as_of": "2026-06-23",
+            "evidence_count": 2,
+            "low_confidence_count": 1,
+            "by_theme": {"半导体": 1},
+            "by_fund": {"510300": 1},
+            "items": [
+                {
+                    "title": "半导体设备国产化进展提速",
+                    "source": "fixture-news",
+                    "published_at": "2026-06-23T00:00:00+00:00",
+                    "related_themes": ["半导体"],
+                    "related_funds": ["510300"],
+                    "evidence_strength": "medium",
+                    "low_confidence": False,
+                },
+                {
+                    "title": "消费主题基金披露月度观点",
+                    "source": "unknown-blog",
+                    "published_at": "2026-06-22T09:30:00+08:00",
+                    "related_themes": ["消费"],
+                    "related_funds": ["110022"],
+                    "evidence_strength": "low",
+                    "low_confidence": True,
+                },
+            ],
+            "not_production_model": True,
+        },
+    )
+    review_state = tmp_path / "manual_review_state.json"
+    _write_json(review_state, {"items": []})
+
+    generate_evidence_dashboard(
+        runs_dir=runs_dir,
+        review_state_path=review_state,
+        output_dir=tmp_path / "dashboard",
+        days=30,
+    )
+
+    news_html = (tmp_path / "dashboard" / "news.html").read_text(encoding="utf-8")
+    index_html = (tmp_path / "dashboard" / "index.html").read_text(encoding="utf-8")
+
+    assert "News Evidence" in news_html
+    assert "evidence_count: 2" in news_html
+    assert "low_confidence_count: 1" in news_html
+    assert "半导体设备国产化进展提速" in news_html
+    assert "low_confidence" in news_html
+    assert "news.html" in index_html
+    assert "买入" not in news_html
+    assert "卖出" not in news_html

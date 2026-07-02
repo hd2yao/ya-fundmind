@@ -40,6 +40,7 @@ from .market_intelligence import (
 )
 from .models import FundRecord, ProviderHealth, ProviderWarning
 from .nav_summary import build_nav_history_windows_summary, parse_nav_windows
+from .news_evidence import collect_news_evidence
 from .ops import build_ops_status, write_latest_summary, write_ops_status
 from .portfolio_analysis import build_portfolio_analysis_report, write_portfolio_analysis_outputs
 from .providers import (
@@ -85,6 +86,7 @@ DEFAULT_RESEARCH_LOOP_CONFIG = Path("configs/research_loop.yaml")
 DEFAULT_REVIEW_STATE_FILE = Path("outputs/manual_review_state.json")
 DEFAULT_CACHE_FILE = Path("data/cache/funds.sqlite")
 DEFAULT_MARKET_THEMES_CONFIG = Path("configs/market_themes.yaml")
+DEFAULT_NEWS_EVIDENCE_FILE = Path("data/fixtures/news_evidence.json")
 
 
 def _write_reports(result, output_dir: Path) -> tuple[Path, Path]:
@@ -563,6 +565,34 @@ def _run_portfolio_analysis(args) -> int:
             status=report.get("status"),
             holdings=report.get("holding_count"),
             issues=report.get("observation_issue_count"),
+        )
+    )
+    return 0
+
+
+def _run_collect_news_evidence(args) -> int:
+    try:
+        payload = collect_news_evidence(
+            source=args.source,
+            fixtures_file=args.fixtures_file,
+            output_dir=args.output_dir,
+            as_of=args.as_of or None,
+        )
+    except Exception as exc:
+        print(f"News evidence collection failed: {exc}")
+        return 2
+    report_path = args.output_dir / "news" / "news_evidence_report.json"
+    summary_path = args.output_dir / "news" / "news_evidence_summary.md"
+    run_path = args.output_dir / "runs" / str(payload.get("as_of")) / "news_evidence_report.json"
+    print(f"News evidence report: {report_path}")
+    print(f"News evidence summary: {summary_path}")
+    if run_path.exists():
+        print(f"Run bundle news evidence: {run_path}")
+    print(
+        "News evidence: evidence_count={count} low_confidence_count={low} duplicate_count={duplicates}".format(
+            count=payload.get("evidence_count", 0),
+            low=payload.get("low_confidence_count", 0),
+            duplicates=payload.get("duplicate_count", 0),
         )
     )
     return 0
@@ -1314,6 +1344,13 @@ def build_parser() -> argparse.ArgumentParser:
     portfolio_analysis.add_argument("--output-dir", type=Path, default=Path("outputs"))
     portfolio_analysis.add_argument("--as-of", default="")
     portfolio_analysis.set_defaults(func=_run_portfolio_analysis)
+
+    news_evidence = subparsers.add_parser("collect-news-evidence", help="收集新闻/公告证据候选，不修改主评分/风险")
+    news_evidence.add_argument("--source", choices=["fixture"], default="fixture")
+    news_evidence.add_argument("--fixtures-file", type=Path, default=DEFAULT_NEWS_EVIDENCE_FILE)
+    news_evidence.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    news_evidence.add_argument("--as-of", default="")
+    news_evidence.set_defaults(func=_run_collect_news_evidence)
 
     fund_detail = subparsers.add_parser("fund-detail", help="生成单只或多只基金详情观察层，不修改主评分/风险")
     fund_detail.add_argument("--code")
