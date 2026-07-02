@@ -178,7 +178,7 @@ python -m fund_agent.cli ops-status --output-dir outputs --json-output outputs/o
 
 ```bash
 python -m fund_agent.cli historical-backfill --start-date 2026-06-01 --end-date 2026-06-30 --provider fixture --output-dir outputs
-python -m fund_agent.cli market-trend --snapshot-dir outputs/market/snapshots --output-dir outputs
+python -m fund_agent.cli market-trend --market-dir outputs/market --output-dir outputs
 python -m fund_agent.cli fund-detail --code 021511 --output-dir outputs
 ```
 
@@ -537,4 +537,4 @@ python -m fund_agent.cli ops-status --output-dir outputs --json-output outputs/o
 
 ## 当前定位
 
-M1 Fund Detail 通用化收尾已完成并自验通过。当前项目进入 M2 Historical Backfill。
+M1 Fund Detail 通用化收尾和 M2 Historical Backfill 历史回填层均已完成并自验通过。当前项目进入 M3 Portfolio Analysis 组合分析层。

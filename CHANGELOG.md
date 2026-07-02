@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.14.0 - 2026-07-02
+
+V1 M2 Historical Backfill release checkpoint.
+
+- Added `historical-backfill` CLI for observation-only historical backfill runs.
+- Writes backfill artifacts under `outputs/backfill/`, `outputs/market/snapshots/`, and `outputs/runs/YYYY-MM-DD/` with `run_type=historical_backfill`.
+- Keeps backfill output separate from live daily evidence and does not write daily research summaries.
+- Added NAV history summary backfill output for Fund Detail consumption.
+- Added market trend backfill counters: `run_type_counts` and `backfill_snapshot_count`.
+- Fund Detail can read backfill NAV summaries and shows `nav_history_run_type` / `nav_history_backfill` markers.
+- Fixture backfill is explicitly marked as synthetic and not real history.
+- Updated V1 roadmap/backlog status: M2 complete, M3 Portfolio Analysis next.
+- No scoring, risk, watchlist, portfolio config, provider default, news, Web Console, or trading behavior changes.
+
 ## v0.13.1 - 2026-07-02
 
 M1 Fund Detail unknown theme patch.

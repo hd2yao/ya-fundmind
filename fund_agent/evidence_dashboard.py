@@ -294,12 +294,15 @@ def _market_trend_section(trend: dict[str, Any]) -> str:
     insufficient = ""
     if not trend.get("enough_market_history", False):
         insufficient = "<p>趋势样本不足，但 Market Intelligence 可继续运行。</p>"
+    run_type_counts = _format_run_type_counts(trend.get("run_type_counts") or {})
     return """
 <h2>Market Trend Summary</h2>
 <ul>
   <li>snapshots_processed: {snapshots}</li>
   <li>minimum_required_snapshots: {minimum}</li>
   <li>enough_market_history: {enough}</li>
+  <li>backfill_snapshot_count: {backfill}</li>
+  <li>run_type_counts: {run_type_counts}</li>
   <li>latest_as_of: {latest}</li>
 </ul>
 {insufficient}
@@ -314,6 +317,8 @@ def _market_trend_section(trend: dict[str, Any]) -> str:
         snapshots=html.escape(str(trend.get("snapshots_processed", 0))),
         minimum=html.escape(str(trend.get("minimum_required_snapshots", 0))),
         enough=html.escape(str(trend.get("enough_market_history", False))),
+        backfill=html.escape(str(trend.get("backfill_snapshot_count", 0))),
+        run_type_counts=html.escape(run_type_counts),
         latest=html.escape(str(trend.get("latest_as_of"))),
         insufficient=insufficient,
         persistent=persistent,
@@ -323,6 +328,12 @@ def _market_trend_section(trend: dict[str, Any]) -> str:
         quality_rows=quality_rows or "<tr><td colspan=\"4\">none</td></tr>",
         warnings=warnings or "<li>none</li>",
     )
+
+
+def _format_run_type_counts(value: dict[str, Any]) -> str:
+    if not value:
+        return "none"
+    return ", ".join(f"{key}={count}" for key, count in sorted(value.items()))
 
 
 def _trend_list(items: list[dict[str, Any]]) -> str:

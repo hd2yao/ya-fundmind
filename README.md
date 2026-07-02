@@ -18,7 +18,8 @@ V1 基准文档：
 当前 V1 进度：
 
 - M1 Fund Detail 通用化收尾：已完成。
-- 下一步：M2 Historical Backfill 历史回填层。
+- M2 Historical Backfill 历史回填层：已完成。
+- 下一步：M3 Portfolio Analysis 组合分析层。
 
 ## 能力
 
@@ -62,6 +63,12 @@ python -m fund_agent.cli fund-detail --code 021511 --output-dir outputs
 # 生成自选池基金详情观察层
 python -m fund_agent.cli watchlist-detail --watchlist-file configs/watchlist.yaml --output-dir outputs
 
+# 生成历史回填观察数据，不修改主评分/主风险
+python -m fund_agent.cli historical-backfill --provider fixture --start-date 2026-06-21 --end-date 2026-06-23 --output-dir outputs
+
+# 基于 market snapshots 生成板块趋势观察
+python -m fund_agent.cli market-trend --market-dir outputs/market --output-dir outputs
+
 # 可选：尝试 AKShare 实时数据，需要先安装 akshare
 python -m fund_agent.cli screen --source live --output-dir outputs
 ```
@@ -74,6 +81,7 @@ python -m fund_agent.cli screen --source live --output-dir outputs
 - 持仓配置：`configs/portfolio.yaml`。`demo` 仍默认使用 fixture 和 `data/portfolio.example.json`，便于无配置试运行。
 - 每次成功运行都会写入 `outputs/snapshots/YYYY-MM-DD.json`；当存在上一期 snapshot 时，报告会展示评分、估值、风险和持仓风险变化。
 - Fund Detail 输出包含 `unknown_reason`、`data_coverage`、`peer_comparison`，用于解释自选基金的数据覆盖、主题识别和同主题样本情况。
+- Historical Backfill 输出写入 `outputs/backfill/`、`outputs/market/snapshots/` 和 `outputs/runs/YYYY-MM-DD/`，统一标记 `run_type=historical_backfill`；fixture 回填只用于管线验证，不代表真实历史数据。
 
 ## 测试
 
