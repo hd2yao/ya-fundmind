@@ -14,6 +14,8 @@ V1 Todo 用来防止主线被零散优化打断。
 
 当前无已知 P0。
 
+2026-07-03 V1 post-release acceptance 结论：无 P0。
+
 判定标准：
 
 - daily ops 无法运行。
@@ -31,9 +33,21 @@ V1 Todo 用来防止主线被零散优化打断。
 - 新增能力进入新的路线图或 V2 ideas。
 - P0 只保留运行中断、测试失败、数据契约破坏、误输出交易建议等生产级阻塞。
 
+2026-07-03 V1 post-release acceptance 结论：无 P1。
+
 ## P2 Later Polish
 
 这些事项不打断 M1-M6 主线。
+
+### 2026-07-03 V1 Post-release Acceptance Observations
+
+- Long-horizon history still has `insufficient_history`: 当前 `runs_processed=5`，主模型升级门槛为 20 个有效 run。该问题只影响主评分/主风险升级判断，不影响 daily、dashboard、Web Console 或现有报告使用。
+- Portfolio Analysis 当前为 `warning`: 3 个持仓观察项缺少可用当前估值，代码为 `510300`、`000834`、`110022`。现有页面和 JSON 可用，但组合估值字段后续需要补全。
+- Fund Detail coverage 仍需积累：`detail_count=3`、`missing_count=3`、`warning_count=4`。不阻塞 V1 使用，后续可继续增强数据源覆盖率。
+- News Evidence 当前使用本地 evidence 底座：`evidence_count=3`、`low_confidence_count=1`。真实新闻/公告扩展属于后续能力，不阻塞 V1。
+- Market Intelligence 当前数据质量为 `warning`: `insufficient_sample_themes:2`。继续 daily 运行可以改善主题样本稳定性。
+- Scheduler status 文案可优化：`status_launchd_scheduler.sh` 会展示当天日志路径，即使当天 21:30 尚未触发 daily。实际最近成功 daily 为 2026-07-02 21:30，launchd daily 上次退出码为 0。
+- Weekly scheduler 已安装并加载，但 launchd 还未到下一次周六 10:00 自动触发窗口；下次 scheduler 调整时建议与 daily 一样固定使用项目 `.venv` Python 路径。
 
 - README 截图或本地 dashboard 使用截图。
 - Dashboard 视觉细节统一。

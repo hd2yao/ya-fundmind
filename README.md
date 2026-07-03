@@ -6,7 +6,7 @@ YA FundMind OS v1 是本地个人基金/ETF 投研工作台。它每天或每周
 
 ## 当前状态
 
-- 当前版本：`v1.0.1`
+- 当前版本：`v1.0.2`
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`

@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.2 - 2026-07-03
+
+V1 post-release acceptance notes.
+
+- Recorded the V1 post-release acceptance and ops check findings in `docs/backlog/v1-todo.md`.
+- Confirmed daily scheduler, generated outputs, Web Console, contract validation, pytest, and compileall status.
+- Classified current observations as non-blocking P2 items: history accumulation, portfolio valuation coverage, fund detail coverage, news evidence confidence, market sample coverage, and scheduler status wording.
+- No runtime behavior, scoring, risk, provider default, watchlist, portfolio, scheduler install, or trading behavior changes.
+
 ## v1.0.1 - 2026-07-02
 
 V1 documentation and repository structure cleanup.
