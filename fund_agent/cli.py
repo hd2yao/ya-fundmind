@@ -288,6 +288,8 @@ def _run_validate_contract(args) -> int:
         results.append(validate_contract_file(args.evidence_bundle, "evidence_bundle"))
     if args.research_answer:
         results.append(validate_contract_file(args.research_answer, "research_answer"))
+    if args.mcp_result:
+        results.append(validate_contract_file(args.mcp_result, "mcp_tool_result"))
     if not results:
         results = list(validate_output_dir(args.output_dir).results)
     summary = ContractValidationSummary(results=tuple(results))
@@ -1605,6 +1607,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--research-context", type=Path)
     validate.add_argument("--evidence-bundle", type=Path)
     validate.add_argument("--research-answer", type=Path)
+    validate.add_argument("--mcp-result", type=Path)
     validate.set_defaults(func=_run_validate_contract)
 
     research_query = subparsers.add_parser(
