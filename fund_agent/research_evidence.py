@@ -203,24 +203,25 @@ def build_evidence_bundle(
     loader = ArtifactLoader(output_dir)
     loaded: list[_LoadedArtifact] = []
     load_warnings: list[str] = []
-    load_decisions: list[QualityDecision] = []
+    artifact_decisions: dict[str, QualityDecision] = {}
+    load_failure_decisions: list[QualityDecision] = []
     for item in context_payload.get("artifacts") or []:
         try:
             descriptor = _descriptor_from_dict(item)
         except (KeyError, TypeError, ValueError) as exc:
             load_warnings.append(f"invalid_artifact_descriptor:{exc}")
-            load_decisions.append(QualityDecision("blocked", True, ("invalid_artifact_descriptor",)))
+            load_failure_decisions.append(QualityDecision("blocked", True, ("invalid_artifact_descriptor",)))
             continue
         result = loader.load(descriptor)
         if result.status != "ok" or result.payload is None:
             reason = f"artifact_load_{result.status}:{descriptor.artifact_id}"
             grade = "blocked" if result.status == "blocked" else "warning"
             load_warnings.extend(result.warnings)
-            load_decisions.append(QualityDecision(grade, grade == "blocked", (reason,)))
+            load_failure_decisions.append(QualityDecision(grade, grade == "blocked", (reason,)))
             continue
         decision = evaluate_artifact_quality(descriptor, result.payload)
         loaded.append(_LoadedArtifact(descriptor, result.payload, decision))
-        load_decisions.append(decision)
+        artifact_decisions[descriptor.artifact_id] = decision
 
     evidence: list[EvidenceRef] = []
     findings: list[ResearchFinding] = []
@@ -254,7 +255,13 @@ def build_evidence_bundle(
             for finding in findings
         ]
 
-    decisions = list(load_decisions)
+    used_artifact_ids = {item.artifact_id for item in evidence}
+    decisions = [
+        decision
+        for artifact_id, decision in artifact_decisions.items()
+        if artifact_id in used_artifact_ids
+    ]
+    decisions.extend(load_failure_decisions)
     if data_gaps:
         decisions.append(QualityDecision("warning", False, ("data_gaps_present",)))
     if conflicts:

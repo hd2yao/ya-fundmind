@@ -134,7 +134,14 @@ def test_history_bundle_cites_latest_snapshot_delta(tmp_path):
     output_dir = tmp_path / "outputs"
     _write_json(
         output_dir / "snapshots" / "2026-07-11.json",
-        {"schema_version": "1.0", "as_of": "2026-07-11", "snapshot_delta": {}},
+        {
+            "schema_version": "1.0",
+            "as_of": "2026-07-11",
+            "snapshot_delta": {},
+            "provider_warnings": [
+                {"code": "all_watchlist_missing", "severity": "critical"}
+            ],
+        },
     )
     latest = output_dir / "snapshots" / "2026-07-12.json"
     _write_json(
@@ -154,6 +161,8 @@ def test_history_bundle_cites_latest_snapshot_delta(tmp_path):
     assert evidence["path"] == "snapshots/2026-07-12.json"
     assert evidence["json_pointer"] == "/snapshot_delta"
     assert finding["value"] == {"warning_count_delta": 1}
+    assert bundle.quality_grade == "normal"
+    assert bundle.review_required is False
 
 
 def test_bundle_marks_cross_source_conflict_degraded_and_requires_review(tmp_path):

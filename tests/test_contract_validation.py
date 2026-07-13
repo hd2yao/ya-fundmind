@@ -295,3 +295,80 @@ def test_research_context_contract_rejects_unknown_topic_and_status(tmp_path):
     assert result.ok is False
     assert "Unsupported research topic: markdown" in result.errors
     assert "Unsupported research context status: complete" in result.errors
+
+
+def test_evidence_bundle_contract_accepts_cited_findings(tmp_path):
+    path = tmp_path / "research_evidence.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "generated_at": "2026-07-12T00:00:00+00:00",
+                "generator": "fund_agent",
+                "topic": "market",
+                "status": "ok",
+                "as_of": "2026-07-12",
+                "code": None,
+                "quality_grade": "normal",
+                "review_required": False,
+                "findings": [
+                    {
+                        "finding_id": "finding-1",
+                        "evidence_ids": ["evidence-1"],
+                    }
+                ],
+                "evidence": [
+                    {
+                        "evidence_id": "evidence-1",
+                        "artifact_id": "artifact-1",
+                        "path": "market/report.json",
+                        "json_pointer": "/total_funds",
+                        "claim_type": "market.total_funds",
+                    }
+                ],
+                "data_gaps": [],
+                "warnings": [],
+                "metadata": {},
+                "future_optional": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_contract_file(path, "evidence_bundle")
+
+    assert result.ok is True
+
+
+def test_evidence_bundle_contract_rejects_uncited_or_missing_evidence(tmp_path):
+    path = tmp_path / "research_evidence.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "generated_at": "2026-07-12T00:00:00+00:00",
+                "generator": "fund_agent",
+                "topic": "market",
+                "status": "ok",
+                "as_of": "2026-07-12",
+                "code": None,
+                "quality_grade": "normal",
+                "review_required": False,
+                "findings": [
+                    {"finding_id": "finding-1", "evidence_ids": []},
+                    {"finding_id": "finding-2", "evidence_ids": ["evidence-missing"]},
+                ],
+                "evidence": [],
+                "data_gaps": [],
+                "warnings": [],
+                "metadata": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_contract_file(path, "evidence_bundle")
+
+    assert result.ok is False
+    assert "Finding must reference at least one evidence id: finding-1" in result.errors
+    assert "Finding references unknown evidence id: evidence-missing" in result.errors
