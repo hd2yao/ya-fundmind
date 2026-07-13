@@ -242,8 +242,23 @@ def _validate_evidence_bundle_values(payload: dict[str, Any], errors: list[str])
         if not isinstance(item, dict):
             errors.append(f"Evidence item must be an object: {index}")
             continue
-        for field in ("evidence_id", "artifact_id", "path", "json_pointer", "claim_type"):
-            if not item.get(field):
+        for field in (
+            "evidence_id",
+            "artifact_id",
+            "artifact_type",
+            "path",
+            "content_hash",
+            "json_pointer",
+            "claim_type",
+            "as_of",
+            "source",
+            "quality_grade",
+            "stale",
+            "value",
+            "excerpt",
+            "metadata",
+        ):
+            if field not in item:
                 errors.append(f"Evidence item missing field: {field}")
         evidence_id = item.get("evidence_id")
         if isinstance(evidence_id, str):
@@ -255,6 +270,21 @@ def _validate_evidence_bundle_values(payload: dict[str, Any], errors: list[str])
             errors.append(f"Finding must be an object: {index}")
             continue
         finding_id = str(item.get("finding_id") or index)
+        for field in (
+            "finding_id",
+            "topic",
+            "category",
+            "label",
+            "value",
+            "code",
+            "quality_grade",
+            "evidence_ids",
+            "review_required",
+            "warnings",
+            "metadata",
+        ):
+            if field not in item:
+                errors.append(f"Finding missing field: {field}")
         references = item.get("evidence_ids")
         if not isinstance(references, list) or not references:
             errors.append(f"Finding must reference at least one evidence id: {finding_id}")

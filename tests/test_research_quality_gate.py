@@ -81,6 +81,16 @@ def test_quality_gate_marks_legacy_schema_and_insufficient_sample_warning():
     assert "insufficient_sample" in decision.reasons
 
 
+def test_quality_gate_marks_regular_artifact_warning():
+    decision = evaluate_artifact_quality(
+        _descriptor(),
+        {"warnings": ["low_confidence_evidence_present"]},
+    )
+
+    assert decision.grade == "warning"
+    assert decision.reasons == ("artifact_warning:low_confidence_evidence_present",)
+
+
 def test_conflict_gate_only_flags_cross_source_different_values():
     source_a = _descriptor(artifact_id="artifact-a", source="akshare", path="a.json")
     source_b = _descriptor(artifact_id="artifact-b", source="tiantian", path="b.json")

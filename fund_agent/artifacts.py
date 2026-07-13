@@ -99,6 +99,8 @@ class ArtifactLoader:
             return self._blocked(descriptor, "artifact_descriptor_mismatch")
         if not path.is_file():
             return ArtifactLoadResult(descriptor, "missing", None, ("artifact_missing",))
+        if descriptor.content_hash and _content_hash(path) != descriptor.content_hash:
+            return ArtifactLoadResult(descriptor, "changed", None, ("artifact_content_changed",))
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):

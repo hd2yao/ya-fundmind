@@ -41,6 +41,7 @@ class EvidenceRef:
     artifact_id: str
     artifact_type: str
     path: str
+    content_hash: str
     json_pointer: str
     claim_type: str
     as_of: str | None

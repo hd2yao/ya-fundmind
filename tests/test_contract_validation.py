@@ -314,16 +314,34 @@ def test_evidence_bundle_contract_accepts_cited_findings(tmp_path):
                 "findings": [
                     {
                         "finding_id": "finding-1",
+                        "topic": "market",
+                        "category": "breadth",
+                        "label": "基金总数",
+                        "value": 10,
+                        "code": None,
+                        "quality_grade": "normal",
                         "evidence_ids": ["evidence-1"],
+                        "review_required": False,
+                        "warnings": [],
+                        "metadata": {"claim_type": "market.total_funds"},
                     }
                 ],
                 "evidence": [
                     {
                         "evidence_id": "evidence-1",
                         "artifact_id": "artifact-1",
+                        "artifact_type": "market_intelligence",
                         "path": "market/report.json",
-                        "json_pointer": "/total_funds",
+                        "content_hash": "a" * 64,
+                        "json_pointer": "",
                         "claim_type": "market.total_funds",
+                        "as_of": "2026-07-12",
+                        "source": "fixture",
+                        "quality_grade": "normal",
+                        "stale": False,
+                        "value": {"total_funds": 10},
+                        "excerpt": "{\"total_funds\":10}",
+                        "metadata": {},
                     }
                 ],
                 "data_gaps": [],
@@ -358,7 +376,15 @@ def test_evidence_bundle_contract_rejects_uncited_or_missing_evidence(tmp_path):
                     {"finding_id": "finding-1", "evidence_ids": []},
                     {"finding_id": "finding-2", "evidence_ids": ["evidence-missing"]},
                 ],
-                "evidence": [],
+                "evidence": [
+                    {
+                        "evidence_id": "evidence-other",
+                        "artifact_id": "artifact-1",
+                        "path": "market/report.json",
+                        "json_pointer": "/total_funds",
+                        "claim_type": "market.total_funds",
+                    }
+                ],
                 "data_gaps": [],
                 "warnings": [],
                 "metadata": {},
@@ -372,3 +398,4 @@ def test_evidence_bundle_contract_rejects_uncited_or_missing_evidence(tmp_path):
     assert result.ok is False
     assert "Finding must reference at least one evidence id: finding-1" in result.errors
     assert "Finding references unknown evidence id: evidence-missing" in result.errors
+    assert "Evidence item missing field: content_hash" in result.errors

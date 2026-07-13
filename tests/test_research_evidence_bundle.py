@@ -193,3 +193,23 @@ def test_bundle_marks_cross_source_conflict_degraded_and_requires_review(tmp_pat
     assert bundle.quality_grade == "degraded"
     assert bundle.review_required is True
     assert "evidence_conflict:fund.name" in bundle.warnings
+
+
+def test_null_source_value_becomes_data_gap_not_finding(tmp_path):
+    output_dir = tmp_path / "outputs"
+    _write_json(
+        output_dir / "fund_details" / "fund_detail_000001.json",
+        {
+            "schema_version": "1.0",
+            "as_of": "2026-07-12",
+            "source": "tiantian",
+            "code": "000001",
+            "name": None,
+        },
+    )
+    context = ResearchQueryService(output_dir).query("fund", code="000001")
+
+    bundle = build_evidence_bundle(context, output_dir)
+
+    assert "fund.name" in bundle.data_gaps
+    assert all(item["metadata"]["claim_type"] != "fund.name" for item in bundle.findings)

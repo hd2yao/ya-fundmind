@@ -35,10 +35,11 @@ Evidence Bundle 把 Research Context 中的关键研究事实转换为可追溯 
 
 每个 EvidenceRef 包含：
 
-- `evidence_id`：由 artifact id、JSON Pointer 和 claim type 稳定生成。
+- `evidence_id`：由 artifact id、content hash、JSON Pointer 和 claim type 稳定生成。
 - `artifact_id`
 - `artifact_type`
 - `path`：相对 `output_dir` 的白名单路径。
+- `content_hash`：生成 context 时记录的 artifact SHA-256；原文件变化后必须重新生成 context。
 - `json_pointer`：RFC 6901 pointer。
 - `claim_type`
 - `as_of`
@@ -72,7 +73,7 @@ Evidence Bundle 把 Research Context 中的关键研究事实转换为可追溯 
 ## 质量规则
 
 - `normal`：证据存在，未发现质量问题。
-- `warning`：fallback、普通 provider warning、legacy schema、样本不足或 data gap。
+- `warning`：fallback、普通 provider/artifact warning、legacy schema、样本不足或 data gap。
 - `degraded`：stale、artifact degraded 或跨来源冲突。
 - `blocked`：critical provider warning、loader blocked 或完全没有 finding/evidence。
 

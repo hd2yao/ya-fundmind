@@ -145,13 +145,14 @@ def build_evidence_ref(
     metadata: dict[str, Any] | None = None,
 ) -> EvidenceRef:
     value = resolve_json_pointer(payload, json_pointer)
-    identity = f"{descriptor.artifact_id}:{json_pointer}:{claim_type}"
+    identity = f"{descriptor.artifact_id}:{descriptor.content_hash}:{json_pointer}:{claim_type}"
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
     return EvidenceRef(
         evidence_id=f"evidence-{digest[:20]}",
         artifact_id=descriptor.artifact_id,
         artifact_type=descriptor.artifact_type,
         path=descriptor.path,
+        content_hash=descriptor.content_hash,
         json_pointer=json_pointer,
         claim_type=claim_type,
         as_of=descriptor.as_of,
@@ -347,6 +348,11 @@ def evaluate_artifact_quality(
     if _has_insufficient_sample(payload.get("warnings")):
         grades.append("warning")
         reasons.append("insufficient_sample")
+    for warning in _artifact_warning_codes(payload.get("warnings")):
+        if "insufficient_sample" in warning:
+            continue
+        grades.append("warning")
+        reasons.append(f"artifact_warning:{warning}")
 
     grade = _worst_quality(grades)
     return QualityDecision(
@@ -518,6 +524,8 @@ def _add_pointer_finding(
     except ValueError:
         return False
     evidence_item = replace(evidence_item, quality_grade=item.quality.grade)
+    if evidence_item.value is None:
+        return False
     finding = build_finding(
         topic=topic,
         category=spec.category,
@@ -635,6 +643,18 @@ def _has_insufficient_sample(items: Any) -> bool:
         if isinstance(item, dict) and "insufficient_sample" in str(item.get("code") or ""):
             return True
     return False
+
+
+def _artifact_warning_codes(items: Any) -> tuple[str, ...]:
+    if not isinstance(items, list):
+        return ()
+    codes: list[str] = []
+    for item in items:
+        if isinstance(item, str) and item:
+            codes.append(item)
+        elif isinstance(item, dict) and item.get("code"):
+            codes.append(str(item["code"]))
+    return _deduplicate(codes)
 
 
 def _value_key(value: Any) -> str:

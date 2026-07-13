@@ -65,12 +65,21 @@ def test_evidence_ref_is_stable_and_preserves_source_metadata():
     assert first == second
     assert first.evidence_id.startswith("evidence-")
     assert first.artifact_id == "artifact-123"
+    assert first.content_hash == "a" * 64
     assert first.value == 21488
     assert first.excerpt == "21488"
     assert first.as_of == "2026-07-12"
     assert first.source == "akshare"
     assert first.quality_grade == "normal"
     assert first.stale is False
+
+    changed = build_evidence_ref(
+        _descriptor(content_hash="b" * 64),
+        payload,
+        json_pointer="/total_funds",
+        claim_type="market.total_funds",
+    )
+    assert changed.evidence_id != first.evidence_id
 
 
 def test_finding_requires_at_least_one_evidence_reference():
