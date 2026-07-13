@@ -88,6 +88,8 @@ python -m fund_agent.cli research-query --output-dir outputs --topic quality
 
 ## M2：Evidence & Citation（`v1.2.0`）
 
+状态：完成，下一步 M3 Research Copilot Core。
+
 ### 目标
 
 让每个研究 finding 都能定位到原始 JSON artifact 和字段，并统一处理数据质量、冲突和缺口。

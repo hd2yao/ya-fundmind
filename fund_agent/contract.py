@@ -55,6 +55,22 @@ CORE_FIELDS = {
         "warnings",
         "metadata",
     ),
+    "evidence_bundle": (
+        "schema_version",
+        "generated_at",
+        "generator",
+        "topic",
+        "status",
+        "as_of",
+        "code",
+        "quality_grade",
+        "review_required",
+        "findings",
+        "evidence",
+        "data_gaps",
+        "warnings",
+        "metadata",
+    ),
 }
 
 
@@ -112,6 +128,8 @@ def validate_contract_file(path: Path | str, contract_type: str) -> ContractVali
     _validate_shape(payload, contract_type, errors)
     if contract_type == "research_context":
         _validate_research_context_values(payload, errors)
+    elif contract_type == "evidence_bundle":
+        _validate_evidence_bundle_values(payload, errors)
     return ContractValidationResult(
         path=resolved_path,
         contract_type=contract_type,
@@ -128,6 +146,7 @@ def validate_output_dir(output_dir: Path | str) -> ContractValidationSummary:
         (_latest_snapshot(resolved_dir), "snapshot"),
         (_latest_trace(resolved_dir), "trace"),
         (resolved_dir / "research_queries" / "research_context.json", "research_context"),
+        (resolved_dir / "evidence" / "research_evidence.json", "evidence_bundle"),
     ]
     results = [
         validate_contract_file(path, contract_type)
@@ -165,11 +184,13 @@ def _validate_shape(payload: dict[str, Any], contract_type: str, errors: list[st
         "report": ("provider_health", "provider_warnings", "candidates", "risk_issues"),
         "trace": ("providers",),
         "research_context": ("artifacts", "warnings"),
+        "evidence_bundle": ("findings", "evidence", "data_gaps", "warnings"),
     }
     dict_fields = {
         "report": ("valuations", "report_metadata"),
         "snapshot": ("candidates", "valuations"),
         "research_context": ("data", "metadata"),
+        "evidence_bundle": ("metadata",),
     }
     for field in list_fields.get(contract_type, ()):
         if field in payload and not isinstance(payload[field], list):
@@ -197,6 +218,80 @@ def _validate_research_context_values(payload: dict[str, Any], errors: list[str]
     code = payload.get("code")
     if code is not None and not isinstance(code, str):
         errors.append("Field must be a string or null: code")
+
+
+def _validate_evidence_bundle_values(payload: dict[str, Any], errors: list[str]) -> None:
+    topic = payload.get("topic")
+    if topic not in {"market", "fund", "portfolio", "news", "history", "quality"}:
+        errors.append(f"Unsupported evidence topic: {topic}")
+    status = payload.get("status")
+    if status not in {"ok", "partial", "unavailable"}:
+        errors.append(f"Unsupported evidence bundle status: {status}")
+    grade = payload.get("quality_grade")
+    if grade not in {"normal", "unknown", "warning", "degraded", "blocked"}:
+        errors.append(f"Unsupported evidence quality grade: {grade}")
+    if "review_required" in payload and not isinstance(payload["review_required"], bool):
+        errors.append("Field must be a boolean: review_required")
+
+    evidence_items = payload.get("evidence")
+    findings = payload.get("findings")
+    if not isinstance(evidence_items, list) or not isinstance(findings, list):
+        return
+    evidence_ids: set[str] = set()
+    for index, item in enumerate(evidence_items):
+        if not isinstance(item, dict):
+            errors.append(f"Evidence item must be an object: {index}")
+            continue
+        for field in (
+            "evidence_id",
+            "artifact_id",
+            "artifact_type",
+            "path",
+            "content_hash",
+            "json_pointer",
+            "claim_type",
+            "as_of",
+            "source",
+            "quality_grade",
+            "stale",
+            "value",
+            "excerpt",
+            "metadata",
+        ):
+            if field not in item:
+                errors.append(f"Evidence item missing field: {field}")
+        evidence_id = item.get("evidence_id")
+        if isinstance(evidence_id, str):
+            if evidence_id in evidence_ids:
+                errors.append(f"Duplicate evidence id: {evidence_id}")
+            evidence_ids.add(evidence_id)
+    for index, item in enumerate(findings):
+        if not isinstance(item, dict):
+            errors.append(f"Finding must be an object: {index}")
+            continue
+        finding_id = str(item.get("finding_id") or index)
+        for field in (
+            "finding_id",
+            "topic",
+            "category",
+            "label",
+            "value",
+            "code",
+            "quality_grade",
+            "evidence_ids",
+            "review_required",
+            "warnings",
+            "metadata",
+        ):
+            if field not in item:
+                errors.append(f"Finding missing field: {field}")
+        references = item.get("evidence_ids")
+        if not isinstance(references, list) or not references:
+            errors.append(f"Finding must reference at least one evidence id: {finding_id}")
+            continue
+        for evidence_id in references:
+            if evidence_id not in evidence_ids:
+                errors.append(f"Finding references unknown evidence id: {evidence_id}")
 
 
 def _latest_trace(output_dir: Path) -> Path | None:

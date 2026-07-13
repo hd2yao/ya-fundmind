@@ -50,6 +50,7 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `fund_agent/signal_review.py` | Signal readiness review and promotion proposal outputs. |
 | `fund_agent/artifacts.py` | V2 whitelist Artifact Catalog and contract-aware safe JSON loader. |
 | `fund_agent/research_query.py` | V2 compact market/fund/portfolio/news/history/quality query service. |
+| `fund_agent/research_evidence.py` | V2 JSON Pointer citations, quality/conflict gate, and Evidence Bundle builder. |
 
 ## Active Documentation
 
@@ -87,6 +88,7 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 - `outputs/portfolio/`
 - `outputs/news/`
 - `outputs/research_queries/`
+- `outputs/evidence/`
 
 ## Cleanup Rules
 

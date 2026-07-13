@@ -89,3 +89,17 @@ def test_loader_blocks_path_traversal_and_unregistered_paths(tmp_path):
     assert unregistered.warnings == ("artifact_not_registered",)
     assert mismatched.status == "blocked"
     assert mismatched.warnings == ("artifact_descriptor_mismatch",)
+
+
+def test_loader_rejects_artifact_changed_after_catalog_scan(tmp_path):
+    output_dir = tmp_path / "outputs"
+    path = output_dir / "ops_status.json"
+    _write_json(path, {"schema_version": "1.0", "value": 1})
+    descriptor = ArtifactCatalog(output_dir).scan()[0]
+    _write_json(path, {"schema_version": "1.0", "value": 2})
+
+    result = ArtifactLoader(output_dir).load(descriptor)
+
+    assert result.status == "changed"
+    assert result.payload is None
+    assert result.warnings == ("artifact_content_changed",)

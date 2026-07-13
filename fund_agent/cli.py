@@ -55,6 +55,7 @@ from .providers import (
     normalize_fund_code,
 )
 from .report import render_html, render_markdown, write_json_report
+from .research_evidence import build_evidence_bundle
 from .research_loop import (
     execute_research_step,
     run_weekly_research,
@@ -279,6 +280,8 @@ def _run_validate_contract(args) -> int:
         results.append(validate_contract_file(args.snapshot, "snapshot"))
     if args.research_context:
         results.append(validate_contract_file(args.research_context, "research_context"))
+    if args.evidence_bundle:
+        results.append(validate_contract_file(args.evidence_bundle, "evidence_bundle"))
     if not results:
         results = list(validate_output_dir(args.output_dir).results)
     summary = ContractValidationSummary(results=tuple(results))
@@ -315,6 +318,31 @@ def _run_research_query(args) -> int:
     print(f"Research context: {output}")
     print(f"Research query: topic={context.topic} status={context.status} as_of={context.as_of or '--'}")
     return 1 if context.status == "unavailable" else 0
+
+
+def _run_build_research_evidence(args) -> int:
+    context_path = args.context or args.output_dir / "research_queries" / "research_context.json"
+    validation = validate_contract_file(context_path, "research_context")
+    if not validation.ok:
+        print(f"Invalid research context: {context_path}")
+        for error in validation.errors:
+            print(f"  error: {error}")
+        return 2
+    payload = json.loads(context_path.read_text(encoding="utf-8"))
+    bundle = build_evidence_bundle(payload, args.output_dir)
+    output = args.output or args.output_dir / "evidence" / "research_evidence.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(asdict(bundle), ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    print(f"Research evidence: {output}")
+    print(
+        "Evidence bundle: "
+        f"topic={bundle.topic} status={bundle.status} quality={bundle.quality_grade} "
+        f"findings={len(bundle.findings)} evidence={len(bundle.evidence)}"
+    )
+    return 1 if bundle.status == "unavailable" else 0
 
 
 def _run_enrich_fund(args) -> int:
@@ -1522,6 +1550,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--trace", type=Path)
     validate.add_argument("--snapshot", type=Path)
     validate.add_argument("--research-context", type=Path)
+    validate.add_argument("--evidence-bundle", type=Path)
     validate.set_defaults(func=_run_validate_contract)
 
     research_query = subparsers.add_parser(
@@ -1533,6 +1562,15 @@ def build_parser() -> argparse.ArgumentParser:
     research_query.add_argument("--code")
     research_query.add_argument("--output", type=Path)
     research_query.set_defaults(func=_run_research_query)
+
+    research_evidence = subparsers.add_parser(
+        "build-research-evidence",
+        help="从 Research Context 生成带 JSON Pointer 引用的 Evidence Bundle",
+    )
+    research_evidence.add_argument("--context", type=Path)
+    research_evidence.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    research_evidence.add_argument("--output", type=Path)
+    research_evidence.set_defaults(func=_run_build_research_evidence)
 
     enrich = subparsers.add_parser("enrich-fund", help="显式补充单只基金详情和历史净值")
     enrich.add_argument("--provider", choices=["tiantian"], required=True)

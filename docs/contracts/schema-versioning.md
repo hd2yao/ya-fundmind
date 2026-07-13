@@ -10,6 +10,7 @@ Covered files:
 - `outputs/traces/provider-YYYY-MM-DD.json`
 - `outputs/snapshots/YYYY-MM-DD.json`
 - `outputs/research_queries/research_context.json`
+- `outputs/evidence/research_evidence.json`
 
 ## Version Semantics
 
@@ -80,4 +81,5 @@ python -m fund_agent.cli validate-contract --report outputs/fund_agent_report.js
 python -m fund_agent.cli validate-contract --trace outputs/traces/provider-2026-06-23.json
 python -m fund_agent.cli validate-contract --snapshot outputs/snapshots/2026-06-23.json
 python -m fund_agent.cli validate-contract --research-context outputs/research_queries/research_context.json
+python -m fund_agent.cli validate-contract --evidence-bundle outputs/evidence/research_evidence.json
 ```

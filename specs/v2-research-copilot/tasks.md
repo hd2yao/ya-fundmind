@@ -31,17 +31,17 @@
 
 ## Batch 2：M2 Evidence & Citation
 
-- [ ] `T201` 新增 EvidenceRef、ResearchFinding 和 EvidenceBundle。
+- [x] `T201` 新增 EvidenceRef、ResearchFinding 和 EvidenceBundle。
   映射：`AC-006`、`AC-009`
-- [ ] `T202` 新增 JSON Pointer citation resolver。
+- [x] `T202` 新增 JSON Pointer citation resolver。
   映射：`AC-006`
-- [ ] `T203` 新增 quality/conflict gate。
+- [x] `T203` 新增 quality/conflict gate。
   映射：`AC-007`、`AC-008`
-- [ ] `T204` 新增 Evidence Graph 和 topic finding builders。
+- [x] `T204` 新增 Evidence Graph 和 topic finding builders。
   映射：`AC-006`、`AC-007`、`AC-008`
-- [ ] `T205` 新增 `build-research-evidence` CLI、contract 和输出。
+- [x] `T205` 新增 `build-research-evidence` CLI、contract 和输出。
   映射：`AC-009`、`AC-021`
-- [ ] `T206` 完成 M2 回归、文档、PR、CI、运行验收和 `v1.2.0` tag。
+- [x] `T206` 完成 M2 回归、文档、PR、CI、运行验收和 `v1.2.0` tag。
 
 ## Batch 3：M3 Research Copilot Core
 

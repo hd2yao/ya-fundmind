@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## v1.2.0 - 2026-07-13
+
+- Added immutable EvidenceRef records with artifact id, content hash, RFC 6901 JSON Pointer, source, as-of, quality, stale state, original value and bounded excerpt.
+- Added ResearchFinding and EvidenceBundle models; findings cannot exist without evidence references.
+- Added market, fund, portfolio, news, history and quality finding builders using explicit field allowlists.
+- Added quality gates for fallback, provider/artifact warnings, legacy schema, insufficient samples, stale/degraded data and critical warnings.
+- Added cross-source conflict detection and mandatory review for degraded/blocked/conflicting evidence.
+- Added source integrity checks that reject artifacts changed after Research Context generation.
+- Added `build-research-evidence` CLI and `evidence-bundle-v1` contract validation.
+- Verified `269 passed`, compileall, demo, daily fixture, market-scan, six real local topic bundles, pointer round-trip and Web Console dry-run.
+- No scoring, risk, provider-default, watchlist, portfolio, scheduler, trading or broker behavior changes.
+
 ## v1.1.0 - 2026-07-13
 
 - Added a whitelist Artifact Catalog covering V1 reports, snapshots, traces, market, fund detail, portfolio, news, ops, daily and weekly JSON artifacts.

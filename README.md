@@ -6,7 +6,7 @@ YA FundMind OS v1 是本地个人基金/ETF 投研工作台。它每天或每周
 
 ## 当前状态
 
-- 当前版本：`v1.1.0`
+- 当前版本：`v1.2.0`
 - 当前交付模式：V2 Research Copilot delivery mode
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
@@ -192,6 +192,19 @@ python -m fund_agent.cli research-query --output-dir outputs --topic quality
 
 默认输出为 `outputs/research_queries/research_context.json`。它只读取白名单 JSON artifact，不解析 Markdown/HTML，不修改 daily、watchlist、portfolio、主评分或主风险。
 
+V2 M2 证据引用：
+
+```bash
+python -m fund_agent.cli build-research-evidence \
+  --context outputs/research_queries/research_context.json \
+  --output-dir outputs
+
+python -m fund_agent.cli validate-contract \
+  --evidence-bundle outputs/evidence/research_evidence.json
+```
+
+默认输出为 `outputs/evidence/research_evidence.json`。每个 finding 至少引用一个原始 artifact 和 RFC 6901 JSON Pointer；stale、fallback、warning、degraded、critical、冲突和 data gap 会显式降级。
+
 可选 live smoke：
 
 ```bash
@@ -219,6 +232,7 @@ python -m fund_agent.cli smoke-tiantian --code 510300 --output-dir outputs
 - `outputs/portfolio/`：组合分析报告。
 - `outputs/news/`：新闻证据报告。
 - `outputs/research_queries/`：V2 紧凑只读 Research Context。
+- `outputs/evidence/`：V2 Evidence Bundle 和可定位引用。
 - `outputs/backfill/`：历史回填报告。
 - `outputs/logs/`：daily/weekly ops 日志。
 
