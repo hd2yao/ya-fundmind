@@ -1,0 +1,4 @@
+interface:
+  display_name: "YA FundMind Research"
+  short_description: "基于本地结构化证据执行只读基金与ETF研究问答和质量核查"
+  default_prompt: "Use $ya-fundmind-research to answer a local fund research question with citations and data-quality caveats."
