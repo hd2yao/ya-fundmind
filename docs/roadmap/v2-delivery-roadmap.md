@@ -42,6 +42,8 @@
 
 ## M1：Research Data Access（`v1.1.0`）
 
+状态：完成，下一步 M2 Evidence & Citation。
+
 ### 目标
 
 建立 V1 artifact 的统一目录和只读查询入口，让后续模块不再各自拼路径、猜字段或解析 Markdown。

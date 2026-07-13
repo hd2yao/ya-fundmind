@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## v1.1.0 - 2026-07-13
+
+- Added a whitelist Artifact Catalog covering V1 reports, snapshots, traces, market, fund detail, portfolio, news, ops, daily and weekly JSON artifacts.
+- Added stable artifact identifiers, SHA-256 content hashes, source/as-of/quality/stale metadata, and deterministic discovery order.
+- Added a contract-aware loader that safely handles missing, invalid, legacy-schema and non-object JSON while blocking path traversal and unregistered paths.
+- Added compact `market`, `fund`, `portfolio`, `news`, `history`, and `quality` Research Context queries without parsing Markdown/HTML or copying full market record arrays.
+- Added `research-query` CLI and `research-context-v1` contract validation.
+- Added V2 architecture, roadmap, acceptance spec, task mapping and execution contract as the delivery baseline.
+- Verified `238 passed`, compileall, demo, daily fixture, market-scan, Research Context validation and Web Console dry-run.
+- No scoring, risk, provider-default, watchlist, portfolio, scheduler, trading or broker behavior changes.
+
 - Entered V2 Research Copilot delivery mode while keeping `v1.0.3` as the stable runtime baseline.
 - Added the V2 design, architecture, M1-M6 roadmap, acceptance spec, task mapping, implementation plan, execution contract, and P0/P1/P2 backlog.
 - Defined checkpoint versions from `v1.1.0` through `v1.5.0`, followed by `v2.0.0-rc.1` and final `v2.0.0`.
