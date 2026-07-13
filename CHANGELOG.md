@@ -10,7 +10,7 @@
 - Added compact `market`, `fund`, `portfolio`, `news`, `history`, and `quality` Research Context queries without parsing Markdown/HTML or copying full market record arrays.
 - Added `research-query` CLI and `research-context-v1` contract validation.
 - Added V2 architecture, roadmap, acceptance spec, task mapping and execution contract as the delivery baseline.
-- Verified `238 passed`, compileall, demo, daily fixture, market-scan, Research Context validation and Web Console dry-run.
+- Verified `242 passed`, compileall, demo, daily fixture, market-scan, Research Context validation and Web Console dry-run.
 - No scoring, risk, provider-default, watchlist, portfolio, scheduler, trading or broker behavior changes.
 
 - Entered V2 Research Copilot delivery mode while keeping `v1.0.3` as the stable runtime baseline.
