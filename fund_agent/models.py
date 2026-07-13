@@ -45,6 +45,18 @@ class ResearchAnswer:
 
 
 @dataclass(frozen=True)
+class McpToolResult:
+    schema_version: str
+    generated_at: str
+    generator: str
+    tool: str
+    status: str
+    data: dict[str, Any]
+    warnings: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ArtifactDescriptor:
     artifact_id: str
     artifact_type: str
