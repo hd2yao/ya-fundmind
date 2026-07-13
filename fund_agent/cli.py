@@ -1097,11 +1097,11 @@ def _run_web_console(args) -> int:
         "--",
         "--output-dir",
         str(args.output_dir),
-        "--review-state",
-        str(args.review_state),
         "--daily-provider",
         args.provider,
     ]
+    if args.review_state is not None:
+        command.extend(["--review-state", str(args.review_state)])
     result = subprocess.run(command, check=False)
     return int(getattr(result, "returncode", result if isinstance(result, int) else 0))
 
@@ -1577,7 +1577,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     web_console = subparsers.add_parser("web-console", help="启动本地 Web Console v1，不修改主评分/风险")
     web_console.add_argument("--output-dir", type=Path, default=Path("outputs"))
-    web_console.add_argument("--review-state", type=Path, default=DEFAULT_REVIEW_STATE_FILE)
+    web_console.add_argument("--review-state", type=Path)
     web_console.add_argument("--provider", choices=["fixture", "akshare"], default="fixture")
     web_console.add_argument("--host", default="127.0.0.1")
     web_console.add_argument("--port", type=int, default=8501)
