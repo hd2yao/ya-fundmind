@@ -5,6 +5,7 @@ from fund_agent.web_console import (
     _console_css,
     _render_home,
     _render_market,
+    _render_review,
     _render_reports,
 )
 
@@ -59,14 +60,34 @@ class _FakeStreamlit:
         self.records.append(("expander", label))
         return nullcontext()
 
+    def form(self, *args, **kwargs):
+        return nullcontext()
+
+    def text_input(self, label, **kwargs):
+        return ""
+
+    def selectbox(self, label, options, **kwargs):
+        return options[0]
+
+    def text_area(self, label, **kwargs):
+        return ""
+
+    def form_submit_button(self, label, **kwargs):
+        return False
+
 
 def test_console_css_sets_width_tab_wrap_focus_and_mobile_rules() -> None:
     css = _console_css()
 
     assert "max-width: 1240px" in css
     assert "flex-wrap: wrap" in css
+    assert "tab-highlight" in css
+    assert 'aria-selected="true"' in css
     assert ":focus-visible" in css
     assert "@media (max-width: 640px)" in css
+    assert "max-width: 900px" in css
+    assert 'data-testid="stMetricValue"' in css
+    assert 'data-testid="stColumn"' in css
     assert "prefers-reduced-motion" in css
     assert "gradient" not in css
 
@@ -137,3 +158,24 @@ def test_reports_marks_available_and_missing_paths(tmp_path) -> None:
     rows = next(record[1] for record in st.records if record[0] == "dataframe")
     assert rows[0]["status"] == "available"
     assert rows[1]["status"] == "missing"
+
+
+def test_review_renders_summary_metrics_and_queue_preview(tmp_path) -> None:
+    st = _FakeStreamlit()
+    state = {
+        "review_state_summary": {
+            "total_review_items": 2,
+            "unresolved_count": 1,
+            "needs_more_data_count": 1,
+            "approved_count": 1,
+        },
+        "review_queue": [{"review_id": "r1", "status": "open"}],
+        "review_state": [{"review_id": "r2", "status": "approved_for_more_experiment"}],
+    }
+
+    _render_review(st, tmp_path / "review.json", state)
+
+    rendered = "\n".join(str(record) for record in st.records)
+    assert "待审核" in rendered
+    assert "需要更多数据" in rendered
+    assert any(record[0] == "dataframe" for record in st.records)

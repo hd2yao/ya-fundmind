@@ -38,6 +38,7 @@ def test_build_web_console_state_reads_ops_status_and_pages(tmp_path):
     output_dir = tmp_path / "outputs"
     _write_json(output_dir / "daily_research_summary.json", {"as_of": "2026-06-23", "status": "success"})
     _write_json(output_dir / "weekly_research_summary.json", {"runs_processed": 1})
+    _write_json(output_dir / "latest_summary.json", {"daily": {"status": "success"}})
     _write_json(output_dir / "long_horizon_stability.json", {"enough_history": False, "blockers": ["insufficient_history"]})
     _write_json(output_dir / "news" / "news_evidence_report.json", {"evidence_count": 2, "low_confidence_count": 1})
     _write_json(output_dir / "manual_review_queue.json", [{"review_id": "r1", "signal_id": "s1"}])
@@ -52,6 +53,7 @@ def test_build_web_console_state_reads_ops_status_and_pages(tmp_path):
     assert state["news_evidence"]["evidence_count"] == 2
     assert state["review_queue_count"] == 1
     assert state["review_state_summary"]["total_review_items"] == 1
+    assert state["latest_summary_data"]["daily"]["status"] == "success"
     assert state["not_production_model"] is True
     assert state["main_score_changed"] is False
     assert state["main_risk_changed"] is False

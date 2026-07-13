@@ -47,6 +47,7 @@ def build_web_console_state(
         "pages": list(WEB_CONSOLE_PAGES),
         "ops_status": build_ops_status(root),
         "latest_summary": _read_text(root / "latest_summary.md"),
+        "latest_summary_data": _load_json(root / "latest_summary.json"),
         "review_queue": review_queue,
         "review_queue_count": len(review_queue),
         "review_state": review_state,
@@ -201,7 +202,7 @@ def render_streamlit_app(
     st.caption("本地投研工作台，仅用于观察和人工审核；不修改主评分/主风险，不构成投资建议。")
     state = build_web_console_state(output_dir=root, review_state_path=state_path)
 
-    action_columns = st.columns([1, 1, 6])
+    action_columns = st.columns([1.4, 1.4, 5.2])
     if action_columns[0].button("Run Daily", use_container_width=True):
         code = run_daily_ops_for_web(output_dir=root, provider=daily_provider, enable_market_intelligence=True)
         st.info(f"daily ops exit_code={code}")
@@ -268,9 +269,18 @@ def _render_copilot(st, root: Path, state: dict[str, Any]) -> None:
     view = build_copilot_view_model(state.get("copilot_answer"))
     columns = st.columns(4)
     columns[0].metric("回答状态", view["status"])
-    columns[1].metric("研究意图", view["intent"])
+    columns[1].metric("研究意图", _metric_intent(view["intent"]))
     columns[2].metric("置信度", view["confidence"])
     columns[3].metric("证据数量", view["evidence_count"])
+    st.caption(
+        " · ".join(
+            (
+                f"as_of={view['as_of'] or '--'}",
+                f"review_required={view['review_required']}",
+                f"intent={view['intent']}",
+            )
+        )
+    )
 
     status = view["status"]
     if status == "empty":
@@ -355,7 +365,43 @@ def _render_home(st, state: dict[str, Any]) -> None:
 
     st.subheader("最新摘要")
     summary = state.get("latest_summary") or "latest_summary.md 尚未生成"
-    st.markdown(summary)
+    summary_data = state.get("latest_summary_data") or {}
+    if summary_data:
+        columns = st.columns(4)
+        columns[0].metric("Daily 状态", (summary_data.get("daily") or {}).get("status") or "--")
+        columns[1].metric(
+            "数据质量",
+            (summary_data.get("daily") or {}).get("data_quality_grade") or "--",
+        )
+        columns[2].metric(
+            "市场历史样本",
+            _format_number(summary_data.get("latest_market_snapshots_processed")),
+        )
+        columns[3].metric(
+            "Weekly 有效 Runs",
+            _format_number((summary_data.get("weekly") or {}).get("runs_processed")),
+        )
+        st.markdown("**当前研究覆盖**")
+        coverage_columns = st.columns(3)
+        coverage_columns[0].metric(
+            "市场主题",
+            _format_number(summary_data.get("latest_market_theme_count")),
+        )
+        coverage_columns[1].metric(
+            "自选详情",
+            _format_number(summary_data.get("watchlist_detail_count")),
+        )
+        coverage_columns[2].metric(
+            "组合持仓",
+            _format_number(summary_data.get("latest_portfolio_holding_count")),
+        )
+        explanation = summary_data.get("main_model_blocker_explanation")
+        if explanation:
+            st.caption(str(explanation))
+        with st.expander("完整运行摘要"):
+            st.markdown(summary)
+    else:
+        st.markdown(summary)
 
 
 def _render_market(st, report: dict[str, Any] | None) -> None:
@@ -539,6 +585,15 @@ def _format_ratio(value: Any) -> str:
     return f"{number:.1f}%"
 
 
+def _metric_intent(intent: Any) -> str:
+    value = str(intent or "--")
+    aliases = {
+        "blocked_transaction": "blocked",
+        "data_quality": "quality",
+    }
+    return aliases.get(value, value)
+
+
 def _inject_console_styles(st) -> None:
     st.markdown(_console_css(), unsafe_allow_html=True)
 
@@ -557,6 +612,9 @@ def _console_css() -> str:
 [data-testid="stAppViewContainer"] {
   background: #f4f6f5;
   color: var(--fundmind-ink);
+}
+[data-testid="stDecoration"] {
+  display: none;
 }
 .block-container {
   max-width: 1240px;
@@ -577,6 +635,14 @@ h1 {
 [data-testid="stTabs"] [data-baseweb="tab"] {
   min-height: 44px;
   padding: 0.55rem 0.75rem;
+  border-bottom: 2px solid transparent;
+}
+[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {
+  color: var(--fundmind-accent) !important;
+  border-bottom-color: var(--fundmind-accent);
+}
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+  display: none;
 }
 [data-testid="stMetric"] {
   border-left: 3px solid var(--fundmind-accent);
@@ -585,10 +651,25 @@ h1 {
 [data-testid="stMetricLabel"] {
   color: var(--fundmind-muted);
 }
+[data-testid="stMetricValue"] > div {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
 .stButton > button,
 [data-testid="stFormSubmitButton"] > button {
   min-height: 44px;
   border-radius: 6px;
+  border-color: #aeb9b5;
+  color: var(--fundmind-ink);
+  background: var(--fundmind-surface);
+}
+.stButton > button:hover,
+[data-testid="stFormSubmitButton"] > button:hover {
+  border-color: var(--fundmind-accent);
+  color: var(--fundmind-accent);
 }
 button:focus-visible,
 input:focus-visible,
@@ -606,6 +687,15 @@ pre, code, [data-testid="stCodeBlock"] {
   border: 1px solid var(--fundmind-line);
   border-radius: 6px;
 }
+@media (min-width: 641px) and (max-width: 900px) {
+  [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap;
+  }
+  [data-testid="stColumn"] {
+    min-width: 15rem !important;
+    flex: 1 1 15rem !important;
+  }
+}
 @media (max-width: 640px) {
   .block-container {
     padding: 1rem 0.85rem 2rem;
@@ -616,9 +706,9 @@ pre, code, [data-testid="stCodeBlock"] {
   [data-testid="stHorizontalBlock"] {
     flex-wrap: wrap;
   }
-  [data-testid="column"] {
-    min-width: min(100%, 10rem) !important;
-    flex: 1 1 10rem !important;
+  [data-testid="stColumn"] {
+    min-width: min(100%, 9rem) !important;
+    flex: 1 1 9rem !important;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -634,12 +724,20 @@ pre, code, [data-testid="stCodeBlock"] {
 
 def _render_review(st, state_path: Path, state: dict[str, Any]) -> None:
     st.subheader("Manual Review")
-    st.write(state["review_state_summary"])
+    st.caption("人工审核只更新 review state，不修改主评分、主风险或研究产物。")
+    summary = state["review_state_summary"]
+    columns = st.columns(4)
+    columns[0].metric("审核记录", _format_number(summary.get("total_review_items")))
+    columns[1].metric("待审核", _format_number(summary.get("unresolved_count")))
+    columns[2].metric("需要更多数据", _format_number(summary.get("needs_more_data_count")))
+    columns[3].metric("已通过实验", _format_number(summary.get("approved_count")))
+
+    st.markdown("**更新审核状态**")
     with st.form("manual_review_update"):
-        review_id = st.text_input("review_id")
-        signal_id = st.text_input("signal_id")
+        review_id = st.text_input("Review ID")
+        signal_id = st.text_input("Signal ID（可选）")
         status = st.selectbox(
-            "status",
+            "审核状态",
             [
                 "open",
                 "needs_more_data",
@@ -648,9 +746,9 @@ def _render_review(st, state_path: Path, state: dict[str, Any]) -> None:
                 "approved_for_main_candidate",
             ],
         )
-        reviewer = st.text_input("reviewer")
-        note = st.text_area("note")
-        submitted = st.form_submit_button("Update Review State")
+        reviewer = st.text_input("Reviewer")
+        note = st.text_area("审核备注")
+        submitted = st.form_submit_button("保存审核状态")
     if submitted and review_id:
         item = update_review_state_for_web(
             review_state_path=state_path,
@@ -661,8 +759,20 @@ def _render_review(st, state_path: Path, state: dict[str, Any]) -> None:
             note=note,
         )
         st.success(f"updated {item['review_id']}")
-    st.subheader("Queue")
-    st.json(state["review_queue"])
+
+    st.markdown("**审核队列**")
+    queue = _tabular_preview(state["review_queue"], limit=50)
+    if queue:
+        st.dataframe(queue, use_container_width=True, hide_index=True)
+    else:
+        st.info("当前审核队列为空。")
+
+    review_items = _tabular_preview(state.get("review_state"), limit=50)
+    if review_items:
+        st.markdown("**最近审核状态**")
+        st.dataframe(review_items, use_container_width=True, hide_index=True)
+    with st.expander("完整审核状态"):
+        st.json(_compact_payload(state.get("review_state") or [], max_items=20))
 
 
 def _report_paths(root: Path) -> dict[str, str]:

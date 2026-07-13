@@ -129,6 +129,8 @@ def test_render_answered_copilot_exposes_finding_and_citation(tmp_path) -> None:
     assert "热门主题" in rendered
     assert "market/market_intelligence_report.json" in rendered
     assert "/hot_theme_candidates" in rendered
+    assert "review_required=False" in rendered
+    assert "intent=market" in rendered
     assert "不构成买卖建议" in rendered
 
 
@@ -149,6 +151,7 @@ def test_render_refused_copilot_uses_error_state_and_no_findings(tmp_path) -> No
     _render_copilot(st, tmp_path, _state(answer))
 
     assert any(record[0] == "error" and "refused" in record[1] for record in st.records)
+    assert any(record[0] == "metric" and record[2] == "blocked" for record in st.records)
     assert not any(record[0] == "expander" and "Finding" in record[1] for record in st.records)
 
 
