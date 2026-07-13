@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## v1.3.0 - 2026-07-13
+
+- Added deterministic intent classification for market, fund, portfolio, news, history and data-quality research questions.
+- Added read-only transaction and recommendation guardrails that take priority over research intent and prompt-injection text.
+- Added deterministic Research Planner and structured ResearchAnswer output backed only by M1 Research Context and M2 Evidence Bundle findings.
+- Added a no-LLM Chinese Markdown renderer plus an optional renderer interface that receives only a JSON deep copy and cannot mutate the structured answer.
+- Added append-only redacted research audit records with question hash, bounded preview, status and evidence counts.
+- Added `research-ask` CLI and `research-answer-v1` contract validation.
+- Verified six real local research topics, blocked/unsupported handling and 44 JSON Pointer/content-hash round trips.
+- Verified `291 passed`, compileall, demo, daily fixture, all V1/V2 contracts and Web Console dry-run.
+- No scoring, risk, provider-default, watchlist, portfolio, scheduler, trading or broker behavior changes.
+
 ## v1.2.0 - 2026-07-13
 
 - Added immutable EvidenceRef records with artifact id, content hash, RFC 6901 JSON Pointer, source, as-of, quality, stale state, original value and bounded excerpt.
