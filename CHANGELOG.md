@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.0.3 - 2026-07-13
+
+Weekly scheduler runtime fix.
+
+- Fixed the weekly launchd job failure caused by a relative `PYTHON_BIN=python` value under launchd's restricted `PATH`.
+- The launchd installer now defaults to the project `.venv/bin/python` when available and writes an absolute interpreter path into daily/weekly plist files.
+- Explicit command names supplied through `PYTHON_BIN` are resolved to absolute executable paths before installation.
+- Plist rendering now uses the same resolved Python interpreter as the installed job.
+- Added regression coverage for the project virtual-environment default.
+- No scoring, risk, provider default, watchlist, portfolio, output-contract, or trading behavior changes.
+
 ## v1.0.2 - 2026-07-03
 
 V1 post-release acceptance notes.
