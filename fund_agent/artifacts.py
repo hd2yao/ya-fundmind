@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,14 @@ ARTIFACT_PATTERNS: tuple[tuple[str, str], ...] = (
     ("run_daily_summary", "runs/*/daily_research_summary.json"),
     ("run_metadata", "runs/*/run_metadata.json"),
 )
+
+
+@dataclass(frozen=True)
+class ArtifactLoadResult:
+    descriptor: ArtifactDescriptor
+    status: str
+    payload: dict[str, Any] | None
+    warnings: tuple[str, ...] = ()
 
 
 class ArtifactCatalog:
@@ -70,6 +79,35 @@ class ArtifactCatalog:
         )
 
 
+class ArtifactLoader:
+    def __init__(self, output_dir: Path | str):
+        self.output_dir = Path(output_dir).resolve()
+
+    def load(self, descriptor: ArtifactDescriptor) -> ArtifactLoadResult:
+        relative = Path(descriptor.path)
+        if relative.is_absolute():
+            return self._blocked(descriptor, "artifact_path_outside_output_dir")
+        path = (self.output_dir / relative).resolve()
+        if not path.is_relative_to(self.output_dir):
+            return self._blocked(descriptor, "artifact_path_outside_output_dir")
+        if not _is_registered(descriptor.artifact_type, descriptor.path):
+            return self._blocked(descriptor, "artifact_not_registered")
+        if not path.is_file():
+            return ArtifactLoadResult(descriptor, "missing", None, ("artifact_missing",))
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            return ArtifactLoadResult(descriptor, "invalid_json", None, ("invalid_json",))
+        if not isinstance(payload, dict):
+            return ArtifactLoadResult(descriptor, "invalid_shape", None, ("invalid_json_root",))
+        warnings = () if payload.get("schema_version") is not None else ("schema_version_missing",)
+        return ArtifactLoadResult(descriptor, "ok", payload, warnings)
+
+    @staticmethod
+    def _blocked(descriptor: ArtifactDescriptor, warning: str) -> ArtifactLoadResult:
+        return ArtifactLoadResult(descriptor, "blocked", None, (warning,))
+
+
 def _read_metadata(path: Path) -> tuple[dict[str, Any], tuple[str, ...]]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -105,3 +143,11 @@ def _provider_source(payload: dict[str, Any]) -> str | None:
     if not isinstance(health, list) or not health or not isinstance(health[0], dict):
         return None
     return _string_value(health[0].get("provider"))
+
+
+def _is_registered(artifact_type: str, relative_path: str) -> bool:
+    path = Path(relative_path)
+    return any(
+        registered_type == artifact_type and path.match(pattern)
+        for registered_type, pattern in ARTIFACT_PATTERNS
+    )
