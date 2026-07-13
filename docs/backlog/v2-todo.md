@@ -9,10 +9,10 @@
 
 ## 当前状态
 
-- 当前版本：`v1.0.3`
-- 当前 Milestone：V2 架构冻结，下一步 M1 Research Data Access。
+- 当前版本：`v1.1.0`
+- 当前 Milestone：M1 Research Data Access 已完成，下一步 M2 Evidence & Citation。
 - 当前 P0：无。
-- 当前 P1：完成规划 PR 并开始 M1。
+- 当前 P1：开始 M2 前完成 EvidenceRef/JSON Pointer/quality gate 的 AC 一致性检查。
 
 ## P0 Blocking
 
@@ -28,8 +28,7 @@
 
 ## P1 Current Milestone
 
-- 冻结并合并 V2 architecture、roadmap、spec、tasks 和 execution contract。
-- M1 开始前完成 AC -> task -> test 一致性检查。
+- M2 开始前细化 Evidence Bundle contract、冲突定义和 quality gate 测试矩阵。
 
 ## P2 Later Polish
 

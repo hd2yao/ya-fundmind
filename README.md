@@ -6,7 +6,7 @@ YA FundMind OS v1 是本地个人基金/ETF 投研工作台。它每天或每周
 
 ## 当前状态
 
-- 当前版本：`v1.0.3`
+- 当前版本：`v1.1.0`
 - 当前交付模式：V2 Research Copilot delivery mode
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
@@ -179,6 +179,19 @@ python -m fund_agent.cli collect-news-evidence --output-dir outputs
 python -m fund_agent.cli generate-evidence-dashboard --runs-dir outputs/runs --review-state outputs/manual_review_state.json --output-dir outputs/dashboard --days 30
 ```
 
+V2 M1 统一只读研究查询：
+
+```bash
+python -m fund_agent.cli research-query --output-dir outputs --topic market
+python -m fund_agent.cli research-query --output-dir outputs --topic fund --code 021511
+python -m fund_agent.cli research-query --output-dir outputs --topic portfolio
+python -m fund_agent.cli research-query --output-dir outputs --topic news
+python -m fund_agent.cli research-query --output-dir outputs --topic history
+python -m fund_agent.cli research-query --output-dir outputs --topic quality
+```
+
+默认输出为 `outputs/research_queries/research_context.json`。它只读取白名单 JSON artifact，不解析 Markdown/HTML，不修改 daily、watchlist、portfolio、主评分或主风险。
+
 可选 live smoke：
 
 ```bash
@@ -205,6 +218,7 @@ python -m fund_agent.cli smoke-tiantian --code 510300 --output-dir outputs
 - `outputs/fund_details/`：基金详情和自选池详情。
 - `outputs/portfolio/`：组合分析报告。
 - `outputs/news/`：新闻证据报告。
+- `outputs/research_queries/`：V2 紧凑只读 Research Context。
 - `outputs/backfill/`：历史回填报告。
 - `outputs/logs/`：daily/weekly ops 日志。
 

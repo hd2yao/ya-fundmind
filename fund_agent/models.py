@@ -5,6 +5,37 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class ArtifactDescriptor:
+    artifact_id: str
+    artifact_type: str
+    path: str
+    schema_version: str | None
+    as_of: str | None
+    generated_at: str | None
+    source: str | None
+    quality_grade: str | None
+    stale: bool
+    content_hash: str
+    warnings: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ResearchContext:
+    schema_version: str
+    generated_at: str
+    generator: str
+    topic: str
+    status: str
+    as_of: str | None
+    code: str | None
+    artifacts: tuple[dict[str, Any], ...]
+    data: dict[str, Any]
+    warnings: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class FundRecord:
     code: str
     name: str

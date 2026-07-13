@@ -11,22 +11,22 @@
 
 ## Batch 1：M1 Research Data Access
 
-- [ ] `T101` 新增 ArtifactDescriptor 和 artifact registry。
+- [x] `T101` 新增 ArtifactDescriptor 和 artifact registry。
   映射：`AC-001`、`AC-002`
   验收：白名单 artifact discovery 测试。
-- [ ] `T102` 新增 contract-aware loader 和安全降级。
+- [x] `T102` 新增 contract-aware loader 和安全降级。
   映射：`AC-003`
   验收：缺失/损坏/旧 schema/未知字段测试。
-- [ ] `T103` 新增 ResearchContext 和 topic query service。
+- [x] `T103` 新增 ResearchContext 和 topic query service。
   映射：`AC-004`
   验收：market/fund/portfolio/news/history/quality 单测。
-- [ ] `T104` 新增 `research-query` CLI 和 JSON 输出。
+- [x] `T104` 新增 `research-query` CLI 和 JSON 输出。
   映射：`AC-004`
   验收：CLI exit code、输出路径和不解析 Markdown 测试。
-- [ ] `T105` 新增 research-context contract、文档和 validator。
+- [x] `T105` 新增 research-context contract、文档和 validator。
   映射：`AC-005`、`AC-021`
   验收：valid/invalid/old optional/unknown field contract 测试。
-- [ ] `T106` 完成 M1 回归、文档、PR、CI、运行验收和 `v1.1.0` tag。
+- [x] `T106` 完成 M1 回归、文档、PR、CI、运行验收和 `v1.1.0` tag。
   映射：`AC-022`、`AC-023`、`AC-025`
 
 ## Batch 2：M2 Evidence & Citation
