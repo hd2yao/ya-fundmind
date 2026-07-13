@@ -52,6 +52,7 @@
 - `unsupported_tool`
 - `artifact_unavailable`
 - `timeout`
+- `audit_unavailable`
 - `dependency_missing`
 - `internal_error`
 

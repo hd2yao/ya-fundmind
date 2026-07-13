@@ -48,19 +48,36 @@ class McpToolGateway:
             )
         except asyncio.TimeoutError as exc:
             error = McpAdapterError("timeout", "Read-only research tool timed out.")
-            self._append_audit(tool, payload, started, error=error)
+            self._record_or_raise(tool, payload, started, error=error)
             raise error from exc
         except McpAdapterError as exc:
-            self._append_audit(tool, payload, started, error=exc)
+            self._record_or_raise(tool, payload, started, error=exc)
             raise
         except Exception as exc:
             error = McpAdapterError("internal_error", "Read-only research tool failed.")
-            self._append_audit(tool, payload, started, error=error)
+            self._record_or_raise(tool, payload, started, error=error)
             raise error from exc
 
         result_payload = json.loads(json.dumps(asdict(result), ensure_ascii=False))
-        self._append_audit(tool, payload, started, result=result_payload)
+        self._record_or_raise(tool, payload, started, result=result_payload)
         return result_payload
+
+    def _record_or_raise(
+        self,
+        tool: str,
+        arguments: dict[str, Any],
+        started: float,
+        *,
+        result: dict[str, Any] | None = None,
+        error: McpAdapterError | None = None,
+    ) -> None:
+        try:
+            self._append_audit(tool, arguments, started, result=result, error=error)
+        except OSError as exc:
+            raise McpAdapterError(
+                "audit_unavailable",
+                "Research tool audit is unavailable.",
+            ) from exc
 
     def _append_audit(
         self,

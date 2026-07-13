@@ -83,6 +83,7 @@ python -m fund_agent.cli validate-contract --mcp-result /tmp/mcp-result.json
 - `unsupported_tool`
 - `artifact_unavailable`
 - `timeout`
+- `audit_unavailable`
 - `dependency_missing`
 - `internal_error`
 

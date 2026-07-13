@@ -149,3 +149,19 @@ def test_audit_is_append_only_for_multiple_calls(tmp_path) -> None:
     asyncio.run(gateway.call("catalog", {}))
 
     assert len(audit_path.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_audit_write_failure_fails_closed_without_path_leak(tmp_path) -> None:
+    blocked_parent = tmp_path / "not-a-directory"
+    blocked_parent.write_text("file", encoding="utf-8")
+    gateway = McpToolGateway(
+        ResearchMcpAdapter(tmp_path / "outputs"),
+        audit_path=blocked_parent / "mcp_calls.jsonl",
+    )
+
+    with pytest.raises(McpAdapterError) as exc_info:
+        asyncio.run(gateway.call("status", {}))
+
+    assert exc_info.value.code == "audit_unavailable"
+    assert str(exc_info.value) == "Research tool audit is unavailable."
+    assert str(tmp_path) not in str(exc_info.value)
