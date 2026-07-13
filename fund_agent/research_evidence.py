@@ -2,12 +2,30 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from typing import Any, Iterable
 
 from .models import ArtifactDescriptor, EvidenceRef, ResearchFinding
 
 
 QUALITY_ORDER = {"normal": 0, "unknown": 1, "warning": 2, "degraded": 3, "blocked": 4}
+
+
+@dataclass(frozen=True)
+class QualityDecision:
+    grade: str
+    review_required: bool
+    reasons: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class EvidenceConflict:
+    claim_type: str
+    sources: tuple[str, ...]
+    evidence_ids: tuple[str, ...]
+    values: tuple[Any, ...]
+    quality_grade: str = "degraded"
+    review_required: bool = True
 
 
 def escape_json_pointer_token(token: str) -> str:
@@ -95,6 +113,88 @@ def build_finding(
     )
 
 
+def evaluate_artifact_quality(
+    descriptor: ArtifactDescriptor,
+    payload: dict[str, Any],
+) -> QualityDecision:
+    grades = ["normal"]
+    reasons: list[str] = []
+    descriptor_grade = descriptor.quality_grade or "unknown"
+    if descriptor_grade in {"warning", "degraded", "blocked", "critical"}:
+        normalized = "blocked" if descriptor_grade == "critical" else descriptor_grade
+        grades.append(normalized)
+        reasons.append(f"artifact_quality:{descriptor_grade}")
+    if descriptor.stale:
+        grades.append("degraded")
+        reasons.append("stale_artifact")
+    if "schema_version_missing" in descriptor.warnings:
+        grades.append("warning")
+        reasons.append("legacy_schema")
+
+    providers = _provider_records(payload)
+    if any(provider.get("fallback_used") is True for provider in providers):
+        grades.append("warning")
+        reasons.append("provider_fallback")
+
+    for warning in _provider_warnings(payload, providers):
+        code = str(warning.get("code") or "unknown")
+        severity = str(warning.get("severity") or "warning").lower()
+        if severity in {"critical", "error"}:
+            grades.append("blocked")
+            reasons.append(f"critical_provider_warning:{code}")
+        else:
+            grades.append("warning")
+            reasons.append(f"provider_warning:{code}")
+
+    if _has_insufficient_sample(payload.get("warnings")):
+        grades.append("warning")
+        reasons.append("insufficient_sample")
+
+    grade = _worst_quality(grades)
+    return QualityDecision(
+        grade=grade,
+        review_required=grade in {"degraded", "blocked"},
+        reasons=_deduplicate(reasons),
+    )
+
+
+def aggregate_quality(decisions: Iterable[QualityDecision]) -> QualityDecision:
+    items = tuple(decisions)
+    if not items:
+        return QualityDecision("unknown", True, ("quality_evidence_missing",))
+    grade = _worst_quality(item.grade for item in items)
+    return QualityDecision(
+        grade=grade,
+        review_required=any(item.review_required for item in items),
+        reasons=_deduplicate(reason for item in items for reason in item.reasons),
+    )
+
+
+def detect_evidence_conflicts(evidence: Iterable[EvidenceRef]) -> tuple[EvidenceConflict, ...]:
+    groups: dict[tuple[str, Any], list[EvidenceRef]] = {}
+    for item in evidence:
+        key = (item.claim_type, item.metadata.get("code"))
+        groups.setdefault(key, []).append(item)
+
+    conflicts: list[EvidenceConflict] = []
+    for (claim_type, _), items in sorted(groups.items(), key=lambda entry: str(entry[0])):
+        sources = tuple(sorted({str(item.source) for item in items if item.source}))
+        values_by_key: dict[str, Any] = {}
+        for item in items:
+            values_by_key[_value_key(item.value)] = item.value
+        if len(sources) < 2 or len(values_by_key) < 2:
+            continue
+        conflicts.append(
+            EvidenceConflict(
+                claim_type=claim_type,
+                sources=sources,
+                evidence_ids=tuple(item.evidence_id for item in items),
+                values=tuple(values_by_key.values()),
+            )
+        )
+    return tuple(conflicts)
+
+
 def _decode_pointer_token(token: str, pointer: str) -> str:
     decoded: list[str] = []
     index = 0
@@ -123,3 +223,48 @@ def _worst_quality(grades: Iterable[str]) -> str:
     if not normalized:
         return "unknown"
     return max(normalized, key=lambda grade: QUALITY_ORDER[grade])
+
+
+def _provider_records(payload: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    records = payload.get("provider_health") or payload.get("providers") or []
+    if not isinstance(records, list):
+        return ()
+    return tuple(item for item in records if isinstance(item, dict))
+
+
+def _provider_warnings(
+    payload: dict[str, Any],
+    providers: tuple[dict[str, Any], ...],
+) -> tuple[dict[str, Any], ...]:
+    warnings: list[dict[str, Any]] = []
+    top_level = payload.get("provider_warnings")
+    if isinstance(top_level, list):
+        warnings.extend(item for item in top_level if isinstance(item, dict))
+    for provider in providers:
+        provider_items = provider.get("warnings")
+        if isinstance(provider_items, list):
+            warnings.extend(item for item in provider_items if isinstance(item, dict))
+    unique: dict[tuple[str, str], dict[str, Any]] = {}
+    for warning in warnings:
+        key = (str(warning.get("code") or "unknown"), str(warning.get("severity") or "warning"))
+        unique[key] = warning
+    return tuple(unique.values())
+
+
+def _has_insufficient_sample(items: Any) -> bool:
+    if not isinstance(items, list):
+        return False
+    for item in items:
+        if isinstance(item, str) and "insufficient_sample" in item:
+            return True
+        if isinstance(item, dict) and "insufficient_sample" in str(item.get("code") or ""):
+            return True
+    return False
+
+
+def _value_key(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _deduplicate(items: Iterable[str]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(items))
