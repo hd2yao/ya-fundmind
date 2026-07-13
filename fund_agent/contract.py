@@ -42,6 +42,19 @@ CORE_FIELDS = {
         "provider_health",
         "data_quality_grade",
     ),
+    "research_context": (
+        "schema_version",
+        "generated_at",
+        "generator",
+        "topic",
+        "status",
+        "as_of",
+        "code",
+        "artifacts",
+        "data",
+        "warnings",
+        "metadata",
+    ),
 }
 
 
@@ -112,6 +125,7 @@ def validate_output_dir(output_dir: Path | str) -> ContractValidationSummary:
         (resolved_dir / "fund_agent_report.json", "report"),
         (_latest_snapshot(resolved_dir), "snapshot"),
         (_latest_trace(resolved_dir), "trace"),
+        (resolved_dir / "research_queries" / "research_context.json", "research_context"),
     ]
     results = [
         validate_contract_file(path, contract_type)
@@ -148,10 +162,12 @@ def _validate_shape(payload: dict[str, Any], contract_type: str, errors: list[st
     list_fields = {
         "report": ("provider_health", "provider_warnings", "candidates", "risk_issues"),
         "trace": ("providers",),
+        "research_context": ("artifacts", "warnings"),
     }
     dict_fields = {
         "report": ("valuations", "report_metadata"),
         "snapshot": ("candidates", "valuations"),
+        "research_context": ("data", "metadata"),
     }
     for field in list_fields.get(contract_type, ()):
         if field in payload and not isinstance(payload[field], list):

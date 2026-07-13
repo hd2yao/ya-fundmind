@@ -141,7 +141,7 @@ class ResearchQueryService:
         return ResearchContext(
             schema_version="1.0",
             generated_at=datetime.now(timezone.utc).isoformat(),
-            generator="fund_agent.research_query",
+            generator="fund_agent",
             topic=topic,
             status=status,
             as_of=as_of_values[-1] if as_of_values else None,

@@ -61,6 +61,7 @@ from .research_loop import (
     write_daily_research_summary,
     write_run_bundle,
 )
+from .research_query import ResearchQueryService, SUPPORTED_RESEARCH_TOPICS
 from .review_state import list_review_state, summarize_review_state, update_review_state
 from .signal_candidates import (
     batch_signal_experiment,
@@ -276,6 +277,8 @@ def _run_validate_contract(args) -> int:
         results.append(validate_contract_file(args.trace, "trace"))
     if args.snapshot:
         results.append(validate_contract_file(args.snapshot, "snapshot"))
+    if args.research_context:
+        results.append(validate_contract_file(args.research_context, "research_context"))
     if not results:
         results = list(validate_output_dir(args.output_dir).results)
     summary = ContractValidationSummary(results=tuple(results))
@@ -290,6 +293,28 @@ def _run_validate_contract(args) -> int:
         for error in result.errors:
             print(f"  error: {error}")
     return 0 if summary.ok else 1
+
+
+def _run_research_query(args) -> int:
+    code = args.code
+    if code is not None:
+        if args.topic != "fund":
+            print("--code is only supported for --topic fund")
+            return 2
+        code = normalize_fund_code(code)
+        if len(code) != 6 or not code.isdigit():
+            print(f"Invalid fund code: {args.code}")
+            return 2
+    context = ResearchQueryService(args.output_dir).query(args.topic, code=code)
+    output = args.output or args.output_dir / "research_queries" / "research_context.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(asdict(context), ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    print(f"Research context: {output}")
+    print(f"Research query: topic={context.topic} status={context.status} as_of={context.as_of or '--'}")
+    return 1 if context.status == "unavailable" else 0
 
 
 def _run_enrich_fund(args) -> int:
@@ -1496,7 +1521,18 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--report", type=Path)
     validate.add_argument("--trace", type=Path)
     validate.add_argument("--snapshot", type=Path)
+    validate.add_argument("--research-context", type=Path)
     validate.set_defaults(func=_run_validate_contract)
+
+    research_query = subparsers.add_parser(
+        "research-query",
+        help="从 V1 JSON artifact 生成紧凑只读研究上下文，不解析 Markdown",
+    )
+    research_query.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    research_query.add_argument("--topic", choices=SUPPORTED_RESEARCH_TOPICS, required=True)
+    research_query.add_argument("--code")
+    research_query.add_argument("--output", type=Path)
+    research_query.set_defaults(func=_run_research_query)
 
     enrich = subparsers.add_parser("enrich-fund", help="显式补充单只基金详情和历史净值")
     enrich.add_argument("--provider", choices=["tiantian"], required=True)
