@@ -1,12 +1,30 @@
-# V2 Ideas
+# V2 Ideas Triage
 
-本文件记录 V2 方向。这里的内容不阻塞 V1，也不应该混入 V1 Milestone。
+V2 Research Copilot 已进入正式 delivery mode。已选中的能力以 `docs/roadmap/v2-delivery-roadmap.md` 为准；本文件只保留来源说明和未进入当前主线的想法。
+
+## 已进入 V2 Roadmap
+
+- 受约束的 Agent/Research Copilot 问答：M3。
+- 只读 MCP：M4。
+- Research Skill：M4；不包含投资博主人格化输出。
+- 可选 LLM 自动解释：M3；只做证据约束的 renderer，默认关闭。
+- 本地 Copilot Console：M5。
+
+## 未进入当前 V2 主线
+
+- 投资博主人格化 Skill。
+- LangGraph。
+- 自动推荐。
+- 自动交易。
+- 券商接入。
+- SaaS、多用户。
+- 移动端和小程序。
 
 ## V2 原则
 
-- V2 可以探索智能化和产品化，但必须建立在 V1 稳定输出契约之上。
+- V2 Research Copilot 必须建立在 V1 稳定输出契约之上。
 - V2 下游应读取 JSON report、provider trace、snapshot、dashboard artifact，不应解析 Markdown。
-- 任何自动化解释、推荐或交易方向都必须另行定义安全边界和审批流程。
+- 自动解释必须受 evidence 和 quality gate 约束；推荐和交易不在当前范围。
 - V2 不应反向要求 V1 改变核心交付范围。
 
 ## 投资博主 Skill
