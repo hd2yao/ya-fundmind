@@ -71,6 +71,25 @@ CORE_FIELDS = {
         "warnings",
         "metadata",
     ),
+    "research_answer": (
+        "schema_version",
+        "generated_at",
+        "generator",
+        "question",
+        "intent",
+        "answer_status",
+        "as_of",
+        "summary",
+        "findings",
+        "evidence",
+        "data_gaps",
+        "warnings",
+        "review_required",
+        "confidence",
+        "blocked_reason",
+        "not_investment_advice",
+        "metadata",
+    ),
 }
 
 
@@ -130,6 +149,8 @@ def validate_contract_file(path: Path | str, contract_type: str) -> ContractVali
         _validate_research_context_values(payload, errors)
     elif contract_type == "evidence_bundle":
         _validate_evidence_bundle_values(payload, errors)
+    elif contract_type == "research_answer":
+        _validate_research_answer_values(payload, errors)
     return ContractValidationResult(
         path=resolved_path,
         contract_type=contract_type,
@@ -147,6 +168,7 @@ def validate_output_dir(output_dir: Path | str) -> ContractValidationSummary:
         (_latest_trace(resolved_dir), "trace"),
         (resolved_dir / "research_queries" / "research_context.json", "research_context"),
         (resolved_dir / "evidence" / "research_evidence.json", "evidence_bundle"),
+        (resolved_dir / "copilot" / "research_answer.json", "research_answer"),
     ]
     results = [
         validate_contract_file(path, contract_type)
@@ -185,12 +207,14 @@ def _validate_shape(payload: dict[str, Any], contract_type: str, errors: list[st
         "trace": ("providers",),
         "research_context": ("artifacts", "warnings"),
         "evidence_bundle": ("findings", "evidence", "data_gaps", "warnings"),
+        "research_answer": ("findings", "evidence", "data_gaps", "warnings"),
     }
     dict_fields = {
         "report": ("valuations", "report_metadata"),
         "snapshot": ("candidates", "valuations"),
         "research_context": ("data", "metadata"),
         "evidence_bundle": ("metadata",),
+        "research_answer": ("intent", "metadata"),
     }
     for field in list_fields.get(contract_type, ()):
         if field in payload and not isinstance(payload[field], list):
@@ -286,6 +310,57 @@ def _validate_evidence_bundle_values(payload: dict[str, Any], errors: list[str])
             if field not in item:
                 errors.append(f"Finding missing field: {field}")
         references = item.get("evidence_ids")
+        if not isinstance(references, list) or not references:
+            errors.append(f"Finding must reference at least one evidence id: {finding_id}")
+            continue
+        for evidence_id in references:
+            if evidence_id not in evidence_ids:
+                errors.append(f"Finding references unknown evidence id: {evidence_id}")
+
+
+def _validate_research_answer_values(payload: dict[str, Any], errors: list[str]) -> None:
+    status = payload.get("answer_status")
+    if status not in {"answered", "partial", "unavailable", "refused", "unsupported"}:
+        errors.append(f"Unsupported research answer status: {status}")
+    confidence = payload.get("confidence")
+    if confidence not in {"high", "medium", "low"}:
+        errors.append(f"Unsupported research answer confidence: {confidence}")
+    intent = payload.get("intent")
+    if isinstance(intent, dict):
+        intent_name = intent.get("intent")
+        if intent_name not in {
+            "market",
+            "fund",
+            "portfolio",
+            "news",
+            "history",
+            "quality",
+            "blocked_transaction",
+            "unsupported",
+        }:
+            errors.append(f"Unsupported research answer intent: {intent_name}")
+    if "review_required" in payload and not isinstance(payload["review_required"], bool):
+        errors.append("Field must be a boolean: review_required")
+    if payload.get("not_investment_advice") is not True:
+        errors.append("Field must be true: not_investment_advice")
+    if status == "refused" and not payload.get("blocked_reason"):
+        errors.append("Refused answer must include blocked_reason")
+
+    evidence_items = payload.get("evidence")
+    findings = payload.get("findings")
+    if not isinstance(evidence_items, list) or not isinstance(findings, list):
+        return
+    evidence_ids = {
+        item.get("evidence_id")
+        for item in evidence_items
+        if isinstance(item, dict) and isinstance(item.get("evidence_id"), str)
+    }
+    for index, finding in enumerate(findings):
+        if not isinstance(finding, dict):
+            errors.append(f"Finding must be an object: {index}")
+            continue
+        finding_id = str(finding.get("finding_id") or index)
+        references = finding.get("evidence_ids")
         if not isinstance(references, list) or not references:
             errors.append(f"Finding must reference at least one evidence id: {finding_id}")
             continue

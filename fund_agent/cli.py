@@ -10,6 +10,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from .agents import run_research
+from .audit import append_research_audit
 from .cache import FundCache
 from .config import (
     load_experiment_scoring_config,
@@ -18,6 +19,7 @@ from .config import (
     load_research_loop_config,
     load_watchlist_config,
 )
+from .copilot_renderer import render_research_answer
 from .contract import ContractValidationSummary, validate_contract_file, validate_output_dir
 from .evidence_dashboard import generate_evidence_dashboard
 from .experiment_scoring import (
@@ -56,6 +58,7 @@ from .providers import (
 )
 from .report import render_html, render_markdown, write_json_report
 from .research_evidence import build_evidence_bundle
+from .research_copilot import ResearchCopilot
 from .research_loop import (
     execute_research_step,
     run_weekly_research,
@@ -282,6 +285,8 @@ def _run_validate_contract(args) -> int:
         results.append(validate_contract_file(args.research_context, "research_context"))
     if args.evidence_bundle:
         results.append(validate_contract_file(args.evidence_bundle, "evidence_bundle"))
+    if args.research_answer:
+        results.append(validate_contract_file(args.research_answer, "research_answer"))
     if not results:
         results = list(validate_output_dir(args.output_dir).results)
     summary = ContractValidationSummary(results=tuple(results))
@@ -343,6 +348,30 @@ def _run_build_research_evidence(args) -> int:
         f"findings={len(bundle.findings)} evidence={len(bundle.evidence)}"
     )
     return 1 if bundle.status == "unavailable" else 0
+
+
+def _run_research_ask(args) -> int:
+    answer = ResearchCopilot(args.output_dir).answer(args.question)
+    output = args.output or args.output_dir / "copilot" / "research_answer.json"
+    markdown_output = args.markdown_output or args.output_dir / "copilot" / "research_answer.md"
+    audit_output = args.audit_output or args.output_dir / "audit" / "research_queries.jsonl"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    markdown_output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(asdict(answer), ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    markdown_output.write_text(render_research_answer(answer), encoding="utf-8")
+    append_research_audit(answer, audit_output, output_path=output)
+    print(f"Research answer: {output}")
+    print(f"Research answer Markdown: {markdown_output}")
+    print(f"Research audit: {audit_output}")
+    print(
+        "Research ask: "
+        f"intent={answer.intent.get('intent')} status={answer.answer_status} "
+        f"findings={len(answer.findings)} evidence={len(answer.evidence)}"
+    )
+    return 0 if answer.answer_status in {"answered", "partial"} else 1
 
 
 def _run_enrich_fund(args) -> int:
@@ -1551,6 +1580,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--snapshot", type=Path)
     validate.add_argument("--research-context", type=Path)
     validate.add_argument("--evidence-bundle", type=Path)
+    validate.add_argument("--research-answer", type=Path)
     validate.set_defaults(func=_run_validate_contract)
 
     research_query = subparsers.add_parser(
@@ -1571,6 +1601,17 @@ def build_parser() -> argparse.ArgumentParser:
     research_evidence.add_argument("--output-dir", type=Path, default=Path("outputs"))
     research_evidence.add_argument("--output", type=Path)
     research_evidence.set_defaults(func=_run_build_research_evidence)
+
+    research_ask = subparsers.add_parser(
+        "research-ask",
+        help="基于本地 JSON 证据回答受约束的只读研究问题",
+    )
+    research_ask.add_argument("--question", required=True)
+    research_ask.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    research_ask.add_argument("--output", type=Path)
+    research_ask.add_argument("--markdown-output", type=Path)
+    research_ask.add_argument("--audit-output", type=Path)
+    research_ask.set_defaults(func=_run_research_ask)
 
     enrich = subparsers.add_parser("enrich-fund", help="显式补充单只基金详情和历史净值")
     enrich.add_argument("--provider", choices=["tiantian"], required=True)
