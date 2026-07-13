@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## v1.4.0 - 2026-07-13
+
+- Added framework-independent read-only status, catalog, query, ask and evidence adapters with strict argument allowlists.
+- Added path, URL, command, configuration-write, transaction and unsupported-tool rejection tests.
+- Added bounded async tool timeout, safe error taxonomy and append-only redacted MCP audit records.
+- Added optional stable MCP Python SDK dependency `mcp>=1.28.1,<2`, FastMCP stdio/Streamable HTTP server and `mcp-server` CLI.
+- Added official in-memory MCP client integration coverage while keeping default CI free of MCP and network requirements.
+- Added `mcp-tool-result-v1` contract and `validate-contract --mcp-result`.
+- Added the repository-local `ya-fundmind-research` Skill after governance review; it is not globally installed.
+- Fixed editable package discovery so modern setuptools installs only `fund_agent*`; default CI now verifies `pip install -e ".[dev]"`.
+- Verified `335 passed, 1 skipped`, compileall, demo, daily fixture, all contracts and Web Console dry-run; optional MCP environment verified `43 passed` with `mcp 1.28.1`.
+- No scoring, risk, provider-default, watchlist, portfolio, scheduler, trading or broker behavior changes.
+
 ## v1.3.0 - 2026-07-13
 
 - Added deterministic intent classification for market, fund, portfolio, news, history and data-quality research questions.

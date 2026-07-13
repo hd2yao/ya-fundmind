@@ -15,6 +15,7 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `ops/` | Scheduler templates for launchd and cron. | Yes |
 | `docs/` | Active V1/V2 architecture, roadmap, contracts, plans, ops and archived history. | Yes |
 | `specs/` | V2 acceptance criteria, task mapping and execution contract. | Yes |
+| `skills/` | Repository-local, manually invoked project Skills; not globally installed. | Yes |
 | `outputs/` | Generated reports, dashboards, logs, snapshots, traces, and run bundles. | No |
 | `.venv/` | Local Python environment. | No |
 
@@ -51,6 +52,10 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `fund_agent/artifacts.py` | V2 whitelist Artifact Catalog and contract-aware safe JSON loader. |
 | `fund_agent/research_query.py` | V2 compact market/fund/portfolio/news/history/quality query service. |
 | `fund_agent/research_evidence.py` | V2 JSON Pointer citations, quality/conflict gate, and Evidence Bundle builder. |
+| `fund_agent/research_copilot.py` | V2 intent guardrails, deterministic planner, and structured Research Answer. |
+| `fund_agent/mcp_adapter.py` | Framework-independent allowlisted read-only Research MCP adapter. |
+| `fund_agent/mcp_gateway.py` | MCP timeout, safe error mapping, and redacted append-only audit. |
+| `fund_agent/mcp_server.py` | Optional FastMCP server and transport boundary. |
 
 ## Active Documentation
 
@@ -89,6 +94,8 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 - `outputs/news/`
 - `outputs/research_queries/`
 - `outputs/evidence/`
+- `outputs/copilot/`
+- `outputs/audit/`
 
 ## Cleanup Rules
 

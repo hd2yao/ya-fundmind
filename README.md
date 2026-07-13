@@ -6,7 +6,7 @@ YA FundMind OS v1 是本地个人基金/ETF 投研工作台。它每天或每周
 
 ## 当前状态
 
-- 当前版本：`v1.3.0`
+- 当前版本：`v1.4.0`
 - 当前交付模式：V2 Research Copilot delivery mode
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
@@ -38,6 +38,12 @@ pip install -e ".[dev,web]"
 
 ```bash
 pip install -e ".[live]"
+```
+
+如需本地只读 MCP server：
+
+```bash
+pip install -e ".[mcp]"
 ```
 
 如果只想无网络验证系统，可以不安装 `live`，默认 fixture 路径仍可运行。
@@ -77,6 +83,19 @@ python -m fund_agent.cli validate-contract --output-dir outputs
 
 `research-ask` 支持 market、fund、portfolio、news、history 和 quality。交易、仓位、收益承诺和买卖推荐请求会被拒绝；默认无需 LLM 或网络，不修改主评分和主风险。
 
+## Read-only MCP / Skill
+
+MCP 是 optional adapter，默认 stdio，只提供 `status`、`catalog`、`query`、`ask`、`evidence` 五个工具：
+
+```bash
+python -m fund_agent.cli mcp-server --output-dir outputs --dry-run
+python -m fund_agent.cli mcp-server --output-dir outputs
+```
+
+Tool 不接收任意 path、URL、配置或写参数。调用 audit 写入 `outputs/audit/mcp_calls.jsonl`，question 只保留 hash 和脱敏预览。MCP 未安装时其他 CLI、daily、weekly 和 Web Console 不受影响。
+
+仓库内手动 Research Skill：`skills/ya-fundmind-research/`。它随项目版本管理，不自动安装到全局技能目录。
+
 核心输出：
 
 - `outputs/fund_agent_report.md`
@@ -89,6 +108,7 @@ python -m fund_agent.cli validate-contract --output-dir outputs
 - `outputs/copilot/research_answer.json`
 - `outputs/copilot/research_answer.md`
 - `outputs/audit/research_queries.jsonl`
+- `outputs/audit/mcp_calls.jsonl`
 
 ## Daily / Weekly Ops
 
