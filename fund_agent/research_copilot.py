@@ -25,12 +25,20 @@ _BLOCKED_PATTERNS = (
     "买哪",
     "卖什么",
     "卖哪",
+    "推荐哪",
+    "推荐什么",
     "推荐购买",
     "推荐买",
+    "投资建议",
+    "操作建议",
     "收益承诺",
     "保证收益",
+    "申购",
+    "赎回",
+    "调仓",
     "接入券商",
     "自动交易",
+    "交易",
 )
 
 _TOPIC_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -48,7 +56,7 @@ def classify_research_intent(question: str) -> ResearchIntent:
     code_match = _FUND_CODE_PATTERN.search(normalized)
     code = code_match.group(1) if code_match else None
 
-    if any(pattern in lowered for pattern in _BLOCKED_PATTERNS):
+    if _contains_blocked_request(lowered):
         return ResearchIntent(
             intent="blocked_transaction",
             code=code,
@@ -87,6 +95,11 @@ def classify_research_intent(question: str) -> ResearchIntent:
         reason="unsupported_research_topic",
         normalized_question=normalized,
     )
+
+
+def _contains_blocked_request(question: str) -> bool:
+    request_text = question.replace("交易日", "")
+    return any(pattern in request_text for pattern in _BLOCKED_PATTERNS)
 
 
 def build_research_plan(question: str) -> ResearchPlan:
