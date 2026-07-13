@@ -25,11 +25,20 @@ class _FakeTab:
         return False
 
 
+class _FakeColumn:
+    def button(self, *args, **kwargs):
+        return False
+
+    def metric(self, *args, **kwargs):
+        return None
+
+
 
 def test_build_web_console_state_reads_ops_status_and_pages(tmp_path):
     output_dir = tmp_path / "outputs"
     _write_json(output_dir / "daily_research_summary.json", {"as_of": "2026-06-23", "status": "success"})
     _write_json(output_dir / "weekly_research_summary.json", {"runs_processed": 1})
+    _write_json(output_dir / "latest_summary.json", {"daily": {"status": "success"}})
     _write_json(output_dir / "long_horizon_stability.json", {"enough_history": False, "blockers": ["insufficient_history"]})
     _write_json(output_dir / "news" / "news_evidence_report.json", {"evidence_count": 2, "low_confidence_count": 1})
     _write_json(output_dir / "manual_review_queue.json", [{"review_id": "r1", "signal_id": "s1"}])
@@ -44,6 +53,7 @@ def test_build_web_console_state_reads_ops_status_and_pages(tmp_path):
     assert state["news_evidence"]["evidence_count"] == 2
     assert state["review_queue_count"] == 1
     assert state["review_state_summary"]["total_review_items"] == 1
+    assert state["latest_summary_data"]["daily"]["status"] == "success"
     assert state["not_production_model"] is True
     assert state["main_score_changed"] is False
     assert state["main_risk_changed"] is False
@@ -85,19 +95,26 @@ def test_web_console_script_entrypoint_supports_direct_streamlit_execution(monke
         set_page_config=lambda **kwargs: None,
         title=lambda *args, **kwargs: None,
         caption=lambda *args, **kwargs: None,
+        markdown=lambda *args, **kwargs: None,
         button=lambda *args, **kwargs: False,
+        columns=lambda spec: [_FakeColumn() for _ in range(len(spec) if isinstance(spec, list) else spec)],
         tabs=lambda labels: [_FakeTab() for _ in labels],
         subheader=lambda *args, **kwargs: None,
         write=lambda *args, **kwargs: None,
         text=lambda *args, **kwargs: None,
         json=lambda *args, **kwargs: None,
+        dataframe=lambda *args, **kwargs: None,
         form=lambda *args, **kwargs: _FakeTab(),
+        expander=lambda *args, **kwargs: _FakeTab(),
         text_input=lambda *args, **kwargs: "",
         selectbox=lambda label, options, **kwargs: options[0],
         text_area=lambda *args, **kwargs: "",
         form_submit_button=lambda *args, **kwargs: False,
         info=lambda *args, **kwargs: None,
         success=lambda *args, **kwargs: None,
+        warning=lambda *args, **kwargs: None,
+        error=lambda *args, **kwargs: None,
+        divider=lambda *args, **kwargs: None,
     )
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
     monkeypatch.setattr(sys, "argv", ["web_console.py", "--output-dir", str(tmp_path)])

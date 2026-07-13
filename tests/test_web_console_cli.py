@@ -49,3 +49,26 @@ def test_web_console_cli_launches_streamlit_with_expected_args(monkeypatch, tmp_
     assert "--server.port" in cmd
     assert "8507" in cmd
     assert "--output-dir" in cmd
+    assert "--review-state" not in cmd
+
+
+def test_web_console_cli_passes_explicit_review_state(monkeypatch, tmp_path):
+    calls = []
+    review_state = tmp_path / "review.json"
+    monkeypatch.setattr("fund_agent.cli._streamlit_available", lambda: True)
+    monkeypatch.setattr("fund_agent.cli.subprocess.run", lambda cmd, check=False: calls.append(cmd) or 0)
+
+    exit_code = main(
+        [
+            "web-console",
+            "--output-dir",
+            str(tmp_path),
+            "--review-state",
+            str(review_state),
+        ]
+    )
+
+    assert exit_code == 0
+    cmd = calls[0]
+    index = cmd.index("--review-state")
+    assert cmd[index + 1] == str(review_state)

@@ -6,7 +6,7 @@ YA FundMind OS v1 是本地个人基金/ETF 投研工作台。它每天或每周
 
 ## 当前状态
 
-- 当前版本：`v1.4.0`
+- 当前版本：`v1.5.0`
 - 当前交付模式：V2 Research Copilot delivery mode
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
@@ -188,6 +188,9 @@ Web Console 提供：
 
 - Ops Status
 - Latest Summary
+- Research Copilot 问题输入和示例问题
+- finding / citation / data gap / quality 展开查看
+- 最近脱敏 research audit
 - Market
 - Funds
 - Portfolio
@@ -198,7 +201,7 @@ Web Console 提供：
 - 一键刷新 dashboard
 - manual review state 更新
 
-Web Console 仍只运行在本地，不做公网部署，不做多用户权限，不接主评分/主风险。
+Web Console 读取本地 JSON contract，不从 Markdown 反向提取事实。Copilot 无需 LLM 即可运行；交易、仓位、收益承诺和买卖推荐请求会被拒绝。Console 仍只运行在本地，不做公网部署，不做多用户权限，不接主评分/主风险。
 
 ## 常用 CLI
 
