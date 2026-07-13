@@ -13,10 +13,14 @@ dependencies = []
 [project.optional-dependencies]
 live = ["akshare"]
 web = ["streamlit"]
+mcp = ["mcp>=1.28.1,<2"]
 dev = ["pytest"]
 
 [project.scripts]
 fund-agent = "fund_agent.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["fund_agent*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -43,6 +43,7 @@ from .market_intelligence import (
     write_market_intelligence_outputs,
     write_market_trend_outputs,
 )
+from .mcp_server import McpDependencyUnavailable, run_mcp_server
 from .models import FundRecord, ProviderHealth, ProviderWarning
 from .nav_summary import build_nav_history_windows_summary, parse_nav_windows
 from .news_evidence import collect_news_evidence
@@ -372,6 +373,29 @@ def _run_research_ask(args) -> int:
         f"findings={len(answer.findings)} evidence={len(answer.evidence)}"
     )
     return 0 if answer.answer_status in {"answered", "partial"} else 1
+
+
+def _run_mcp_server(args) -> int:
+    try:
+        result = run_mcp_server(
+            args.output_dir,
+            transport=args.transport,
+            timeout_seconds=args.timeout_seconds,
+            audit_path=args.audit_output,
+            dry_run=args.dry_run,
+        )
+    except McpDependencyUnavailable as exc:
+        print(f"MCP server unavailable: {exc}")
+        return 2
+    except ValueError as exc:
+        print(f"Invalid MCP server configuration: {exc}")
+        return 2
+    if args.dry_run:
+        print(
+            "MCP server ready: "
+            f"transport={result['transport']} tools={', '.join(result['tools'])} read_only=true"
+        )
+    return 0
 
 
 def _run_enrich_fund(args) -> int:
@@ -1612,6 +1636,21 @@ def build_parser() -> argparse.ArgumentParser:
     research_ask.add_argument("--markdown-output", type=Path)
     research_ask.add_argument("--audit-output", type=Path)
     research_ask.set_defaults(func=_run_research_ask)
+
+    mcp_server = subparsers.add_parser(
+        "mcp-server",
+        help="启动 optional 的本地只读 Research MCP server",
+    )
+    mcp_server.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    mcp_server.add_argument(
+        "--transport",
+        choices=["stdio", "streamable-http"],
+        default="stdio",
+    )
+    mcp_server.add_argument("--timeout-seconds", type=float, default=10.0)
+    mcp_server.add_argument("--audit-output", type=Path)
+    mcp_server.add_argument("--dry-run", action="store_true")
+    mcp_server.set_defaults(func=_run_mcp_server)
 
     enrich = subparsers.add_parser("enrich-fund", help="显式补充单只基金详情和历史净值")
     enrich.add_argument("--provider", choices=["tiantian"], required=True)
