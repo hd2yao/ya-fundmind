@@ -49,6 +49,12 @@ V1 Todo 用来防止主线被零散优化打断。
 - Scheduler status 文案可优化：`status_launchd_scheduler.sh` 会展示当天日志路径，即使当天 21:30 尚未触发 daily。实际最近成功 daily 为 2026-07-02 21:30，launchd daily 上次退出码为 0。
 - Weekly scheduler 已安装并加载，但 launchd 还未到下一次周六 10:00 自动触发窗口；下次 scheduler 调整时建议与 daily 一样固定使用项目 `.venv` Python 路径。
 
+### 2026-07-13 v1.0.3 Ops Fix
+
+- Weekly scheduler 于首次自动触发时因 `PYTHON_BIN=python` 在 launchd 精简 PATH 下不可解析而退出 `127`。
+- `v1.0.3` 将安装器默认解释器固定为项目 `.venv/bin/python`（存在时），并在 plist 中写入绝对路径。
+- 修复发布后需要重新安装 weekly，并以 `launchctl` 触发和退出码 `0` 作为验收证据。
+
 - README 截图或本地 dashboard 使用截图。
 - Dashboard 视觉细节统一。
 - Markdown 文档措辞统一。

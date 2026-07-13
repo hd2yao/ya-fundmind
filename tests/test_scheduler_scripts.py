@@ -1,5 +1,7 @@
+import os
 from pathlib import Path
 import subprocess
+import sys
 
 
 def test_launchd_scheduler_scripts_exist_and_support_required_flags():
@@ -62,6 +64,41 @@ def test_launchd_install_dry_run_daily_only_returns_zero():
 
     assert result.returncode == 0
     assert "dry-run daily" in result.stdout
+
+
+def test_launchd_install_defaults_to_project_venv_python(tmp_path):
+    project_dir = tmp_path / "project"
+    (project_dir / "scripts").mkdir(parents=True)
+    (project_dir / "ops" / "launchd").mkdir(parents=True)
+    (project_dir / ".venv" / "bin").mkdir(parents=True)
+    (project_dir / "scripts" / "run_daily_ops.sh").write_text("#!/usr/bin/env bash\n")
+    (project_dir / "scripts" / "run_weekly_ops.sh").write_text("#!/usr/bin/env bash\n")
+    template = Path("ops/launchd/com.ya-fundmind.weekly.plist.template")
+    (project_dir / "ops" / "launchd" / template.name).write_text(
+        template.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (project_dir / ".venv" / "bin" / "python").symlink_to(sys.executable)
+
+    env = os.environ.copy()
+    env.pop("PYTHON_BIN", None)
+    env.update(
+        {
+            "HOME": str(tmp_path / "home"),
+            "YA_FUNDMIND_PROJECT_DIR": str(project_dir),
+        }
+    )
+    result = subprocess.run(
+        ["bash", "scripts/install_launchd_scheduler.sh", "--weekly", "--dry-run"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    preview = project_dir / "outputs" / "logs" / "com.ya-fundmind.weekly.plist.preview"
+    assert str(project_dir / ".venv" / "bin" / "python") in preview.read_text(encoding="utf-8")
 
 
 def test_launchd_uninstall_daily_only_returns_zero(tmp_path):

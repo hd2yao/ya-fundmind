@@ -2,7 +2,6 @@
 set -euo pipefail
 
 PROJECT_DIR="${YA_FUNDMIND_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-PYTHON_BIN="${PYTHON_BIN:-python}"
 OUTPUT_DIR="${OUTPUT_DIR:-outputs}"
 PROVIDER="${PROVIDER:-fixture}"
 ENABLE_MARKET_INTELLIGENCE="${ENABLE_MARKET_INTELLIGENCE:-false}"
@@ -16,6 +15,25 @@ INSTALL_DAILY=false
 INSTALL_WEEKLY=false
 LAUNCH_AGENTS_DIR="${HOME}/Library/LaunchAgents"
 
+resolve_python_bin() {
+  local requested="${PYTHON_BIN:-}"
+  if [[ -z "${requested}" && -x "${PROJECT_DIR}/.venv/bin/python" ]]; then
+    requested="${PROJECT_DIR}/.venv/bin/python"
+  elif [[ -z "${requested}" ]]; then
+    requested="$(command -v python3 || command -v python || true)"
+  elif [[ "${requested}" != */* ]]; then
+    requested="$(command -v "${requested}" || true)"
+  fi
+
+  if [[ -z "${requested}" || ! -x "${requested}" ]]; then
+    echo "Python executable not found; set PYTHON_BIN to an absolute executable path" >&2
+    exit 1
+  fi
+  printf '%s\n' "${requested}"
+}
+
+PYTHON_BIN="$(resolve_python_bin)"
+
 usage() {
   cat <<'USAGE'
 Usage: scripts/install_launchd_scheduler.sh [--daily] [--weekly] [--dry-run]
@@ -24,7 +42,7 @@ Environment:
   PROVIDER=fixture|akshare
   ENABLE_MARKET_INTELLIGENCE=false|true
   OUTPUT_DIR=outputs
-  PYTHON_BIN=python
+  PYTHON_BIN=/absolute/path/to/python
   DAILY_HOUR=18 DAILY_MINUTE=30
   WEEKLY_WEEKDAY=6 WEEKLY_HOUR=10 WEEKLY_MINUTE=0
 USAGE
@@ -69,7 +87,7 @@ render_plist() {
   WEEKLY_WEEKDAY="${WEEKLY_WEEKDAY}" \
   WEEKLY_HOUR="${WEEKLY_HOUR}" \
   WEEKLY_MINUTE="${WEEKLY_MINUTE}" \
-  python - "$template" "$output" <<'PY'
+  "${PYTHON_BIN}" - "$template" "$output" <<'PY'
 import os
 import sys
 from pathlib import Path

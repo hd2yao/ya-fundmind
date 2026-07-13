@@ -95,6 +95,8 @@ DAILY_HOUR=18 DAILY_MINUTE=30 WEEKLY_WEEKDAY=6 WEEKLY_HOUR=10 WEEKLY_MINUTE=0 \
 
 The install script writes plist files into `~/Library/LaunchAgents/`, validates them with `plutil` when available, and loads them with `launchctl bootstrap` or `launchctl load`.
 
+When `PYTHON_BIN` is not set, the installer uses the project-local `.venv/bin/python` if it exists. The resolved absolute interpreter path is written into both daily and weekly plist files so launchd does not depend on the interactive shell `PATH`.
+
 ## Status
 
 ```bash
@@ -197,6 +199,8 @@ Python path:
 ```bash
 PYTHON_BIN=/path/to/python bash scripts/install_launchd_scheduler.sh --daily --weekly
 ```
+
+Use an absolute interpreter path for reproducible scheduler runs. A command name such as `python3` is accepted during installation and is resolved to its absolute path before the plist is written.
 
 launchctl:
 
