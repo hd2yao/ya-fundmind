@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -195,14 +196,16 @@ def render_streamlit_app(
     root = Path(output_dir)
     state_path = Path(review_state_path) if review_state_path else root / "manual_review_state.json"
     st.set_page_config(page_title="YA FundMind Console", layout="wide")
-    st.title("YA FundMind Console")
+    _inject_console_styles(st)
+    st.title("YA FundMind OS")
     st.caption("本地投研工作台，仅用于观察和人工审核；不修改主评分/主风险，不构成投资建议。")
     state = build_web_console_state(output_dir=root, review_state_path=state_path)
 
-    if st.button("Run Daily Ops"):
+    action_columns = st.columns([1, 1, 6])
+    if action_columns[0].button("Run Daily", use_container_width=True):
         code = run_daily_ops_for_web(output_dir=root, provider=daily_provider, enable_market_intelligence=True)
         st.info(f"daily ops exit_code={code}")
-    if st.button("Refresh Dashboard"):
+    if action_columns[1].button("Refresh", use_container_width=True):
         manifest = refresh_dashboard_for_web(output_dir=root, review_state_path=state_path)
         st.info(f"dashboard refreshed: {manifest}")
 
@@ -210,40 +213,423 @@ def render_streamlit_app(
     with tabs[0]:
         _render_home(st, state)
     with tabs[1]:
-        st.subheader("Research Copilot")
-        st.json(build_copilot_view_model(state["copilot_answer"]))
+        _render_copilot(st, root, state)
     with tabs[2]:
-        st.subheader("Market")
-        st.json(state["market_report"] or {"status": "missing"})
+        _render_market(st, state["market_report"])
     with tabs[3]:
-        st.subheader("Funds")
-        st.json(state["fund_details"] or {"status": "missing"})
+        _render_funds(st, state["fund_details"])
     with tabs[4]:
-        st.subheader("Portfolio")
-        st.json(state["portfolio_report"] or {"status": "missing"})
+        _render_portfolio(st, state["portfolio_report"])
     with tabs[5]:
-        st.subheader("News")
-        st.json(state["news_evidence"] or {"status": "missing"})
+        _render_news(st, state["news_evidence"])
     with tabs[6]:
         _render_review(st, state_path, state)
     with tabs[7]:
-        st.subheader("Reports")
-        st.json(state["report_paths"])
+        _render_reports(st, state["report_paths"])
+
+
+def _render_copilot(st, root: Path, state: dict[str, Any]) -> None:
+    st.subheader("Research Copilot")
+    st.caption("基于本地 JSON 研究产物回答，并为每项结论附上可追溯证据。")
+
+    examples = (
+        "选择一个示例，或在下方输入自己的研究问题",
+        "当前市场热点和主要证据是什么？",
+        "自选基金中哪些数据需要人工复核？",
+        "当前组合有哪些已知的数据缺口？",
+    )
+    with st.form("research_copilot_query"):
+        example = st.selectbox("研究问题示例", examples)
+        question = st.text_area(
+            "研究问题",
+            placeholder="例如：当前市场热点和主要证据是什么？",
+            height=96,
+        )
+        submitted = st.form_submit_button("生成证据化回答")
+
+    if submitted:
+        selected_question = question.strip()
+        if not selected_question and example != examples[0]:
+            selected_question = example
+        if not selected_question:
+            st.warning("请输入研究问题，或选择一个示例问题。")
+        else:
+            try:
+                with st.spinner("正在读取本地研究证据……"):
+                    answer = run_copilot_for_web(question=selected_question, output_dir=root)
+                state["copilot_answer"] = asdict(answer)
+                state["research_audit"] = _load_audit_events(
+                    root / "audit" / "research_queries.jsonl",
+                    event_type="research",
+                )
+            except Exception as exc:  # pragma: no cover - Streamlit boundary protection
+                st.error(f"Research Copilot 运行失败：{type(exc).__name__}: {exc}")
+
+    view = build_copilot_view_model(state.get("copilot_answer"))
+    columns = st.columns(4)
+    columns[0].metric("回答状态", view["status"])
+    columns[1].metric("研究意图", view["intent"])
+    columns[2].metric("置信度", view["confidence"])
+    columns[3].metric("证据数量", view["evidence_count"])
+
+    status = view["status"]
+    if status == "empty":
+        st.info("输入研究问题后，将在这里显示结论、证据引用和数据缺口。")
+    elif status == "answered":
+        st.success("status=answered：本地证据足以形成研究回答。")
+    elif status in {"partial", "unavailable"}:
+        st.warning(f"status={status}：证据不完整，请结合数据缺口人工复核。")
+    elif status in {"refused", "unsupported"}:
+        st.error(f"status={status}：请求超出只读投研边界或当前能力范围。")
+    else:
+        st.info(f"status={status}")
+
+    st.markdown("**研究摘要**")
+    st.write(view["summary"])
+
+    for index, finding in enumerate(view["findings"], start=1):
+        label = str(finding.get("label") or finding.get("finding_id") or "未命名结论")
+        with st.expander(f"Finding {index} · {label}", expanded=index == 1):
+            st.write(finding.get("value"))
+            quality = finding.get("quality_grade") or "unknown"
+            st.caption(f"quality_grade={quality}")
+            for warning in finding.get("warnings") or []:
+                st.warning(str(warning))
+
+            citations = finding.get("citations") or []
+            if citations:
+                st.markdown("**证据引用**")
+            for citation in citations:
+                evidence_id = citation.get("evidence_id") or "evidence"
+                source = citation.get("source") or "unknown"
+                st.markdown(f"**{evidence_id} · {source}**")
+                st.caption(
+                    " · ".join(
+                        (
+                            f"as_of={citation.get('as_of') or '--'}",
+                            f"quality={citation.get('quality_grade') or 'unknown'}",
+                            f"stale={bool(citation.get('stale'))}",
+                        )
+                    )
+                )
+                path = citation.get("path") or "--"
+                pointer = citation.get("json_pointer") or ""
+                st.code(f"{path}#{pointer}")
+                if citation.get("excerpt") not in {None, ""}:
+                    st.write(citation["excerpt"])
+
+    if view["data_gaps"]:
+        st.markdown("**数据缺口**")
+        for gap in view["data_gaps"]:
+            st.warning(str(gap))
+    if view["warnings"]:
+        st.markdown("**边界与质量警告**")
+        for warning in view["warnings"]:
+            st.warning(str(warning))
+
+    if state.get("research_audit"):
+        with st.expander("最近研究审计（脱敏）"):
+            st.json(state["research_audit"][-10:])
+
+    st.divider()
+    st.caption("仅用于研究观察和人工审核，不改变主评分/主风险，不构成买卖建议。")
 
 
 def _render_home(st, state: dict[str, Any]) -> None:
     status = state["ops_status"]
-    st.subheader("Ops Status")
-    st.write(
-        {
-            "ops_ready": status.get("ops_ready"),
-            "dashboard_ready": status.get("dashboard_ready"),
-            "latest_run": (status.get("latest_run") or {}).get("as_of"),
-            "main_model_ready": status.get("main_model_ready"),
-        }
-    )
-    st.subheader("Latest Summary")
-    st.text(state.get("latest_summary") or "latest_summary.md 尚未生成")
+    st.subheader("运行状态")
+    columns = st.columns(4)
+    columns[0].metric("Daily Ops", "Ready" if status.get("ops_ready") else "Blocked")
+    columns[1].metric("Dashboard", "Ready" if status.get("dashboard_ready") else "Missing")
+    columns[2].metric("最新研究日", (status.get("latest_run") or {}).get("as_of") or "--")
+    columns[3].metric("主模型门禁", "Ready" if status.get("main_model_ready") else "Research only")
+
+    overall_status = str(status.get("overall_status") or "unknown")
+    blockers = [str(item) for item in status.get("main_model_blockers") or []]
+    if status.get("ops_ready"):
+        st.success(f"overall_status={overall_status}：日常研究与展示链路可用。")
+    else:
+        st.error(f"overall_status={overall_status}：运行链路需要检查。")
+    if blockers:
+        st.warning("主模型仍受门禁限制：" + ", ".join(blockers))
+
+    st.subheader("最新摘要")
+    summary = state.get("latest_summary") or "latest_summary.md 尚未生成"
+    st.markdown(summary)
+
+
+def _render_market(st, report: dict[str, Any] | None) -> None:
+    st.subheader("Market Intelligence")
+    if not report:
+        st.info("市场情报产物尚未生成。")
+        return
+    st.caption(f"as_of={report.get('as_of') or '--'} · source={report.get('source') or '--'}")
+    columns = st.columns(4)
+    columns[0].metric("基金样本", _format_number(report.get("total_funds")))
+    columns[1].metric("ETF 样本", _format_number(report.get("total_etfs")))
+    columns[2].metric("主题数量", _format_number(len(report.get("themes") or [])))
+    columns[3].metric("热点候选", _format_number(len(report.get("hot_theme_candidates") or [])))
+    _render_warnings(st, report.get("warnings"))
+    candidates = _tabular_preview(report.get("hot_theme_candidates"), limit=20)
+    if candidates:
+        st.markdown("**热点候选（研究观察）**")
+        st.dataframe(candidates, use_container_width=True, hide_index=True)
+    else:
+        st.info("当前没有可展示的热点候选。")
+    _render_compact_source(st, report)
+
+
+def _render_funds(st, report: dict[str, Any] | None) -> None:
+    st.subheader("Watchlist Fund Details")
+    if not report:
+        st.info("自选基金详情产物尚未生成。")
+        return
+    coverage = report.get("coverage_summary") or {}
+    st.caption(f"as_of={report.get('as_of') or '--'} · 当前页仅展示自选池补充数据")
+    columns = st.columns(4)
+    columns[0].metric("详情数量", _format_number(report.get("detail_count")))
+    columns[1].metric("缺失数量", _format_number(report.get("missing_count")))
+    columns[2].metric("质量警告", _format_number(report.get("warning_count")))
+    columns[3].metric("字段覆盖率", _format_ratio(_first_value(coverage, "average_coverage_ratio", "coverage_ratio")))
+    details = _tabular_preview(report.get("fund_details"), limit=20)
+    if details:
+        st.dataframe(details, use_container_width=True, hide_index=True)
+    else:
+        st.info("当前没有可展示的基金详情。")
+    _render_compact_source(st, report)
+
+
+def _render_portfolio(st, report: dict[str, Any] | None) -> None:
+    st.subheader("Portfolio Observation")
+    if not report:
+        st.info("组合分析产物尚未生成；空配置属于可接受状态。")
+        return
+    st.caption(f"{report.get('portfolio_name') or '未命名组合'} · as_of={report.get('as_of') or '--'}")
+    columns = st.columns(4)
+    columns[0].metric("持仓数量", _format_number(report.get("holding_count")))
+    columns[1].metric("组合估值", _format_money(report.get("total_value")))
+    columns[2].metric("可用现金", _format_money(report.get("cash_available")))
+    columns[3].metric("观察问题", _format_number(report.get("observation_issue_count")))
+    if str(report.get("status") or "") == "warning":
+        st.warning("组合状态为 warning；这里只展示观察结果，不改变主风险。")
+    _render_warnings(st, report.get("warnings"))
+    positions = _tabular_preview(report.get("positions"), limit=20)
+    if positions:
+        st.markdown("**持仓观察**")
+        st.dataframe(positions, use_container_width=True, hide_index=True)
+    issues = _tabular_preview(report.get("observation_issues"), limit=20)
+    if issues:
+        st.markdown("**观察问题**")
+        st.dataframe(issues, use_container_width=True, hide_index=True)
+    _render_compact_source(st, report)
+
+
+def _render_news(st, report: dict[str, Any] | None) -> None:
+    st.subheader("News Evidence")
+    if not report:
+        st.info("新闻与公告证据产物尚未生成；未配置来源时允许为空。")
+        return
+    st.caption(f"as_of={report.get('as_of') or '--'} · source={report.get('source') or '--'}")
+    columns = st.columns(4)
+    columns[0].metric("证据数量", _format_number(report.get("evidence_count")))
+    columns[1].metric("低置信证据", _format_number(report.get("low_confidence_count")))
+    columns[2].metric("去重数量", _format_number(report.get("duplicate_count")))
+    columns[3].metric("覆盖主题", _format_number(len(report.get("by_theme") or {})))
+    _render_warnings(st, report.get("warnings"))
+    items = _tabular_preview(report.get("items"), limit=30)
+    if items:
+        st.dataframe(items, use_container_width=True, hide_index=True)
+    else:
+        st.info("当前没有可展示的新闻或公告证据。")
+    _render_compact_source(st, report)
+
+
+def _render_reports(st, report_paths: dict[str, str]) -> None:
+    st.subheader("Reports & Artifacts")
+    st.caption("机器读取应使用 JSON contract；HTML/Markdown 仅供人工查看。")
+    rows = []
+    for name, raw_path in report_paths.items():
+        path = Path(raw_path)
+        rows.append(
+            {
+                "artifact": name,
+                "status": "available" if path.exists() and path.is_file() else "missing",
+                "path": str(path),
+            }
+        )
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
+def _render_warnings(st, warnings: Any) -> None:
+    for warning in warnings or []:
+        st.warning(str(warning))
+
+
+def _render_compact_source(st, payload: dict[str, Any]) -> None:
+    with st.expander("Source JSON preview"):
+        st.json(_compact_payload(payload, max_items=5))
+
+
+def _compact_payload(value: Any, *, max_items: int = 5) -> Any:
+    if isinstance(value, dict):
+        return {key: _compact_payload(item, max_items=max_items) for key, item in value.items()}
+    if isinstance(value, list):
+        if len(value) > max_items:
+            return {
+                "count": len(value),
+                "preview": [
+                    _compact_payload(item, max_items=max_items) for item in value[:max_items]
+                ],
+            }
+        return [_compact_payload(item, max_items=max_items) for item in value]
+    return value
+
+
+def _tabular_preview(value: Any, *, limit: int) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in value[:limit]:
+        if not isinstance(item, dict):
+            rows.append({"value": item})
+            continue
+        rows.append(
+            {
+                key: json.dumps(field, ensure_ascii=False) if isinstance(field, (dict, list)) else field
+                for key, field in item.items()
+            }
+        )
+    return rows
+
+
+def _first_value(payload: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if payload.get(key) is not None:
+            return payload[key]
+    return None
+
+
+def _format_number(value: Any) -> str:
+    if isinstance(value, bool) or value is None:
+        return "--"
+    try:
+        return f"{int(value):,}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _format_money(value: Any) -> str:
+    if value is None:
+        return "--"
+    try:
+        return f"¥{float(value):,.2f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _format_ratio(value: Any) -> str:
+    if value is None:
+        return "--"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if 0 <= number <= 1:
+        number *= 100
+    return f"{number:.1f}%"
+
+
+def _inject_console_styles(st) -> None:
+    st.markdown(_console_css(), unsafe_allow_html=True)
+
+
+def _console_css() -> str:
+    return """
+<style>
+:root {
+  --fundmind-ink: #17201f;
+  --fundmind-muted: #5f6b69;
+  --fundmind-line: #d7ddda;
+  --fundmind-surface: #ffffff;
+  --fundmind-accent: #0f766e;
+  --fundmind-warning: #9a6700;
+}
+[data-testid="stAppViewContainer"] {
+  background: #f4f6f5;
+  color: var(--fundmind-ink);
+}
+.block-container {
+  max-width: 1240px;
+  padding-top: 1.75rem;
+  padding-bottom: 3rem;
+}
+h1, h2, h3, p, label, button, input, textarea {
+  letter-spacing: 0 !important;
+}
+h1 {
+  font-size: 2rem !important;
+  line-height: 1.2 !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+[data-testid="stTabs"] [data-baseweb="tab"] {
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+}
+[data-testid="stMetric"] {
+  border-left: 3px solid var(--fundmind-accent);
+  padding-left: 0.75rem;
+}
+[data-testid="stMetricLabel"] {
+  color: var(--fundmind-muted);
+}
+.stButton > button,
+[data-testid="stFormSubmitButton"] > button {
+  min-height: 44px;
+  border-radius: 6px;
+}
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[role="tab"]:focus-visible {
+  outline: 3px solid #0f766e !important;
+  outline-offset: 2px;
+}
+pre, code, [data-testid="stCodeBlock"] {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+[data-testid="stDataFrame"] {
+  border: 1px solid var(--fundmind-line);
+  border-radius: 6px;
+}
+@media (max-width: 640px) {
+  .block-container {
+    padding: 1rem 0.85rem 2rem;
+  }
+  h1 {
+    font-size: 1.6rem !important;
+  }
+  [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap;
+  }
+  [data-testid="column"] {
+    min-width: min(100%, 10rem) !important;
+    flex: 1 1 10rem !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+</style>
+"""
 
 
 def _render_review(st, state_path: Path, state: dict[str, Any]) -> None:

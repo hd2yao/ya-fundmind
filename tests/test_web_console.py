@@ -25,6 +25,14 @@ class _FakeTab:
         return False
 
 
+class _FakeColumn:
+    def button(self, *args, **kwargs):
+        return False
+
+    def metric(self, *args, **kwargs):
+        return None
+
+
 
 def test_build_web_console_state_reads_ops_status_and_pages(tmp_path):
     output_dir = tmp_path / "outputs"
@@ -85,19 +93,26 @@ def test_web_console_script_entrypoint_supports_direct_streamlit_execution(monke
         set_page_config=lambda **kwargs: None,
         title=lambda *args, **kwargs: None,
         caption=lambda *args, **kwargs: None,
+        markdown=lambda *args, **kwargs: None,
         button=lambda *args, **kwargs: False,
+        columns=lambda spec: [_FakeColumn() for _ in range(len(spec) if isinstance(spec, list) else spec)],
         tabs=lambda labels: [_FakeTab() for _ in labels],
         subheader=lambda *args, **kwargs: None,
         write=lambda *args, **kwargs: None,
         text=lambda *args, **kwargs: None,
         json=lambda *args, **kwargs: None,
+        dataframe=lambda *args, **kwargs: None,
         form=lambda *args, **kwargs: _FakeTab(),
+        expander=lambda *args, **kwargs: _FakeTab(),
         text_input=lambda *args, **kwargs: "",
         selectbox=lambda label, options, **kwargs: options[0],
         text_area=lambda *args, **kwargs: "",
         form_submit_button=lambda *args, **kwargs: False,
         info=lambda *args, **kwargs: None,
         success=lambda *args, **kwargs: None,
+        warning=lambda *args, **kwargs: None,
+        error=lambda *args, **kwargs: None,
+        divider=lambda *args, **kwargs: None,
     )
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
     monkeypatch.setattr(sys, "argv", ["web_console.py", "--output-dir", str(tmp_path)])
