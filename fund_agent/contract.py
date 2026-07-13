@@ -110,6 +110,8 @@ def validate_contract_file(path: Path | str, contract_type: str) -> ContractVali
                 continue
             errors.append(f"Missing core field: {field}")
     _validate_shape(payload, contract_type, errors)
+    if contract_type == "research_context":
+        _validate_research_context_values(payload, errors)
     return ContractValidationResult(
         path=resolved_path,
         contract_type=contract_type,
@@ -183,6 +185,18 @@ def _latest_snapshot(output_dir: Path) -> Path | None:
         return None
     candidates = sorted(snapshot_dir.glob("*.json"))
     return candidates[-1] if candidates else None
+
+
+def _validate_research_context_values(payload: dict[str, Any], errors: list[str]) -> None:
+    topic = payload.get("topic")
+    if topic not in {"market", "fund", "portfolio", "news", "history", "quality"}:
+        errors.append(f"Unsupported research topic: {topic}")
+    status = payload.get("status")
+    if status not in {"ok", "partial", "unavailable"}:
+        errors.append(f"Unsupported research context status: {status}")
+    code = payload.get("code")
+    if code is not None and not isinstance(code, str):
+        errors.append("Field must be a string or null: code")
 
 
 def _latest_trace(output_dir: Path) -> Path | None:

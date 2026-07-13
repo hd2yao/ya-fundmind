@@ -106,6 +106,12 @@ class ResearchQueryService:
         selected = tuple(item for item in self.catalog.scan() if item.artifact_type in allowed)
         if topic == "history":
             return selected
+        if topic == "fund":
+            details = tuple(item for item in selected if item.artifact_type == "fund_detail")
+            watchlist = _latest_per_type(
+                item for item in selected if item.artifact_type == "watchlist_fund_details"
+            )
+            return tuple(sorted((*details, *watchlist), key=lambda item: (item.artifact_type, item.path)))
         return _latest_per_type(selected)
 
     def _build_data(

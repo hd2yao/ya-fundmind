@@ -80,9 +80,12 @@ def test_loader_blocks_path_traversal_and_unregistered_paths(tmp_path):
 
     traversal = loader.load(replace(descriptor, path="../outside.json"))
     unregistered = loader.load(replace(descriptor, path="arbitrary.json"))
+    mismatched = loader.load(replace(descriptor, artifact_id="artifact-spoofed"))
 
     assert traversal.status == "blocked"
     assert traversal.payload is None
     assert traversal.warnings == ("artifact_path_outside_output_dir",)
     assert unregistered.status == "blocked"
     assert unregistered.warnings == ("artifact_not_registered",)
+    assert mismatched.status == "blocked"
+    assert mismatched.warnings == ("artifact_descriptor_mismatch",)

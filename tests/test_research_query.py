@@ -76,6 +76,24 @@ def test_fund_query_selects_requested_code_and_watchlist_summary(tmp_path):
     assert context.data["coverage_summary"]["average_coverage_ratio"] == 0.8
 
 
+def test_fund_query_keeps_all_individual_details_before_selecting_code(tmp_path):
+    output_dir = tmp_path / "outputs"
+    _write_json(
+        output_dir / "fund_details" / "fund_detail_000001.json",
+        {"schema_version": "1.0", "as_of": "2026-07-12", "code": "000001", "name": "A"},
+    )
+    _write_json(
+        output_dir / "fund_details" / "fund_detail_000002.json",
+        {"schema_version": "1.0", "as_of": "2026-07-12", "code": "000002", "name": "B"},
+    )
+
+    context = ResearchQueryService(output_dir).query("fund", code="000001")
+
+    assert context.status == "ok"
+    assert context.data["fund"]["name"] == "A"
+    assert len(context.artifacts) == 2
+
+
 def test_portfolio_and_news_queries_return_small_structured_reports(tmp_path):
     output_dir = tmp_path / "outputs"
     _write_json(

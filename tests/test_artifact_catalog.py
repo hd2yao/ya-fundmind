@@ -83,3 +83,37 @@ def test_catalog_records_invalid_json_without_aborting_other_artifacts(tmp_path)
     assert news.schema_version is None
     assert news.as_of is None
     assert news.warnings == ("invalid_json",)
+
+
+def test_catalog_does_not_follow_symlinks_outside_output_dir(tmp_path):
+    output_dir = tmp_path / "outputs"
+    output_dir.mkdir()
+    outside = tmp_path / "outside.json"
+    _write_json(outside, {"schema_version": "1.0", "private": True})
+    (output_dir / "ops_status.json").symlink_to(outside)
+
+    assert ArtifactCatalog(output_dir).scan() == ()
+
+
+def test_catalog_derives_nested_quality_stale_and_provider_source(tmp_path):
+    output_dir = tmp_path / "outputs"
+    _write_json(
+        output_dir / "fund_agent_report.json",
+        {
+            "schema_version": "1.0",
+            "as_of": "2026-07-12",
+            "provider_health": [
+                {
+                    "provider": "akshare",
+                    "warnings": [{"code": "stale_cache", "severity": "warning"}],
+                }
+            ],
+            "data_quality_summary": {"grade": "warning"},
+        },
+    )
+
+    descriptor = ArtifactCatalog(output_dir).scan()[0]
+
+    assert descriptor.source == "akshare"
+    assert descriptor.quality_grade == "warning"
+    assert descriptor.stale is True

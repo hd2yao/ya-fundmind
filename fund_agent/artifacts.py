@@ -47,9 +47,12 @@ class ArtifactCatalog:
     def scan(self) -> tuple[ArtifactDescriptor, ...]:
         descriptors: list[ArtifactDescriptor] = []
         seen: set[Path] = set()
+        resolved_output_dir = self.output_dir.resolve()
         for artifact_type, pattern in ARTIFACT_PATTERNS:
             for path in self.output_dir.glob(pattern):
-                if not path.is_file() or path in seen:
+                if not path.is_file() or path.is_symlink() or path in seen:
+                    continue
+                if not path.resolve().is_relative_to(resolved_output_dir):
                     continue
                 seen.add(path)
                 descriptors.append(self._describe(path, artifact_type))
@@ -72,8 +75,8 @@ class ArtifactCatalog:
             as_of=_string_value(payload.get("as_of") or payload.get("latest_as_of")),
             generated_at=_string_value(payload.get("generated_at")),
             source=source,
-            quality_grade=_string_value(payload.get("data_quality_grade")),
-            stale=bool(payload.get("stale", False)),
+            quality_grade=_quality_grade(payload),
+            stale=_payload_stale(payload),
             content_hash=_content_hash(path),
             warnings=warnings,
         )
@@ -92,6 +95,8 @@ class ArtifactLoader:
             return self._blocked(descriptor, "artifact_path_outside_output_dir")
         if not _is_registered(descriptor.artifact_type, descriptor.path):
             return self._blocked(descriptor, "artifact_not_registered")
+        if descriptor.artifact_id != _artifact_id(descriptor.artifact_type, descriptor.path):
+            return self._blocked(descriptor, "artifact_descriptor_mismatch")
         if not path.is_file():
             return ArtifactLoadResult(descriptor, "missing", None, ("artifact_missing",))
         try:
@@ -139,7 +144,7 @@ def _string_value(value: Any) -> str | None:
 
 
 def _provider_source(payload: dict[str, Any]) -> str | None:
-    health = payload.get("provider_health")
+    health = payload.get("provider_health") or payload.get("providers")
     if not isinstance(health, list) or not health or not isinstance(health[0], dict):
         return None
     return _string_value(health[0].get("provider"))
@@ -151,3 +156,47 @@ def _is_registered(artifact_type: str, relative_path: str) -> bool:
         registered_type == artifact_type and path.match(pattern)
         for registered_type, pattern in ARTIFACT_PATTERNS
     )
+
+
+def _quality_grade(payload: dict[str, Any]) -> str | None:
+    direct = _string_value(payload.get("data_quality_grade"))
+    if direct is not None:
+        return direct
+    summary = payload.get("data_quality_summary")
+    if isinstance(summary, dict):
+        nested = _string_value(summary.get("grade") or summary.get("data_quality_grade"))
+        if nested is not None:
+            return nested
+    status = _string_value(payload.get("status"))
+    if status in {"normal", "warning", "degraded", "critical"}:
+        return status
+    return None
+
+
+def _payload_stale(payload: dict[str, Any]) -> bool:
+    if payload.get("stale") is True:
+        return True
+    warning_groups = (payload.get("provider_warnings"), payload.get("warnings"))
+    if any(_has_stale_warning(items) for items in warning_groups):
+        return True
+    for key in ("provider_health", "providers"):
+        providers = payload.get(key)
+        if not isinstance(providers, list):
+            continue
+        for provider in providers:
+            if not isinstance(provider, dict):
+                continue
+            if provider.get("stale") is True or _has_stale_warning(provider.get("warnings")):
+                return True
+    return False
+
+
+def _has_stale_warning(items: Any) -> bool:
+    if not isinstance(items, list):
+        return False
+    for item in items:
+        if isinstance(item, dict) and item.get("code") == "stale_cache":
+            return True
+        if isinstance(item, str) and "stale_cache" in item:
+            return True
+    return False

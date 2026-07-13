@@ -267,3 +267,31 @@ def test_research_context_contract_rejects_missing_core_field_and_wrong_shape(tm
     assert result.ok is False
     assert "Missing core field: data" in result.errors
     assert "Field must be a list: artifacts" in result.errors
+
+
+def test_research_context_contract_rejects_unknown_topic_and_status(tmp_path):
+    path = tmp_path / "research_context.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "generated_at": "2026-07-12T00:00:00+00:00",
+                "generator": "fund_agent",
+                "topic": "markdown",
+                "status": "complete",
+                "as_of": None,
+                "code": None,
+                "artifacts": [],
+                "data": {},
+                "warnings": [],
+                "metadata": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_contract_file(path, "research_context")
+
+    assert result.ok is False
+    assert "Unsupported research topic: markdown" in result.errors
+    assert "Unsupported research context status: complete" in result.errors
