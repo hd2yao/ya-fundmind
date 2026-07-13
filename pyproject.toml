@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ya-fundmind"
-version = "1.3.0"
+version = "1.4.0"
 description = "YA FundMind local fund and ETF research assistant"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,10 +13,14 @@ dependencies = []
 [project.optional-dependencies]
 live = ["akshare"]
 web = ["streamlit"]
+mcp = ["mcp>=1.28.1,<2"]
 dev = ["pytest"]
 
 [project.scripts]
 fund-agent = "fund_agent.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["fund_agent*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

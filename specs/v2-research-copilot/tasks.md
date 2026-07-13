@@ -59,17 +59,17 @@
 
 ## Batch 4：M4 Read-only Skill / MCP
 
-- [ ] `T401` 核对官方 MCP SDK 并冻结 adapter contract。
+- [x] `T401` 核对官方 MCP SDK 并冻结 adapter contract。
   映射：`AC-015` 至 `AC-017`
-- [ ] `T402` 新增 optional MCP dependency 和只读 tools。
+- [x] `T402` 新增 optional MCP dependency 和只读 tools。
   映射：`AC-015`
-- [ ] `T403` 新增 path/write/trading/prompt-injection 防护。
+- [x] `T403` 新增 path/write/trading/prompt-injection 防护。
   映射：`AC-016`
-- [ ] `T404` 新增脱敏 audit、错误分类和超时。
+- [x] `T404` 新增脱敏 audit、错误分类和超时。
   映射：`AC-017`
-- [ ] `T405` 执行 skill governance review 并新增 Research Skill。
+- [x] `T405` 执行 skill governance review 并新增 Research Skill。
   映射：`AC-015` 至 `AC-017`
-- [ ] `T406` 完成 MCP permission、optional dependency、PR、CI、运行验收和 `v1.4.0` tag。
+- [x] `T406` 完成 MCP permission、optional dependency、PR、CI、运行验收和 `v1.4.0` tag。
 
 ## Batch 5：M5 Copilot Console
 

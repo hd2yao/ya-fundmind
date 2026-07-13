@@ -90,6 +90,16 @@ CORE_FIELDS = {
         "not_investment_advice",
         "metadata",
     ),
+    "mcp_tool_result": (
+        "schema_version",
+        "generated_at",
+        "generator",
+        "tool",
+        "status",
+        "data",
+        "warnings",
+        "metadata",
+    ),
 }
 
 
@@ -151,6 +161,8 @@ def validate_contract_file(path: Path | str, contract_type: str) -> ContractVali
         _validate_evidence_bundle_values(payload, errors)
     elif contract_type == "research_answer":
         _validate_research_answer_values(payload, errors)
+    elif contract_type == "mcp_tool_result":
+        _validate_mcp_tool_result_values(payload, errors)
     return ContractValidationResult(
         path=resolved_path,
         contract_type=contract_type,
@@ -208,6 +220,7 @@ def _validate_shape(payload: dict[str, Any], contract_type: str, errors: list[st
         "research_context": ("artifacts", "warnings"),
         "evidence_bundle": ("findings", "evidence", "data_gaps", "warnings"),
         "research_answer": ("findings", "evidence", "data_gaps", "warnings"),
+        "mcp_tool_result": ("warnings",),
     }
     dict_fields = {
         "report": ("valuations", "report_metadata"),
@@ -215,6 +228,7 @@ def _validate_shape(payload: dict[str, Any], contract_type: str, errors: list[st
         "research_context": ("data", "metadata"),
         "evidence_bundle": ("metadata",),
         "research_answer": ("intent", "metadata"),
+        "mcp_tool_result": ("data", "metadata"),
     }
     for field in list_fields.get(contract_type, ()):
         if field in payload and not isinstance(payload[field], list):
@@ -367,6 +381,25 @@ def _validate_research_answer_values(payload: dict[str, Any], errors: list[str])
         for evidence_id in references:
             if evidence_id not in evidence_ids:
                 errors.append(f"Finding references unknown evidence id: {evidence_id}")
+
+
+def _validate_mcp_tool_result_values(payload: dict[str, Any], errors: list[str]) -> None:
+    tool = payload.get("tool")
+    if tool not in {"status", "catalog", "query", "ask", "evidence"}:
+        errors.append(f"Unsupported MCP tool: {tool}")
+    status = payload.get("status")
+    if status not in {
+        "ok",
+        "partial",
+        "unavailable",
+        "answered",
+        "refused",
+        "unsupported",
+    }:
+        errors.append(f"Unsupported MCP tool result status: {status}")
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict) and metadata.get("read_only") is not True:
+        errors.append("MCP tool result metadata.read_only must be true")
 
 
 def _latest_trace(output_dir: Path) -> Path | None:

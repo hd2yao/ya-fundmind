@@ -12,7 +12,7 @@ from .models import ResearchAnswer
 
 
 _KEY_VALUE_SECRET = re.compile(
-    r"(?i)\b(api[_-]?key|token|password|secret)\s*[:=]\s*[^\s,;]+"
+    r"(?i)\b(api[_-]?key|token|password|secret|cookie)\s*[:=]\s*[^\s,;]+"
 )
 _BEARER_SECRET = re.compile(r"(?i)\bbearer\s+[^\s,;]+")
 
@@ -31,7 +31,7 @@ def append_research_audit(
         "schema_version": "1.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "question_hash": f"sha256:{hashlib.sha256(question.encode('utf-8')).hexdigest()}",
-        "question_preview": _redacted_preview(question),
+        "question_preview": redact_preview(question),
         "intent": (payload.get("intent") or {}).get("intent"),
         "answer_status": payload.get("answer_status"),
         "finding_count": len(payload.get("findings") or []),
@@ -47,7 +47,7 @@ def append_research_audit(
     return path
 
 
-def _redacted_preview(question: str, *, limit: int = 160) -> str:
+def redact_preview(question: str, *, limit: int = 160) -> str:
     redacted = _KEY_VALUE_SECRET.sub(lambda match: f"{match.group(1)}=[REDACTED]", question)
     redacted = _BEARER_SECRET.sub("Bearer [REDACTED]", redacted)
     if len(redacted) <= limit:

@@ -9,10 +9,10 @@
 
 ## 当前状态
 
-- 当前版本：`v1.3.0`
-- 当前 Milestone：M3 Research Copilot Core 已完成，下一步 M4 Read-only Skill / MCP。
+- 当前版本：`v1.4.0`
+- 当前 Milestone：M4 Read-only Skill / MCP 已完成，下一步 M5 Copilot Console。
 - 当前 P0：无。
-- 当前 P1：核对官方 MCP Python SDK，冻结只读 adapter contract，并完成 Skill governance review。
+- 当前 P1：按 frontend design workflow 冻结 Copilot Console 信息架构、状态矩阵和截图验收标准。
 
 ## P0 Blocking
 
@@ -28,9 +28,9 @@
 
 ## P1 Current Milestone
 
-- M4 只允许 status、catalog、query、ask、evidence 五类只读能力。
-- MCP 依赖必须 optional；默认安装和 CI 不依赖真实网络。
-- Research Skill 创建前完成 governance review，禁止任意路径和写工具。
+- M5 只调用 Research Copilot service，不在 UI 重复查询、证据或业务规则。
+- 保留 Market、Funds、Portfolio、News、Review、Reports 全部 V1 页面。
+- 覆盖 loading、empty、error、partial、refused、unsupported 和无 LLM 状态。
 
 ## P2 Later Polish
 

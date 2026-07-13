@@ -161,6 +161,8 @@ python -m fund_agent.cli research-query --output-dir outputs --topic quality
 
 ## M4：Read-only Skill / MCP（`v1.4.0`）
 
+状态：完成，下一步 M5 Copilot Console。
+
 ### 目标
 
 让外部 Agent/工具通过受控只读接口使用 V2 Research Copilot，而不是直接访问任意本地文件。
