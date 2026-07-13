@@ -10,7 +10,6 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from .agents import run_research
-from .audit import append_research_audit
 from .cache import FundCache
 from .config import (
     load_experiment_scoring_config,
@@ -19,7 +18,6 @@ from .config import (
     load_research_loop_config,
     load_watchlist_config,
 )
-from .copilot_renderer import render_research_answer
 from .contract import ContractValidationSummary, validate_contract_file, validate_output_dir
 from .evidence_dashboard import generate_evidence_dashboard
 from .experiment_scoring import (
@@ -60,6 +58,7 @@ from .providers import (
 from .report import render_html, render_markdown, write_json_report
 from .research_evidence import build_evidence_bundle
 from .research_copilot import ResearchCopilot
+from .research_output import write_research_answer_outputs
 from .research_loop import (
     execute_research_step,
     run_weekly_research,
@@ -355,20 +354,16 @@ def _run_build_research_evidence(args) -> int:
 
 def _run_research_ask(args) -> int:
     answer = ResearchCopilot(args.output_dir).answer(args.question)
-    output = args.output or args.output_dir / "copilot" / "research_answer.json"
-    markdown_output = args.markdown_output or args.output_dir / "copilot" / "research_answer.md"
-    audit_output = args.audit_output or args.output_dir / "audit" / "research_queries.jsonl"
-    output.parent.mkdir(parents=True, exist_ok=True)
-    markdown_output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        json.dumps(asdict(answer), ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
+    outputs = write_research_answer_outputs(
+        answer,
+        args.output_dir,
+        json_path=args.output,
+        markdown_path=args.markdown_output,
+        audit_path=args.audit_output,
     )
-    markdown_output.write_text(render_research_answer(answer), encoding="utf-8")
-    append_research_audit(answer, audit_output, output_path=output)
-    print(f"Research answer: {output}")
-    print(f"Research answer Markdown: {markdown_output}")
-    print(f"Research audit: {audit_output}")
+    print(f"Research answer: {outputs.json_path}")
+    print(f"Research answer Markdown: {outputs.markdown_path}")
+    print(f"Research audit: {outputs.audit_path}")
     print(
         "Research ask: "
         f"intent={answer.intent.get('intent')} status={answer.answer_status} "
