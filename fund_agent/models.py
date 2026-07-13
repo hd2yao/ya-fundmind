@@ -36,6 +36,56 @@ class ResearchContext:
 
 
 @dataclass(frozen=True)
+class EvidenceRef:
+    evidence_id: str
+    artifact_id: str
+    artifact_type: str
+    path: str
+    json_pointer: str
+    claim_type: str
+    as_of: str | None
+    source: str | None
+    quality_grade: str
+    stale: bool
+    value: Any
+    excerpt: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ResearchFinding:
+    finding_id: str
+    topic: str
+    category: str
+    label: str
+    value: Any
+    code: str | None
+    quality_grade: str
+    evidence_ids: tuple[str, ...]
+    review_required: bool = False
+    warnings: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class EvidenceBundle:
+    schema_version: str
+    generated_at: str
+    generator: str
+    topic: str
+    status: str
+    as_of: str | None
+    code: str | None
+    quality_grade: str
+    review_required: bool
+    findings: tuple[dict[str, Any], ...]
+    evidence: tuple[dict[str, Any], ...]
+    data_gaps: tuple[str, ...]
+    warnings: tuple[str, ...]
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class FundRecord:
     code: str
     name: str
