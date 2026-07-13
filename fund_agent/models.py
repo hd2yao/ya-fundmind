@@ -5,6 +5,16 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class ResearchIntent:
+    intent: str
+    code: str | None
+    confidence: str
+    blocked: bool
+    reason: str | None
+    normalized_question: str
+
+
+@dataclass(frozen=True)
 class ArtifactDescriptor:
     artifact_id: str
     artifact_type: str
