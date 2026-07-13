@@ -9,10 +9,10 @@
 
 ## 当前状态
 
-- 当前版本：`v1.1.0`
-- 当前 Milestone：M1 Research Data Access 已完成，下一步 M2 Evidence & Citation。
+- 当前版本：`v1.2.0`
+- 当前 Milestone：M2 Evidence & Citation 已完成，下一步 M3 Research Copilot Core。
 - 当前 P0：无。
-- 当前 P1：开始 M2 前完成 EvidenceRef/JSON Pointer/quality gate 的 AC 一致性检查。
+- 当前 P1：开始 M3 前细化 intent taxonomy、交易型请求拒绝和确定性 renderer 测试矩阵。
 
 ## P0 Blocking
 
@@ -28,7 +28,7 @@
 
 ## P1 Current Milestone
 
-- M2 开始前细化 Evidence Bundle contract、冲突定义和 quality gate 测试矩阵。
+- M3 开始前细化六类问题、unsupported intent、guardrails 和无 LLM 回退行为。
 
 ## P2 Later Polish
 
