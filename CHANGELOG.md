@@ -11,7 +11,7 @@
 - Added append-only redacted research audit records with question hash, bounded preview, status and evidence counts.
 - Added `research-ask` CLI and `research-answer-v1` contract validation.
 - Verified six real local research topics, blocked/unsupported handling and 44 JSON Pointer/content-hash round trips.
-- Verified `291 passed`, compileall, demo, daily fixture, all V1/V2 contracts and Web Console dry-run.
+- Verified `293 passed`, compileall, demo, daily fixture, all V1/V2 contracts and Web Console dry-run.
 - No scoring, risk, provider-default, watchlist, portfolio, scheduler, trading or broker behavior changes.
 
 ## v1.2.0 - 2026-07-13
