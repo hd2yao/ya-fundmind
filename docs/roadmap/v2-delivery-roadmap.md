@@ -88,7 +88,7 @@ python -m fund_agent.cli research-query --output-dir outputs --topic quality
 
 ## M2：Evidence & Citation（`v1.2.0`）
 
-状态：完成，下一步 M3 Research Copilot Core。
+状态：完成。
 
 ### 目标
 
@@ -123,6 +123,8 @@ python -m fund_agent.cli research-query --output-dir outputs --topic quality
 - 不修改评分、风险或交易边界。
 
 ## M3：Research Copilot Core（`v1.3.0`）
+
+状态：完成，下一步 M4 Read-only Skill / MCP。
 
 ### 目标
 

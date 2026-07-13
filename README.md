@@ -6,7 +6,7 @@ YA FundMind OS v1 是本地个人基金/ETF 投研工作台。它每天或每周
 
 ## 当前状态
 
-- 当前版本：`v1.2.0`
+- 当前版本：`v1.3.0`
 - 当前交付模式：V2 Research Copilot delivery mode
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
@@ -66,6 +66,17 @@ python -m fund_agent.cli daily --provider fixture --watchlist-file configs/watch
 python -m fund_agent.cli validate-contract --output-dir outputs
 ```
 
+V2 Research Copilot 只读取本地 JSON artifact，并为回答保留 finding、citation、质量等级和数据缺口：
+
+```bash
+python -m fund_agent.cli research-query --output-dir outputs --topic market
+python -m fund_agent.cli build-research-evidence --output-dir outputs
+python -m fund_agent.cli research-ask --output-dir outputs --question "今天市场和热门板块有什么变化？"
+python -m fund_agent.cli validate-contract --output-dir outputs
+```
+
+`research-ask` 支持 market、fund、portfolio、news、history 和 quality。交易、仓位、收益承诺和买卖推荐请求会被拒绝；默认无需 LLM 或网络，不修改主评分和主风险。
+
 核心输出：
 
 - `outputs/fund_agent_report.md`
@@ -73,6 +84,11 @@ python -m fund_agent.cli validate-contract --output-dir outputs
 - `outputs/fund_agent_report.json`
 - `outputs/snapshots/YYYY-MM-DD.json`
 - `outputs/traces/provider-YYYY-MM-DD.json`
+- `outputs/research_queries/research_context.json`
+- `outputs/evidence/research_evidence.json`
+- `outputs/copilot/research_answer.json`
+- `outputs/copilot/research_answer.md`
+- `outputs/audit/research_queries.jsonl`
 
 ## Daily / Weekly Ops
 

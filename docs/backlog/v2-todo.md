@@ -9,10 +9,10 @@
 
 ## 当前状态
 
-- 当前版本：`v1.2.0`
-- 当前 Milestone：M2 Evidence & Citation 已完成，下一步 M3 Research Copilot Core。
+- 当前版本：`v1.3.0`
+- 当前 Milestone：M3 Research Copilot Core 已完成，下一步 M4 Read-only Skill / MCP。
 - 当前 P0：无。
-- 当前 P1：开始 M3 前细化 intent taxonomy、交易型请求拒绝和确定性 renderer 测试矩阵。
+- 当前 P1：核对官方 MCP Python SDK，冻结只读 adapter contract，并完成 Skill governance review。
 
 ## P0 Blocking
 
@@ -28,7 +28,9 @@
 
 ## P1 Current Milestone
 
-- M3 开始前细化六类问题、unsupported intent、guardrails 和无 LLM 回退行为。
+- M4 只允许 status、catalog、query、ask、evidence 五类只读能力。
+- MCP 依赖必须 optional；默认安装和 CI 不依赖真实网络。
+- Research Skill 创建前完成 governance review，禁止任意路径和写工具。
 
 ## P2 Later Polish
 

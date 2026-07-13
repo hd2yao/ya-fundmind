@@ -5,6 +5,46 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class ResearchIntent:
+    intent: str
+    code: str | None
+    confidence: str
+    blocked: bool
+    reason: str | None
+    normalized_question: str
+
+
+@dataclass(frozen=True)
+class ResearchPlan:
+    intent: str
+    topic: str | None
+    code: str | None
+    steps: tuple[str, ...]
+    read_only: bool = True
+
+
+@dataclass(frozen=True)
+class ResearchAnswer:
+    schema_version: str
+    generated_at: str
+    generator: str
+    question: str
+    intent: dict[str, Any]
+    answer_status: str
+    as_of: str | None
+    summary: str
+    findings: tuple[dict[str, Any], ...]
+    evidence: tuple[dict[str, Any], ...]
+    data_gaps: tuple[str, ...]
+    warnings: tuple[str, ...]
+    review_required: bool
+    confidence: str
+    blocked_reason: str | None = None
+    not_investment_advice: bool = True
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ArtifactDescriptor:
     artifact_id: str
     artifact_type: str

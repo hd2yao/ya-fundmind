@@ -45,17 +45,17 @@
 
 ## Batch 3：M3 Research Copilot Core
 
-- [ ] `T301` 新增 intent taxonomy 和交易/越界 intent guard。
+- [x] `T301` 新增 intent taxonomy 和交易/越界 intent guard。
   映射：`AC-010`、`AC-013`
-- [ ] `T302` 新增确定性 Research Planner。
+- [x] `T302` 新增确定性 Research Planner。
   映射：`AC-010`、`AC-012`
-- [ ] `T303` 新增 ResearchAnswer 和模板化中文 renderer。
+- [x] `T303` 新增 ResearchAnswer 和模板化中文 renderer。
   映射：`AC-011`、`AC-012`
-- [ ] `T304` 新增 optional LLM renderer interface 和不可变事实校验。
+- [x] `T304` 新增 optional LLM renderer interface 和不可变事实校验。
   映射：`AC-014`
-- [ ] `T305` 新增 `research-ask` CLI、audit 和 contract。
+- [x] `T305` 新增 `research-ask` CLI、audit 和 contract。
   映射：`AC-010` 至 `AC-014`、`AC-021`
-- [ ] `T306` 完成六类问题 e2e、PR、CI、运行验收和 `v1.3.0` tag。
+- [x] `T306` 完成六类问题 e2e、PR、CI、运行验收和 `v1.3.0` tag。
 
 ## Batch 4：M4 Read-only Skill / MCP
 
