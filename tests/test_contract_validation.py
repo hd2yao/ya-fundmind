@@ -92,6 +92,87 @@ def test_missing_core_field_fails_contract_validation(tmp_path):
     assert any("data_quality_grade" in error for error in result.errors)
 
 
+def test_current_release_readiness_passes_contract_validation(tmp_path):
+    path = tmp_path / "v2_release_readiness.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "generated_at": "2026-07-13T00:00:00+00:00",
+                "generator": "fund_agent",
+                "release_target": "v2.0.0",
+                "status": "pass",
+                "minimum_valid_runs": 3,
+                "valid_run_count": 3,
+                "observed_run_dates": ["2026-07-10", "2026-07-11", "2026-07-12"],
+                "run_observations": [],
+                "contract_summary": {"ok": True, "files_checked": 6, "failures": []},
+                "performance": {"within_budget": True, "measurements_ms": {}, "budgets_ms": {}},
+                "boundaries": {
+                    "not_production_model": True,
+                    "main_score_changed": False,
+                    "main_risk_changed": False,
+                    "trading_enabled": False,
+                },
+                "blockers": [],
+                "warnings": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_contract_file(path, "release_readiness")
+
+    assert result.ok is True
+
+
+def test_output_dir_validation_includes_release_readiness(tmp_path):
+    path = tmp_path / "release" / "v2_release_readiness.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{}", encoding="utf-8")
+
+    summary = validate_output_dir(tmp_path)
+
+    result = next(item for item in summary.results if item.contract_type == "release_readiness")
+    assert result.ok is False
+    assert any("schema_version" in error for error in result.errors)
+
+
+def test_release_readiness_cannot_claim_pass_with_insufficient_runs(tmp_path):
+    path = tmp_path / "release.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "generated_at": "2026-07-13T00:00:00+00:00",
+                "generator": "fund_agent",
+                "release_target": "v2.0.0",
+                "status": "pass",
+                "minimum_valid_runs": 3,
+                "valid_run_count": 1,
+                "observed_run_dates": ["2026-07-12"],
+                "run_observations": [],
+                "contract_summary": {"ok": True, "files_checked": 6, "failures": []},
+                "performance": {"within_budget": True, "measurements_ms": {}, "budgets_ms": {}},
+                "boundaries": {
+                    "not_production_model": True,
+                    "main_score_changed": False,
+                    "main_risk_changed": False,
+                    "trading_enabled": False,
+                },
+                "blockers": [],
+                "warnings": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_contract_file(path, "release_readiness")
+
+    assert result.ok is False
+    assert any("enough valid runs" in error for error in result.errors)
+
+
 def test_json_report_with_optional_tiantian_fields_still_validates(tmp_path):
     path = write_json_report(_result(), tmp_path)
     payload = json.loads(path.read_text(encoding="utf-8"))

@@ -56,6 +56,7 @@ from .providers import (
     normalize_fund_code,
 )
 from .report import render_html, render_markdown, write_json_report
+from .release_readiness import evaluate_release_readiness, write_release_readiness
 from .research_evidence import build_evidence_bundle
 from .research_copilot import ResearchCopilot
 from .research_output import write_research_answer_outputs
@@ -289,6 +290,8 @@ def _run_validate_contract(args) -> int:
         results.append(validate_contract_file(args.research_answer, "research_answer"))
     if args.mcp_result:
         results.append(validate_contract_file(args.mcp_result, "mcp_tool_result"))
+    if args.release_readiness:
+        results.append(validate_contract_file(args.release_readiness, "release_readiness"))
     if not results:
         results = list(validate_output_dir(args.output_dir).results)
     summary = ContractValidationSummary(results=tuple(results))
@@ -303,6 +306,29 @@ def _run_validate_contract(args) -> int:
         for error in result.errors:
             print(f"  error: {error}")
     return 0 if summary.ok else 1
+
+
+def _run_release_readiness(args) -> int:
+    result = evaluate_release_readiness(
+        args.output_dir,
+        minimum_valid_runs=args.minimum_valid_runs,
+        release_target=args.release_target,
+    )
+    output = args.json_output or args.output_dir / "release" / "v2_release_readiness.json"
+    write_release_readiness(result, output)
+    print(f"Release readiness: {output}")
+    print(
+        "Release gate: status={status} valid_runs={valid}/{minimum} contracts={contracts} performance={performance}".format(
+            status=result["status"],
+            valid=result["valid_run_count"],
+            minimum=result["minimum_valid_runs"],
+            contracts=result["contract_summary"]["ok"],
+            performance=result["performance"]["within_budget"],
+        )
+    )
+    for blocker in result["blockers"]:
+        print(f"  blocker: {blocker}")
+    return 0 if result["status"] == "pass" else 1
 
 
 def _run_research_query(args) -> int:
@@ -1603,7 +1629,18 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--evidence-bundle", type=Path)
     validate.add_argument("--research-answer", type=Path)
     validate.add_argument("--mcp-result", type=Path)
+    validate.add_argument("--release-readiness", type=Path)
     validate.set_defaults(func=_run_validate_contract)
+
+    release_readiness = subparsers.add_parser(
+        "release-readiness",
+        help="只读检查 V2 contract、性能和真实 daily run 发布门禁",
+    )
+    release_readiness.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    release_readiness.add_argument("--minimum-valid-runs", type=int, default=3)
+    release_readiness.add_argument("--release-target", default="v2.0.0")
+    release_readiness.add_argument("--json-output", type=Path)
+    release_readiness.set_defaults(func=_run_release_readiness)
 
     research_query = subparsers.add_parser(
         "research-query",
