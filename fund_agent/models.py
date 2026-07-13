@@ -21,6 +21,21 @@ class ArtifactDescriptor:
 
 
 @dataclass(frozen=True)
+class ResearchContext:
+    schema_version: str
+    generated_at: str
+    generator: str
+    topic: str
+    status: str
+    as_of: str | None
+    code: str | None
+    artifacts: tuple[dict[str, Any], ...]
+    data: dict[str, Any]
+    warnings: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class FundRecord:
     code: str
     name: str
