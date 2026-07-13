@@ -73,17 +73,17 @@
 
 ## Batch 5：M5 Copilot Console
 
-- [ ] `T501` 用 frontend design workflow 设计 Copilot 页面状态和导航。
+- [x] `T501` 用 frontend design workflow 设计 Copilot 页面状态和导航。
   映射：`AC-018` 至 `AC-020`
-- [ ] `T502` 新增 question/answer/finding/citation/data-gap UI。
+- [x] `T502` 新增 question/answer/finding/citation/data-gap UI。
   映射：`AC-018`
-- [ ] `T503` 新增 review 和 audit UI。
+- [x] `T503` 新增 review 和 audit UI。
   映射：`AC-018`
-- [ ] `T504` 保持全部 V1 页面和 service boundary。
+- [x] `T504` 保持全部 V1 页面和 service boundary。
   映射：`AC-019`
-- [ ] `T505` 完成空/错/加载/无 LLM、Playwright、截图和 a11y 验收。
+- [x] `T505` 完成空/错/加载/无 LLM、Playwright、截图和 a11y 验收。
   映射：`AC-020`
-- [ ] `T506` 完成 PR、CI、运行验收和 `v1.5.0` tag。
+- [x] `T506` 完成 PR、CI、运行验收和 `v1.5.0` tag。
 
 ## Batch 6：M6 Release Hardening
 

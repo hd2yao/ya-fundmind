@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## v1.5.0 - 2026-07-13
+
+- Added a local Research Copilot page backed by the public `ResearchCopilot` service and structured Research Answer JSON.
+- Added question examples, deterministic answer status, confidence, as-of metadata, findings, citations, data gaps, quality warnings and redacted research audit display.
+- Structured Home, Market, Funds, Portfolio, News, Review and Reports pages while keeping bounded source JSON previews for auditability.
+- Added responsive 375/768/1440 layouts, wrapped navigation, stable metric geometry, 44px controls, keyboard focus states and reduced-motion handling.
+- Added answered, empty, partial, unavailable, refused, unsupported and runtime-error presentation without requiring an LLM or network.
+- Fixed Web Console review-state resolution so the default follows `--output-dir` instead of reading a relative `outputs/` path from the process working directory.
+- Kept Run Daily, dashboard refresh and manual review writes within their existing boundaries; Copilot writes only its answer and append-only audit artifacts.
+- Verified `352 passed, 1 skipped`, compileall, demo, daily/market fixture, all V1/V2 contracts, Research Copilot CLI, MCP/Skill no-dependency coverage, Web dry-run and Playwright desktop/tablet/mobile acceptance.
+- No scoring, risk, provider-default, watchlist, portfolio, scheduler, trading or broker behavior changes.
+
 ## v1.4.0 - 2026-07-13
 
 - Added framework-independent read-only status, catalog, query, ask and evidence adapters with strict argument allowlists.

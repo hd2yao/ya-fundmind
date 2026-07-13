@@ -41,7 +41,7 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `fund_agent/historical_backfill.py` | Historical backfill observation layer. |
 | `fund_agent/news_evidence.py` | Fixture-backed news/announcement evidence collection. |
 | `fund_agent/evidence_dashboard.py` | Static dashboard generation. |
-| `fund_agent/web_console.py` | Streamlit-backed local Web Console. |
+| `fund_agent/web_console.py` | Streamlit-backed local Console for Copilot, citations, quality, review, audit and V1 pages. |
 | `fund_agent/ops.py` | Ops status and latest summary generation. |
 | `fund_agent/research_loop.py` | Daily/weekly research loop and run bundle writing. |
 | `fund_agent/review_state.py` | Manual review state read/write helpers. |
@@ -53,6 +53,7 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `fund_agent/research_query.py` | V2 compact market/fund/portfolio/news/history/quality query service. |
 | `fund_agent/research_evidence.py` | V2 JSON Pointer citations, quality/conflict gate, and Evidence Bundle builder. |
 | `fund_agent/research_copilot.py` | V2 intent guardrails, deterministic planner, and structured Research Answer. |
+| `fund_agent/research_output.py` | Shared JSON/Markdown Research Answer writer used by CLI and Web without touching the main report. |
 | `fund_agent/mcp_adapter.py` | Framework-independent allowlisted read-only Research MCP adapter. |
 | `fund_agent/mcp_gateway.py` | MCP timeout, safe error mapping, and redacted append-only audit. |
 | `fund_agent/mcp_server.py` | Optional FastMCP server and transport boundary. |

@@ -9,10 +9,10 @@
 
 ## 当前状态
 
-- 当前版本：`v1.4.0`
-- 当前 Milestone：M4 Read-only Skill / MCP 已完成，下一步 M5 Copilot Console。
+- 当前版本：`v1.5.0`
+- 当前 Milestone：M5 Copilot Console 已完成，下一步 M6 V2 Release Hardening。
 - 当前 P0：无。
-- 当前 P1：按 frontend design workflow 冻结 Copilot Console 信息架构、状态矩阵和截图验收标准。
+- 当前 P1：完成 V1/V2 兼容、安全、性能和端到端矩阵，发布 `v2.0.0-rc.1`。
 
 ## P0 Blocking
 
@@ -28,9 +28,9 @@
 
 ## P1 Current Milestone
 
-- M5 只调用 Research Copilot service，不在 UI 重复查询、证据或业务规则。
-- 保留 Market、Funds、Portfolio、News、Review、Reports 全部 V1 页面。
-- 覆盖 loading、empty、error、partial、refused、unsupported 和无 LLM 状态。
+- M6 建立 V1 artifact、旧 schema 和缺失可选字段兼容矩阵。
+- M6 完成路径隔离、prompt injection、脱敏、只读和性能预算验收。
+- M6 完成 fixture/daily/weekly/scheduler/Web/MCP 端到端验证并发布 RC。
 
 ## P2 Later Polish
 

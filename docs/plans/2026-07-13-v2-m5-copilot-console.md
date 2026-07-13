@@ -114,3 +114,14 @@ Copilot 必须显示：
 - 375/768/1440 无横向页面滚动、裁切、文字重叠或不可达导航。
 - 不修改主评分、主风险、provider 默认、watchlist、portfolio、scheduler。
 - 不输出买卖建议，不自动交易，不接券商，不承诺收益。
+
+## 实施结果
+
+状态：完成，准备发布 `v1.5.0`。
+
+- Home/Copilot/Market/Funds/Portfolio/News/Review/Reports 均完成结构化展示。
+- Copilot 复用公开 service 和共享输出 writer；主报告、主评分和主风险不变。
+- 证据引用、质量、缺口、拒绝态和脱敏 audit 已通过单元与真实浏览器验收。
+- 修复默认 review state 未跟随 `--output-dir` 的启动路径问题。
+- 375/768/1440 根页面 overflow 均为 0；Playwright console 0 errors / 0 warnings。
+- Visual Verdict 从基线 48/100 提升到 93/100，结论 `SHIP`。

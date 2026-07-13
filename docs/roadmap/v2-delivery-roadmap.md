@@ -195,6 +195,8 @@ Codex 或其他兼容工具可以读取本地研究结果并获得证据引用�
 
 ## M5：Copilot Console（`v1.5.0`）
 
+状态：完成，下一步 M6 V2 Release Hardening。
+
 ### 目标
 
 把 Research Copilot、证据、质量和人工审核整合进本地 Web Console。
