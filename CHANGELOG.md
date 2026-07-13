@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Entered V2 Research Copilot delivery mode while keeping `v1.0.3` as the stable runtime baseline.
+- Added the V2 design, architecture, M1-M6 roadmap, acceptance spec, task mapping, implementation plan, execution contract, and P0/P1/P2 backlog.
+- Defined checkpoint versions from `v1.1.0` through `v1.5.0`, followed by `v2.0.0-rc.1` and final `v2.0.0`.
+- V2 remains local, read-only, evidence-grounded, and usable without LLM; no scoring, risk, trading, broker, recommendation, or V1 contract behavior changes are included in this planning baseline.
+
 ## v1.0.3 - 2026-07-13
 
 Weekly scheduler runtime fix.

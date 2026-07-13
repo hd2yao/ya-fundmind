@@ -1,6 +1,6 @@
 # Project Structure
 
-This document is the quick map for YA FundMind OS v1. It describes what each top-level directory and major runtime file does.
+This document is the quick map for YA FundMind OS. V1 remains the stable runtime baseline while V2 Research Copilot is delivered through explicit milestone gates.
 
 ## Top-Level Directories
 
@@ -13,7 +13,8 @@ This document is the quick map for YA FundMind OS v1. It describes what each top
 | `data/cache/` | Local SQLite cache created at runtime. | No |
 | `scripts/` | Daily/weekly ops runners and launchd install/status/uninstall helpers. | Yes |
 | `ops/` | Scheduler templates for launchd and cron. | Yes |
-| `docs/` | Active V1 docs plus archived historical phase docs. | Yes |
+| `docs/` | Active V1/V2 architecture, roadmap, contracts, plans, ops and archived history. | Yes |
+| `specs/` | V2 acceptance criteria, task mapping and execution contract. | Yes |
 | `outputs/` | Generated reports, dashboards, logs, snapshots, traces, and run bundles. | No |
 | `.venv/` | Local Python environment. | No |
 
@@ -52,12 +53,17 @@ This document is the quick map for YA FundMind OS v1. It describes what each top
 
 | Path | Purpose |
 | --- | --- |
-| `README.md` | V1 user manual. |
+| `README.md` | Current user manual and V2 delivery entry point. |
 | `docs/README.md` | Documentation index and retention policy. |
 | `docs/architecture/v1-system-architecture.md` | V1 architecture and boundaries. |
+| `docs/architecture/v2-system-architecture.md` | V2 target architecture and read-only boundaries. |
 | `docs/roadmap/v1-delivery-roadmap.md` | V1 milestone roadmap and completion status. |
+| `docs/roadmap/v2-delivery-roadmap.md` | V2 M1-M6 goals, gates, versions and release rules. |
 | `docs/backlog/v1-todo.md` | V1 maintenance backlog rules. |
-| `docs/backlog/v2-ideas.md` | Ideas intentionally deferred beyond V1. |
+| `docs/backlog/v2-todo.md` | V2 P0/P1/P2 execution backlog. |
+| `docs/backlog/v2-ideas.md` | Ideas not selected for the active V2 mainline. |
+| `docs/plans/2026-07-13-v2-research-copilot-*.md` | V2 design and implementation master plan. |
+| `specs/v2-research-copilot/` | V2 spec, plan, tasks and execution contract. |
 | `docs/contracts/*.md` | Machine-readable output contracts and versioning rules. |
 | `docs/ops/*.md` | Scheduler and readiness semantics. |
 | `docs/releases/v1.0.0-release-report.md` | V1 release verification report. |
@@ -83,5 +89,5 @@ This document is the quick map for YA FundMind OS v1. It describes what each top
 
 - Delete local `.DS_Store`, `__pycache__`, `.pytest_cache`, and generated `outputs/` files when they are not needed locally.
 - Do not commit runtime cache, logs, generated dashboards, or private environment files.
-- Keep active V1 docs short and operational.
+- Keep active V1/V2 docs operational and avoid duplicating the same source of truth.
 - Move old phase plans or research notes to `docs/archive/` instead of keeping them in active directories.

@@ -1,21 +1,28 @@
-# YA FundMind OS v1
+# YA FundMind OS
 
 YA FundMind OS v1 是本地个人基金/ETF 投研工作台。它每天或每周自动运行，生成 Market Intelligence、Market Trend、Fund Detail、Portfolio Analysis、News Evidence、daily/weekly report 和本地 dashboard，并保留人工审核入口。
 
-它只做研究辅助和报告生成：不自动交易，不接券商，不输出买卖建议，不承诺收益。Agent、Skill、MCP、LLM、自动推荐、券商接入、SaaS、移动端和小程序都属于 V2，不阻塞 V1。
+它只做研究辅助和报告生成：不自动交易，不接券商，不输出买卖建议，不承诺收益。
 
 ## 当前状态
 
 - 当前版本：`v1.0.3`
+- 当前交付模式：V2 Research Copilot delivery mode
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
-- V2 想法池：`docs/backlog/v2-ideas.md`
+- V2 架构：`docs/architecture/v2-system-architecture.md`
+- V2 路线图：`docs/roadmap/v2-delivery-roadmap.md`
+- V2 Todo：`docs/backlog/v2-todo.md`
+- V2 Spec：`specs/v2-research-copilot/`
+- V2 剩余想法池：`docs/backlog/v2-ideas.md`
 - V1 验收报告：`docs/releases/v1.0.0-release-report.md`
 - 项目结构说明：`PROJECT_STRUCTURE.md`
 - 文档索引：`docs/README.md`
 
-V1 里程碑 M1 到 M6 已收口。后续新能力应先进入 V2 ideas 或新路线图，不再无限追加 Phase。
+V1 里程碑 M1 到 M6 已收口并保持稳定运行。下一大版本目标是 `v2.0.0`：建立本地、证据驱动、可解释、只读的 Research Copilot。V2 按 M1-M6 和中间版本 gate 推进，不再无限追加 Phase。
+
+V2 会增加统一研究查询、证据引用、受约束 Copilot、只读 Skill/MCP 和本地 Copilot Console。自动推荐、自动交易、券商接入、SaaS、移动端和小程序不进入本次 V2 主线。
 
 历史 Phase 计划、开源调研和旧 review 输出已归档到 `docs/archive/`，日常使用优先阅读 README、项目结构说明、contracts、ops 和 release report。
 

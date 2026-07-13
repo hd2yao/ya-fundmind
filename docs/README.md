@@ -1,17 +1,19 @@
 # Documentation Index
 
-This directory now separates active V1 documentation from historical phase artifacts.
+当前文档同时维护稳定运行的 V1 基线和正在交付的 V2 Research Copilot，不再使用无限 Phase 追加方式。
 
-## Active V1 Docs
+## Active Delivery Docs
 
 | Directory | Use |
 | --- | --- |
-| `architecture/` | V1 system architecture and boundaries. |
-| `roadmap/` | V1 delivery roadmap and completion status. |
-| `backlog/` | V1 maintenance backlog and V2 idea parking lot. |
-| `contracts/` | JSON report, provider trace, snapshot, and schema versioning contracts. |
-| `ops/` | Scheduler automation and readiness semantics. |
-| `releases/` | Release reports and verification evidence. |
+| `architecture/` | V1 稳定架构和 V2 目标架构。 |
+| `roadmap/` | V1 完成记录和 V2 M1-M6 交付门槛。 |
+| `backlog/` | V1 维护项、V2 当前 Todo 和剩余 ideas。 |
+| `plans/` | 当前大版本设计和实现主计划；完成后可归档。 |
+| `contracts/` | 机器可读输出契约和 schema versioning。 |
+| `ops/` | Scheduler automation 和 readiness semantics。 |
+| `releases/` | 版本发布报告和验证证据。 |
+| `../specs/` | V2 验收标准、任务映射和执行契约。 |
 
 ## Archive
 
@@ -21,7 +23,7 @@ This directory now separates active V1 documentation from historical phase artif
 | `archive/research/` | Initial open-source study and gap analysis. |
 | `archive/reviews/` | Historical review/proposal outputs. |
 
-Archived files are not part of the day-to-day V1 operating manual. They are retained for traceability and should not block future work.
+Archived files are not part of the day-to-day operating manual. They are retained for traceability and should not block future work.
 
 ## What Can Be Deleted Locally
 
@@ -44,7 +46,9 @@ These files are runtime or OS noise and should not be committed:
 - `docs/contracts/`
 - `docs/ops/`
 - `docs/releases/`
+- `docs/plans/` 中仍在执行的计划
+- `specs/`
 
 ## Rule For Future Docs
 
-New active docs should answer an operational question. If a document is mainly a past implementation plan or research note, put it under `docs/archive/`.
+新 active docs 应回答当前架构、契约、运行或交付问题。已完成且只用于追溯的历史实现计划和研究记录应移入 `docs/archive/`。
