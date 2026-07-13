@@ -674,6 +674,7 @@ h1 {
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
+[data-testid="stExpander"] summary:focus-visible,
 [role="tab"]:focus-visible {
   outline: 3px solid #0f766e !important;
   outline-offset: 2px;

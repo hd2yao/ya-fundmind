@@ -84,6 +84,7 @@ def test_console_css_sets_width_tab_wrap_focus_and_mobile_rules() -> None:
     assert "tab-highlight" in css
     assert 'aria-selected="true"' in css
     assert ":focus-visible" in css
+    assert "summary:focus-visible" in css
     assert "@media (max-width: 640px)" in css
     assert "max-width: 900px" in css
     assert 'data-testid="stMetricValue"' in css
