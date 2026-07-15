@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "project": {
+    "name": "YA FundMind",
+    "path": ".."
+  },
+  "recurring_tasks": [
+    {
+      "id": "ya-fundmind-daily",
+      "name": "每日投研运行",
+      "schedule": {
+        "type": "daily",
+        "hour": 21,
+        "minute": 30,
+        "timezone": "Asia/Shanghai",
+        "grace_minutes": 180
+      },
+      "runner": {
+        "type": "launchd",
+        "label": "com.ya-fundmind.daily"
+      },
+      "evidence": {
+        "status_json": "outputs/ops_status.json",
+        "status_pointer": "/daily/status",
+        "run_date_pointer": "/daily/as_of",
+        "observed_at_pointer": "/generated_at",
+        "success_values": [
+          "success"
+        ],
+        "log_glob": "outputs/logs/daily-ops-*.log",
+        "success_pattern": "daily ops log:",
+        "detail_pointers": {
+          "数据质量": "/daily/data_quality_grade",
+          "市场数据质量": "/latest_market_data_quality_grade",
+          "组合状态": "/latest_portfolio_status",
+          "市场主题数": "/latest_market_theme_count"
+        }
+      }
+    },
+    {
+      "id": "ya-fundmind-weekly",
+      "name": "每周投研汇总",
+      "schedule": {
+        "type": "weekly",
+        "iso_weekdays": [
+          6
+        ],
+        "hour": 10,
+        "minute": 0,
+        "timezone": "Asia/Shanghai",
+        "grace_minutes": 360
+      },
+      "runner": {
+        "type": "launchd",
+        "label": "com.ya-fundmind.weekly"
+      },
+      "evidence": {
+        "status_json": "outputs/ops_status.json",
+        "observed_at_pointer": "/generated_at",
+        "log_glob": "outputs/logs/weekly-ops-*.log",
+        "success_pattern": "weekly ops log:",
+        "detail_pointers": {
+          "处理运行数": "/weekly/runs_processed",
+          "缺失运行": "/weekly/missing_runs",
+          "长期历史充分": "/long_horizon/enough_history"
+        }
+      }
+    }
+  ]
+}
