@@ -9,10 +9,10 @@
 
 ## 当前状态
 
-- 当前版本：`v1.5.0`
-- 当前 Milestone：M5 Copilot Console 已完成，下一步 M6 V2 Release Hardening。
+- 当前版本：`v2.0.0-rc.1`。
+- 当前 Milestone：M6 RC 技术门已完成，正在完成 RC 发布和 Final post-RC 观察。
 - 当前 P0：无。
-- 当前 P1：完成 V1/V2 兼容、安全、性能和端到端矩阵，发布 `v2.0.0-rc.1`。
+- 当前 P1：发布 `v2.0.0-rc.1`；随后收集 3 个不同日期、满足 provenance 和数据质量门的 scheduler run，再发布 `v2.0.0`。
 
 ## P0 Blocking
 
@@ -28,9 +28,10 @@
 
 ## P1 Current Milestone
 
-- M6 建立 V1 artifact、旧 schema 和缺失可选字段兼容矩阵。
-- M6 完成路径隔离、prompt injection、脱敏、只读和性能预算验收。
-- M6 完成 fixture/daily/weekly/scheduler/Web/MCP 端到端验证并发布 RC。
+- 完成 RC PR/CI/merge 和 `v2.0.0-rc.1` tag。
+- RC 合并后收集 3 个不同日期的真实 daily scheduler run；要求版本、commit、clean tree、trigger、AKShare live 和数据质量全部合格。
+- 以 `post_rc` 模式生成通过的 `outputs/release/v2_release_readiness.json`。
+- P0/P1 清零后完成 Final PR/CI/merge、fresh verification 和 `v2.0.0` tag。
 
 ## P2 Later Polish
 

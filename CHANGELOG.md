@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## v2.0.0-rc.1 - 2026-07-15
+
+- Completed V2 M6 compatibility, security, privacy, performance and end-to-end hardening without changing V1 scoring, risk or scheduled research behavior.
+- Added strict `release-readiness` output and contract with separate `historical_compat` and provenance-bound `post_rc` observation modes.
+- Added daily run provenance for application version, exact Git commit, clean/dirty state, trigger and Python version; Final cannot be released from pre-RC history.
+- Added recursive secret/path redaction and no-follow append-only audit writes that reject symlink escape paths.
+- Hardened Chinese/English trading, position and return-guarantee guardrails, including whitespace bypasses, and forced unsafe optional renderers back to deterministic output.
+- Added strict schema validation, V1 compatibility/non-mutation matrices, 100-artifact performance budgets and six-topic CLI/MCP/Web end-to-end gates.
+- Added interruptible AKShare provider deadlines on supported POSIX main-thread calls while preserving retry, trace and cache fallback behavior.
+- Added offline socket blocking for the default pytest suite and Python 3.10/3.12 GitHub Actions coverage.
+- Added V1-to-V2 migration, troubleshooting, performance-budget and RC release evidence documentation.
+- Verified `411 passed, 1 skipped`, compileall, official MCP `1.28.1` integration (`41 passed`), responsive Web Console, real scheduler status and 16 historical AKShare compatibility runs.
+- RC publication is not Final approval: `v2.0.0` still requires three different dates of clean, scheduler-generated `2.0.0rc1` runs from the exact RC main commit.
+
 ## v1.5.0 - 2026-07-13
 
 - Added a local Research Copilot page backed by the public `ResearchCopilot` service and structured Research Answer JSON.
