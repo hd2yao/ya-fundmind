@@ -16,6 +16,7 @@ def append_research_audit(
     audit_path: Path | str,
     *,
     output_path: Path | str | None = None,
+    trusted_root: Path | str | None = None,
 ) -> Path:
     path = Path(audit_path)
     payload = asdict(answer)
@@ -41,7 +42,7 @@ def append_research_audit(
             else None
         ),
     }
-    return append_json_line(path, record)
+    return append_json_line(path, record, trusted_root=trusted_root)
 
 
 def redact_preview(question: str, *, limit: int = 160) -> str:

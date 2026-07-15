@@ -23,6 +23,7 @@ class McpToolGateway:
         adapter: Any,
         *,
         audit_path: Path | str,
+        audit_root: Path | str | None = None,
         timeout_seconds: float = 10.0,
     ):
         if (
@@ -33,6 +34,7 @@ class McpToolGateway:
             raise ValueError("timeout_seconds must be greater than 0 and at most 60")
         self.adapter = adapter
         self.audit_path = Path(audit_path)
+        self.audit_root = Path(audit_root) if audit_root is not None else self.audit_path.parent
         self.timeout_seconds = float(timeout_seconds)
 
     async def call(
@@ -105,7 +107,7 @@ class McpToolGateway:
             "error_code": error.code if error is not None else None,
             "error_message": str(error) if error is not None else None,
         }
-        append_json_line(self.audit_path, record)
+        append_json_line(self.audit_path, record, trusted_root=self.audit_root)
 
 
 def _argument_summary(arguments: dict[str, Any]) -> dict[str, Any]:

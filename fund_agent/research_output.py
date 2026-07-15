@@ -43,7 +43,12 @@ def write_research_answer_outputs(
         encoding="utf-8",
     )
     resolved_markdown.write_text(render_research_answer(answer), encoding="utf-8")
-    append_research_audit(answer, resolved_audit, output_path=resolved_json)
+    append_research_audit(
+        answer,
+        resolved_audit,
+        output_path=resolved_json,
+        trusted_root=root if audit_path is None else resolved_audit.parent,
+    )
     return ResearchAnswerOutputs(
         json_path=resolved_json,
         markdown_path=resolved_markdown,
