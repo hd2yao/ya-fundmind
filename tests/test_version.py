@@ -1,10 +1,12 @@
-import tomllib
+import re
 from pathlib import Path
 
 import fund_agent
 
 
 def test_package_version_matches_project_metadata() -> None:
-    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    project = Path("pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'^version = "([^"]+)"$', project, re.MULTILINE)
 
-    assert fund_agent.__version__ == project["project"]["version"]
+    assert match is not None
+    assert fund_agent.__version__ == match.group(1)
