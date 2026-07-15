@@ -15,3 +15,9 @@ def test_default_pytest_has_an_autouse_network_guard() -> None:
 
     assert "autouse=True" in conftest
     assert "network access is disabled in default pytest" in conftest
+
+
+def test_playwright_mcp_session_artifacts_are_ignored() -> None:
+    gitignore = Path(".gitignore").read_text(encoding="utf-8").splitlines()
+
+    assert ".playwright-mcp/" in gitignore
