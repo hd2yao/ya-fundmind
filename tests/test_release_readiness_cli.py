@@ -8,7 +8,14 @@ def _result(status: str) -> dict:
         "schema_version": "1.0",
         "generated_at": "2026-07-13T00:00:00+00:00",
         "generator": "fund_agent",
-        "release_target": "v2.0.0",
+        "release_target": "v2.0.0-rc.1",
+        "observation_mode": "historical_compat",
+        "required_provenance": {
+            "app_version": None,
+            "git_commit": None,
+            "git_dirty": None,
+            "triggers": [],
+        },
         "status": status,
         "minimum_valid_runs": 3,
         "valid_run_count": 3 if status == "pass" else 0,
@@ -70,3 +77,34 @@ def test_validate_contract_cli_accepts_release_readiness(tmp_path) -> None:
     exit_code = main(["validate-contract", "--release-readiness", str(path)])
 
     assert exit_code == 0
+
+
+def test_release_readiness_cli_forwards_post_rc_provenance_requirements(
+    monkeypatch, tmp_path
+) -> None:
+    captured = {}
+
+    def evaluate(*args, **kwargs):
+        captured.update(kwargs)
+        return _result("fail")
+
+    monkeypatch.setattr("fund_agent.cli.evaluate_release_readiness", evaluate)
+
+    exit_code = main(
+        [
+            "release-readiness",
+            "--output-dir",
+            str(tmp_path),
+            "--observation-mode",
+            "post_rc",
+            "--required-app-version",
+            "2.0.0rc1",
+            "--required-git-commit",
+            "a" * 40,
+        ]
+    )
+
+    assert exit_code == 1
+    assert captured["observation_mode"] == "post_rc"
+    assert captured["required_app_version"] == "2.0.0rc1"
+    assert captured["required_git_commit"] == "a" * 40

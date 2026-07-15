@@ -18,3 +18,5 @@ def test_daily_ops_script_keeps_market_intelligence_disabled_by_default():
     assert "--provider \"${PROVIDER}\"" in text
     assert "--watchlist-file \"${WATCHLIST_FILE}\"" in text
     assert "REFRESH_DASHBOARD" in text
+    assert 'RUN_TRIGGER="${RUN_TRIGGER:-daily_ops}"' in text
+    assert "export RUN_TRIGGER" in text

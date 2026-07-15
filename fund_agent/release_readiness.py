@@ -25,14 +25,22 @@ PERFORMANCE_BUDGETS_MS = {
     "market_answer": 2000.0,
 }
 NON_LIVE_PROVIDERS = {"fixture", "demo", "synthetic", "cache:fixture"}
+OBSERVATION_MODES = {"historical_compat", "post_rc"}
+SCHEDULER_TRIGGERS = {"daily_ops", "launchd", "scheduler"}
 
 
 def evaluate_release_readiness(
     output_dir: Path | str,
     *,
     minimum_valid_runs: int = 3,
-    release_target: str = "v2.0.0",
+    release_target: str = "v2.0.0-rc.1",
+    observation_mode: str = "historical_compat",
+    required_app_version: str | None = None,
+    required_git_commit: str | None = None,
 ) -> dict[str, Any]:
+    mode = str(observation_mode)
+    if mode not in OBSERVATION_MODES:
+        raise ValueError(f"unsupported observation mode: {observation_mode}")
     root = Path(output_dir)
     runs_dir = root / "runs"
     run_dirs = sorted(
@@ -40,12 +48,26 @@ def evaluate_release_readiness(
         for path in runs_dir.iterdir()
         if path.is_dir() and _parse_date(path.name) is not None
     ) if runs_dir.exists() else []
-    observations = [inspect_run_bundle(path) for path in run_dirs]
+    observations = [
+        inspect_run_bundle(
+            path,
+            observation_mode=mode,
+            required_app_version=required_app_version,
+            required_git_commit=required_git_commit,
+        )
+        for path in run_dirs
+    ]
     valid = [item for item in observations if item["status"] == "valid"]
 
     contract_summary = _contract_summary(root)
     performance = _measure_performance(root)
     blockers: list[str] = []
+    if str(release_target) == "v2.0.0" and mode != "post_rc":
+        blockers.append("final_release_requires_post_rc_observation")
+    if mode == "post_rc" and not required_app_version:
+        blockers.append("required_app_version_missing")
+    if mode == "post_rc" and not required_git_commit:
+        blockers.append("required_git_commit_missing")
     if len(valid) < max(int(minimum_valid_runs), 1):
         blockers.append("insufficient_valid_release_runs")
     if not contract_summary["ok"]:
@@ -63,6 +85,13 @@ def evaluate_release_readiness(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generator": "fund_agent",
         "release_target": str(release_target),
+        "observation_mode": mode,
+        "required_provenance": {
+            "app_version": required_app_version,
+            "git_commit": required_git_commit,
+            "git_dirty": False if mode == "post_rc" else None,
+            "triggers": sorted(SCHEDULER_TRIGGERS) if mode == "post_rc" else [],
+        },
         "status": "pass" if not blockers else "fail",
         "minimum_valid_runs": max(int(minimum_valid_runs), 1),
         "valid_run_count": len(valid),
@@ -81,7 +110,13 @@ def evaluate_release_readiness(
     }
 
 
-def inspect_run_bundle(run_dir: Path | str) -> dict[str, Any]:
+def inspect_run_bundle(
+    run_dir: Path | str,
+    *,
+    observation_mode: str = "historical_compat",
+    required_app_version: str | None = None,
+    required_git_commit: str | None = None,
+) -> dict[str, Any]:
     root = Path(run_dir)
     reasons: list[str] = []
     run_date = _parse_date(root.name)
@@ -111,6 +146,22 @@ def inspect_run_bundle(run_dir: Path | str) -> dict[str, Any]:
         reasons.append("daily_summary_not_success")
     if metadata.get("status") != "success":
         reasons.append("run_metadata_not_success")
+
+    provenance = metadata.get("provenance")
+    if observation_mode == "post_rc":
+        if not isinstance(provenance, dict):
+            reasons.append("run_provenance_missing")
+            provenance = {}
+        if required_app_version and provenance.get("app_version") != required_app_version:
+            reasons.append("run_app_version_mismatch")
+        if required_git_commit and provenance.get("git_commit") != required_git_commit:
+            reasons.append("run_git_commit_mismatch")
+        if provenance.get("git_dirty") is not False:
+            reasons.append("run_git_dirty")
+        if provenance.get("trigger") not in SCHEDULER_TRIGGERS:
+            reasons.append("run_trigger_not_scheduler")
+    elif not isinstance(provenance, dict):
+        provenance = {}
 
     step_status = {
         str(item.get("step_name")): str(item.get("status"))
@@ -178,6 +229,7 @@ def inspect_run_bundle(run_dir: Path | str) -> dict[str, Any]:
         "provider_fallback_used": fallback_used,
         "provider_warning_count": len(provider_warnings),
         "contract_status": contract_status,
+        "provenance": provenance,
         "reasons": _deduplicate(reasons),
     }
 

@@ -17,6 +17,7 @@
 - 默认 pytest/CI 不访问真实网络；AKShare/Tiantian/MCP/Streamlit 继续 optional。
 - 历史 run 只读，不复制、改写或伪造日期。RC 观察必须来自不同日期的真实成功 run。
 - Release readiness 只判定 V2 发布质量，不改变 `long_horizon` 或主模型 promotion gate。
+- pre-RC 历史 run 只能用于 `historical_compat`；Final 必须使用带版本、commit、dirty 与 trigger 溯源的 `post_rc` run。
 
 ## Task 1：计划和基线
 
@@ -64,6 +65,7 @@ Expected: FAIL，release readiness service/CLI/contract 尚不存在。
 - run 必须有 `status=success`、daily/validate_contract step success、`missing_artifacts=[]`、`not_production_model=true`、`main_score_changed=false`、`main_risk_changed=false`。
 - provider 必须非 fixture/synthetic、`live_row_count>0`、`fallback_used=false`、无 critical warning。
 - 输出 `outputs/release/v2_release_readiness.json`，不改其他 artifact。
+- `run_metadata.json` 新增 `provenance`；`post_rc` 模式精确校验 RC app version、merge commit、clean worktree 和 scheduler trigger。
 
 **Step 4: GREEN 和 focused regression**
 
@@ -158,7 +160,7 @@ Run: `python -m pytest -q tests/test_v2_compatibility_matrix.py tests/test_v2_se
 **Commands:**
 
 ```bash
-python -m fund_agent.cli release-readiness --output-dir outputs --minimum-valid-runs 3 --json-output outputs/release/v2_release_readiness.json
+python -m fund_agent.cli release-readiness --output-dir outputs --minimum-valid-runs 3 --release-target v2.0.0 --observation-mode post_rc --required-app-version 2.0.0rc1 --required-git-commit "$(git rev-parse HEAD)" --json-output outputs/release/v2_release_readiness.json
 python -m fund_agent.cli validate-contract --output-dir outputs
 bash scripts/status_launchd_scheduler.sh
 python -m fund_agent.cli web-console --output-dir outputs --dry-run
@@ -166,7 +168,7 @@ python -m fund_agent.cli web-console --output-dir outputs --dry-run
 
 **Acceptance:**
 
-- 真实 observation 使用 2026-07-10、2026-07-11、2026-07-12 或更新日期，必须由 readiness gate 逐项验证；不得手写为 pass。
+- 2026-07-10、2026-07-11、2026-07-12 只作为 pre-RC compatibility 样本；真实 Final observation 必须来自 RC merge 后三个不同日期的新 run，并由 `post_rc` readiness 逐项验证，不得手写为 pass。
 - daily/weekly installed+loaded，最近 exit code 0；21:30 daily/weekly 配置不改。
 - July 11 warning 允许保留为已观察质量事件，但不能有 fallback/critical/degraded。
 - optional MCP 在隔离 venv 安装官方稳定 1.x 并跑 integration；未安装不得报成功。

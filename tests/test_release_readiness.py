@@ -118,6 +118,7 @@ def _write_run(
     missing_artifacts: list[str] | None = None,
     main_score_changed: bool = False,
     main_risk_changed: bool = False,
+    provenance: dict | None = None,
 ) -> Path:
     run_dir = output_dir / "runs" / as_of
     provider_health = [
@@ -148,6 +149,7 @@ def _write_run(
             {"step_name": "daily", "status": "success"},
             {"step_name": "validate_contract", "status": "success"},
         ],
+        **({"provenance": provenance} if provenance is not None else {}),
     }
     _write_json(run_dir / "daily_research_summary.json", summary)
     _write_json(run_dir / "run_metadata.json", metadata)
@@ -170,7 +172,7 @@ def test_release_readiness_passes_with_three_distinct_real_valid_runs(tmp_path) 
     result = evaluate_release_readiness(
         output_dir,
         minimum_valid_runs=3,
-        release_target="v2.0.0",
+        release_target="v2.0.0-rc.1",
     )
 
     assert result["status"] == "pass"
@@ -265,3 +267,125 @@ def test_release_readiness_fails_when_real_history_is_insufficient(tmp_path) -> 
     assert result["status"] == "fail"
     assert result["valid_run_count"] == 1
     assert "insufficient_valid_release_runs" in result["blockers"]
+
+
+def test_post_rc_mode_requires_matching_clean_scheduler_provenance(tmp_path) -> None:
+    output_dir = tmp_path / "outputs"
+    _write_contract_baseline(output_dir)
+    commit = "a" * 40
+    _write_run(
+        output_dir,
+        "2026-07-12",
+        provenance={
+            "app_version": "2.0.0rc1",
+            "git_commit": commit,
+            "git_dirty": False,
+            "trigger": "daily_ops",
+            "python_version": "3.12.0",
+        },
+    )
+
+    result = evaluate_release_readiness(
+        output_dir,
+        minimum_valid_runs=1,
+        observation_mode="post_rc",
+        required_app_version="2.0.0rc1",
+        required_git_commit=commit,
+    )
+
+    assert result["status"] == "pass"
+    assert result["observation_mode"] == "post_rc"
+    assert result["valid_run_count"] == 1
+    assert result["run_observations"][0]["provenance"]["git_commit"] == commit
+
+
+@pytest.mark.parametrize(
+    ("provenance", "reason"),
+    (
+        (None, "run_provenance_missing"),
+        (
+            {
+                "app_version": "1.5.0",
+                "git_commit": "a" * 40,
+                "git_dirty": False,
+                "trigger": "daily_ops",
+            },
+            "run_app_version_mismatch",
+        ),
+        (
+            {
+                "app_version": "2.0.0rc1",
+                "git_commit": "b" * 40,
+                "git_dirty": False,
+                "trigger": "daily_ops",
+            },
+            "run_git_commit_mismatch",
+        ),
+        (
+            {
+                "app_version": "2.0.0rc1",
+                "git_commit": "a" * 40,
+                "git_dirty": True,
+                "trigger": "daily_ops",
+            },
+            "run_git_dirty",
+        ),
+        (
+            {
+                "app_version": "2.0.0rc1",
+                "git_commit": "a" * 40,
+                "git_dirty": False,
+                "trigger": "manual",
+            },
+            "run_trigger_not_scheduler",
+        ),
+    ),
+)
+def test_post_rc_mode_excludes_unprovenanced_runs(tmp_path, provenance, reason) -> None:
+    run_dir = _write_run(
+        tmp_path / "outputs",
+        "2026-07-12",
+        provenance=provenance,
+    )
+
+    observation = inspect_run_bundle(
+        run_dir,
+        observation_mode="post_rc",
+        required_app_version="2.0.0rc1",
+        required_git_commit="a" * 40,
+    )
+
+    assert observation["status"] == "excluded"
+    assert reason in observation["reasons"]
+
+
+def test_post_rc_mode_fails_closed_without_required_version_and_commit(tmp_path) -> None:
+    output_dir = tmp_path / "outputs"
+    _write_contract_baseline(output_dir)
+    _write_run(output_dir, "2026-07-12")
+
+    result = evaluate_release_readiness(
+        output_dir,
+        minimum_valid_runs=1,
+        observation_mode="post_rc",
+    )
+
+    assert result["status"] == "fail"
+    assert "required_app_version_missing" in result["blockers"]
+    assert "required_git_commit_missing" in result["blockers"]
+
+
+def test_final_release_target_cannot_pass_historical_compat_mode(tmp_path) -> None:
+    output_dir = tmp_path / "outputs"
+    _write_contract_baseline(output_dir)
+    _write_run(output_dir, "2026-07-12")
+
+    result = evaluate_release_readiness(
+        output_dir,
+        minimum_valid_runs=1,
+        release_target="v2.0.0",
+        observation_mode="historical_compat",
+    )
+
+    assert result["status"] == "fail"
+    assert "final_release_requires_post_rc_observation" in result["blockers"]

@@ -106,6 +106,8 @@ CORE_FIELDS = {
         "generated_at",
         "generator",
         "release_target",
+        "observation_mode",
+        "required_provenance",
         "status",
         "minimum_valid_runs",
         "valid_run_count",
@@ -283,7 +285,12 @@ def _validate_shape(payload: dict[str, Any], contract_type: str, errors: list[st
         "evidence_bundle": ("metadata",),
         "research_answer": ("intent", "metadata"),
         "mcp_tool_result": ("data", "metadata"),
-        "release_readiness": ("contract_summary", "performance", "boundaries"),
+        "release_readiness": (
+            "contract_summary",
+            "performance",
+            "boundaries",
+            "required_provenance",
+        ),
     }
     for field in list_fields.get(contract_type, ()):
         if field in payload and not isinstance(payload[field], list):
@@ -480,6 +487,25 @@ def _validate_release_readiness_values(payload: dict[str, Any], errors: list[str
             errors.append(f"Field must be a non-negative integer: {field}")
     if not isinstance(payload.get("release_target"), str) or not payload.get("release_target"):
         errors.append("Field must be a non-empty string: release_target")
+    mode = payload.get("observation_mode")
+    if mode not in {"historical_compat", "post_rc"}:
+        errors.append(f"Unsupported release observation mode: {mode}")
+    provenance = payload.get("required_provenance")
+    if mode == "post_rc" and isinstance(provenance, dict):
+        if not provenance.get("app_version"):
+            errors.append("Post-RC readiness requires app_version provenance")
+        if not provenance.get("git_commit"):
+            errors.append("Post-RC readiness requires git_commit provenance")
+        if provenance.get("git_dirty") is not False:
+            errors.append("Post-RC readiness requires git_dirty=false")
+        if not isinstance(provenance.get("triggers"), list) or not provenance.get("triggers"):
+            errors.append("Post-RC readiness requires scheduler triggers")
+    if (
+        payload.get("status") == "pass"
+        and payload.get("release_target") == "v2.0.0"
+        and mode != "post_rc"
+    ):
+        errors.append("Final v2.0.0 readiness requires post_rc observation mode")
     boundaries = payload.get("boundaries")
     if isinstance(boundaries, dict):
         expected = {
