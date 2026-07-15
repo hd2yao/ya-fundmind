@@ -87,15 +87,16 @@
 
 ## Batch 6：M6 Release Hardening
 
-- [ ] `T601` 完成 V1/V2 contract 和旧 artifact 兼容矩阵。
+- [x] `T601` 完成 V1/V2 contract 和旧 artifact 兼容矩阵。
   映射：`AC-021`、`AC-022`
-- [ ] `T602` 完成安全、隐私、prompt injection、路径隔离和只读审查。
+- [x] `T602` 完成安全、隐私、prompt injection、路径隔离和只读审查。
   映射：`AC-013` 至 `AC-017`、`AC-025`
-- [ ] `T603` 完成性能预算和大 outputs 验证。
+- [x] `T603` 完成性能预算和大 outputs 验证。
   映射：`AC-023`
-- [ ] `T604` 完成 fixture/live optional/daily/weekly/scheduler/Web/MCP e2e。
+- [x] `T604` 完成 fixture/live optional/daily/weekly/scheduler/Web/MCP e2e。
   映射：`AC-022` 至 `AC-024`
 - [ ] `T605` 更新 README、migration、ops、contracts、release report，发布 `v2.0.0-rc.1`。
+  状态：文档和本地验收完成，等待 PR #29 CI/merge/tag 后勾选。
 - [ ] `T606` 观察至少 3 个有效 daily run 并清零 P0/P1。
   映射：`AC-024`
 - [ ] `T607` fresh final verification、PR/CI/merge，发布 `v2.0.0`。

@@ -5,7 +5,9 @@ import contextlib
 import io
 import concurrent.futures
 import os
+import signal
 import socket
+import threading
 import time
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
@@ -22,6 +24,10 @@ from .portfolio import PortfolioHolding
 
 class ProviderUnavailable(RuntimeError):
     """Raised when an optional live provider is not available."""
+
+
+class ProviderCallTimeout(TimeoutError):
+    """Raised when a live provider call exceeds its configured deadline."""
 
 
 class TiantianProviderError(RuntimeError):
@@ -690,10 +696,45 @@ def _call_with_timeout(method, *, timeout_seconds: float, verbose: bool, **kwarg
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             return method(**kwargs)
 
+    if (
+        hasattr(signal, "SIGALRM")
+        and hasattr(signal, "setitimer")
+        and threading.current_thread() is threading.main_thread()
+    ):
+        previous_handler = signal.getsignal(signal.SIGALRM)
+        previous_timer = signal.getitimer(signal.ITIMER_REAL)
+        started = time.monotonic()
+
+        def timeout_handler(_signum, _frame):
+            raise ProviderCallTimeout(
+                f"provider call timed out after {timeout_seconds:g} seconds"
+            )
+
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
+        try:
+            return call()
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous_handler)
+            previous_delay, previous_interval = previous_timer
+            if previous_delay > 0:
+                elapsed = time.monotonic() - started
+                signal.setitimer(
+                    signal.ITIMER_REAL,
+                    max(previous_delay - elapsed, 0.000001),
+                    previous_interval,
+                )
+
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
         future = executor.submit(call)
-        return future.result(timeout=timeout_seconds)
+        try:
+            return future.result(timeout=timeout_seconds)
+        except concurrent.futures.TimeoutError as exc:
+            raise ProviderCallTimeout(
+                f"provider call timed out after {timeout_seconds:g} seconds"
+            ) from exc
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
 

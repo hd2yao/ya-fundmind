@@ -15,6 +15,7 @@ from .models import (
     ResearchContext,
     ResearchFinding,
 )
+from .redaction import sanitize_data
 
 
 QUALITY_ORDER = {"normal": 0, "unknown": 1, "warning": 2, "degraded": 3, "blocked": 4}
@@ -144,7 +145,7 @@ def build_evidence_ref(
     claim_type: str,
     metadata: dict[str, Any] | None = None,
 ) -> EvidenceRef:
-    value = resolve_json_pointer(payload, json_pointer)
+    value = sanitize_data(resolve_json_pointer(payload, json_pointer))
     identity = f"{descriptor.artifact_id}:{descriptor.content_hash}:{json_pointer}:{claim_type}"
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
     return EvidenceRef(

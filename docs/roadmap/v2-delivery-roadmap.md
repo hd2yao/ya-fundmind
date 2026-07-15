@@ -14,7 +14,7 @@
 | M3 | `v1.3.0` | Research Copilot CLI 可用 |
 | M4 | `v1.4.0` | 只读 Skill/MCP 可用 |
 | M5 | `v1.5.0` | 本地 Copilot Console 可用 |
-| M6 RC | `v2.0.0-rc.1` | V2 候选发布 |
+| M6 RC | `v2.0.0-rc.1` | V2 候选发布，技术门完成 |
 | V2 Final | `v2.0.0` | 全部验收通过 |
 
 每个 Milestone 必须：
@@ -42,7 +42,7 @@
 
 ## M1：Research Data Access（`v1.1.0`）
 
-状态：完成，下一步 M2 Evidence & Citation。
+状态：完成。
 
 ### 目标
 
@@ -124,7 +124,7 @@ python -m fund_agent.cli research-query --output-dir outputs --topic quality
 
 ## M3：Research Copilot Core（`v1.3.0`）
 
-状态：完成，下一步 M4 Read-only Skill / MCP。
+状态：完成。
 
 ### 目标
 
@@ -161,7 +161,7 @@ python -m fund_agent.cli research-query --output-dir outputs --topic quality
 
 ## M4：Read-only Skill / MCP（`v1.4.0`）
 
-状态：完成，下一步 M5 Copilot Console。
+状态：完成。
 
 ### 目标
 
@@ -195,7 +195,7 @@ Codex 或其他兼容工具可以读取本地研究结果并获得证据引用�
 
 ## M5：Copilot Console（`v1.5.0`）
 
-状态：完成，下一步 M6 V2 Release Hardening。
+状态：完成。
 
 ### 目标
 
@@ -229,6 +229,8 @@ Codex 或其他兼容工具可以读取本地研究结果并获得证据引用�
 
 ## M6：V2 Release Hardening（`v2.0.0-rc.1` -> `v2.0.0`）
 
+状态：RC 技术实现、兼容、安全、性能、端到端和文档门已完成；RC 发布流程进行中。Final 尚未通过，因为 post-RC 的 3 个不同日期 scheduler run 必须在 RC 合并后产生，不能用历史数据替代。
+
 ### 目标
 
 完成兼容、安全、性能、文档、迁移和真实本地运行验收，发布 V2。
@@ -241,7 +243,7 @@ Codex 或其他兼容工具可以读取本地研究结果并获得证据引用�
 - 增加性能预算：catalog/query/answer 在本地典型 outputs 下可交互使用。
 - 完成敏感信息、路径隔离、prompt injection 和只读边界审查。
 - 编写 V1 -> V2 迁移说明、用户手册、故障排查和 release report。
-- RC 观察至少 3 个有效 daily run；发现 P0/P1 只发 patch RC。
+- RC 合并后观察至少 3 个不同日期的有效 daily scheduler run；发现 P0/P1 只发 patch RC。
 
 ### 用户可见效果
 
@@ -257,6 +259,32 @@ V2 可以稳定作为日常本地研究入口，同时 V1 自动任务和所有�
 - `main_score_changed=false`、`main_risk_changed=false`。
 - 没有交易、券商、买卖建议或收益承诺。
 - README、CHANGELOG、architecture、roadmap、contracts、ops 和 release report 完整。
+- 三个 run 的 `app_version=2.0.0rc1`、`git_commit=<RC main merge commit>`、`git_dirty=false`、`trigger=daily_ops/launchd/scheduler`。
+- 三个 run 均为 AKShare live rows > 0，且无 fallback、critical warning 或 degraded quality。
+
+### Release Readiness
+
+RC 前兼容检查使用：
+
+```bash
+python -m fund_agent.cli release-readiness \
+  --output-dir outputs \
+  --release-target v2.0.0-rc.1 \
+  --observation-mode historical_compat
+```
+
+Final 只能使用：
+
+```bash
+python -m fund_agent.cli release-readiness \
+  --output-dir outputs \
+  --release-target v2.0.0 \
+  --observation-mode post_rc \
+  --required-app-version 2.0.0rc1 \
+  --required-git-commit "$(git rev-parse HEAD)"
+```
+
+`historical_compat` 通过不等于 Final 通过，也不允许修改历史 run metadata 补门。
 
 ## 自主推进规则
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -100,6 +101,24 @@ CORE_FIELDS = {
         "warnings",
         "metadata",
     ),
+    "release_readiness": (
+        "schema_version",
+        "generated_at",
+        "generator",
+        "release_target",
+        "observation_mode",
+        "required_provenance",
+        "status",
+        "minimum_valid_runs",
+        "valid_run_count",
+        "observed_run_dates",
+        "run_observations",
+        "contract_summary",
+        "performance",
+        "boundaries",
+        "blockers",
+        "warnings",
+    ),
 }
 
 
@@ -121,7 +140,12 @@ class ContractValidationSummary:
         return all(result.ok for result in self.results)
 
 
-def validate_contract_file(path: Path | str, contract_type: str) -> ContractValidationResult:
+def validate_contract_file(
+    path: Path | str,
+    contract_type: str,
+    *,
+    strict: bool = False,
+) -> ContractValidationResult:
     resolved_path = Path(path)
     errors: list[str] = []
     warnings: list[str] = []
@@ -145,9 +169,9 @@ def validate_contract_file(path: Path | str, contract_type: str) -> ContractVali
             ok=False,
             errors=tuple(errors),
         )
-    _validate_metadata(payload, contract_type, errors, warnings)
+    _validate_metadata(payload, contract_type, errors, warnings, strict=strict)
     required_fields = CORE_FIELDS[contract_type]
-    if contract_type == "snapshot" and "schema_version" not in payload:
+    if contract_type == "snapshot" and "schema_version" not in payload and not strict:
         required_fields = ("as_of", "candidates", "valuations")
     for field in required_fields:
         if field not in payload:
@@ -163,6 +187,8 @@ def validate_contract_file(path: Path | str, contract_type: str) -> ContractVali
         _validate_research_answer_values(payload, errors)
     elif contract_type == "mcp_tool_result":
         _validate_mcp_tool_result_values(payload, errors)
+    elif contract_type == "release_readiness":
+        _validate_release_readiness_values(payload, errors)
     return ContractValidationResult(
         path=resolved_path,
         contract_type=contract_type,
@@ -172,7 +198,11 @@ def validate_contract_file(path: Path | str, contract_type: str) -> ContractVali
     )
 
 
-def validate_output_dir(output_dir: Path | str) -> ContractValidationSummary:
+def validate_output_dir(
+    output_dir: Path | str,
+    *,
+    strict: bool = False,
+) -> ContractValidationSummary:
     resolved_dir = Path(output_dir)
     candidates = [
         (resolved_dir / "fund_agent_report.json", "report"),
@@ -181,9 +211,10 @@ def validate_output_dir(output_dir: Path | str) -> ContractValidationSummary:
         (resolved_dir / "research_queries" / "research_context.json", "research_context"),
         (resolved_dir / "evidence" / "research_evidence.json", "evidence_bundle"),
         (resolved_dir / "copilot" / "research_answer.json", "research_answer"),
+        (resolved_dir / "release" / "v2_release_readiness.json", "release_readiness"),
     ]
     results = [
-        validate_contract_file(path, contract_type)
+        validate_contract_file(path, contract_type, strict=strict)
         for path, contract_type in candidates
         if path is not None and path.exists()
     ]
@@ -195,22 +226,41 @@ def _validate_metadata(
     contract_type: str,
     errors: list[str],
     warnings: list[str],
+    *,
+    strict: bool,
 ) -> None:
     schema_version = payload.get("schema_version")
-    if schema_version is None and contract_type == "snapshot":
+    if schema_version is None and contract_type == "snapshot" and not strict:
         warnings.append("Legacy snapshot missing schema_version; accepted for compatibility.")
     elif schema_version is None:
         errors.append("Missing core field: schema_version")
     elif str(schema_version) != SCHEMA_VERSION:
-        warnings.append(f"Unexpected schema_version {schema_version}; validator expects {SCHEMA_VERSION}.")
+        message = (
+            f"Unexpected schema_version {schema_version}; validator expects "
+            f"{SCHEMA_VERSION}."
+        )
+        if strict:
+            errors.append(message)
+        else:
+            warnings.append(message)
     if payload.get("generator") != GENERATOR and not (
         contract_type == "snapshot" and "schema_version" not in payload
     ):
         errors.append("Missing or invalid generator")
     if not payload.get("generated_at") and not (
-        contract_type == "snapshot" and "schema_version" not in payload
+        contract_type == "snapshot" and "schema_version" not in payload and not strict
     ):
         errors.append("Missing core field: generated_at")
+    elif strict and payload.get("generated_at"):
+        try:
+            generated_at = datetime.fromisoformat(
+                str(payload["generated_at"]).replace("Z", "+00:00")
+            )
+        except ValueError:
+            errors.append("Invalid generated_at timestamp")
+        else:
+            if generated_at.tzinfo is None:
+                errors.append("generated_at timestamp must include timezone")
 
 
 def _validate_shape(payload: dict[str, Any], contract_type: str, errors: list[str]) -> None:
@@ -221,6 +271,12 @@ def _validate_shape(payload: dict[str, Any], contract_type: str, errors: list[st
         "evidence_bundle": ("findings", "evidence", "data_gaps", "warnings"),
         "research_answer": ("findings", "evidence", "data_gaps", "warnings"),
         "mcp_tool_result": ("warnings",),
+        "release_readiness": (
+            "observed_run_dates",
+            "run_observations",
+            "blockers",
+            "warnings",
+        ),
     }
     dict_fields = {
         "report": ("valuations", "report_metadata"),
@@ -229,6 +285,12 @@ def _validate_shape(payload: dict[str, Any], contract_type: str, errors: list[st
         "evidence_bundle": ("metadata",),
         "research_answer": ("intent", "metadata"),
         "mcp_tool_result": ("data", "metadata"),
+        "release_readiness": (
+            "contract_summary",
+            "performance",
+            "boundaries",
+            "required_provenance",
+        ),
     }
     for field in list_fields.get(contract_type, ()):
         if field in payload and not isinstance(payload[field], list):
@@ -359,6 +421,20 @@ def _validate_research_answer_values(payload: dict[str, Any], errors: list[str])
         errors.append("Field must be true: not_investment_advice")
     if status == "refused" and not payload.get("blocked_reason"):
         errors.append("Refused answer must include blocked_reason")
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        expected_boundaries = {
+            "read_only": True,
+            "not_production_model": True,
+            "main_score_changed": False,
+            "main_risk_changed": False,
+        }
+        for field, expected in expected_boundaries.items():
+            if metadata.get(field) is not expected:
+                errors.append(
+                    f"research_answer metadata.{field} must be "
+                    f"{str(expected).lower()}"
+                )
 
     evidence_items = payload.get("evidence")
     findings = payload.get("findings")
@@ -400,6 +476,62 @@ def _validate_mcp_tool_result_values(payload: dict[str, Any], errors: list[str])
     metadata = payload.get("metadata")
     if isinstance(metadata, dict) and metadata.get("read_only") is not True:
         errors.append("MCP tool result metadata.read_only must be true")
+
+
+def _validate_release_readiness_values(payload: dict[str, Any], errors: list[str]) -> None:
+    if payload.get("status") not in {"pass", "fail"}:
+        errors.append(f"Unsupported release readiness status: {payload.get('status')}")
+    for field in ("minimum_valid_runs", "valid_run_count"):
+        value = payload.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            errors.append(f"Field must be a non-negative integer: {field}")
+    if not isinstance(payload.get("release_target"), str) or not payload.get("release_target"):
+        errors.append("Field must be a non-empty string: release_target")
+    mode = payload.get("observation_mode")
+    if mode not in {"historical_compat", "post_rc"}:
+        errors.append(f"Unsupported release observation mode: {mode}")
+    provenance = payload.get("required_provenance")
+    if mode == "post_rc" and isinstance(provenance, dict):
+        if not provenance.get("app_version"):
+            errors.append("Post-RC readiness requires app_version provenance")
+        if not provenance.get("git_commit"):
+            errors.append("Post-RC readiness requires git_commit provenance")
+        if provenance.get("git_dirty") is not False:
+            errors.append("Post-RC readiness requires git_dirty=false")
+        if not isinstance(provenance.get("triggers"), list) or not provenance.get("triggers"):
+            errors.append("Post-RC readiness requires scheduler triggers")
+    if (
+        payload.get("status") == "pass"
+        and payload.get("release_target") == "v2.0.0"
+        and mode != "post_rc"
+    ):
+        errors.append("Final v2.0.0 readiness requires post_rc observation mode")
+    boundaries = payload.get("boundaries")
+    if isinstance(boundaries, dict):
+        expected = {
+            "not_production_model": True,
+            "main_score_changed": False,
+            "main_risk_changed": False,
+            "trading_enabled": False,
+        }
+        for field, value in expected.items():
+            if boundaries.get(field) is not value:
+                errors.append(f"Invalid release boundary: {field}")
+    performance = payload.get("performance")
+    if isinstance(performance, dict) and not isinstance(performance.get("within_budget"), bool):
+        errors.append("Field must be a boolean: performance.within_budget")
+    if payload.get("status") == "pass":
+        minimum = payload.get("minimum_valid_runs")
+        valid = payload.get("valid_run_count")
+        if isinstance(minimum, int) and isinstance(valid, int) and valid < minimum:
+            errors.append("Passing release readiness requires enough valid runs")
+        if payload.get("blockers"):
+            errors.append("Passing release readiness cannot contain blockers")
+        contract_summary = payload.get("contract_summary")
+        if isinstance(contract_summary, dict) and contract_summary.get("ok") is not True:
+            errors.append("Passing release readiness requires valid contracts")
+        if isinstance(performance, dict) and performance.get("within_budget") is not True:
+            errors.append("Passing release readiness requires performance within budget")
 
 
 def _latest_trace(output_dir: Path) -> Path | None:

@@ -7,6 +7,7 @@ from typing import Any, Iterable
 
 from .artifacts import ArtifactCatalog, ArtifactLoadResult, ArtifactLoader
 from .models import ArtifactDescriptor, ResearchContext
+from .redaction import sanitize_data
 
 
 SUPPORTED_RESEARCH_TOPICS = ("market", "fund", "portfolio", "news", "history", "quality")
@@ -97,7 +98,7 @@ class ResearchQueryService:
             status=status,
             code=normalized_code,
             descriptors=descriptors,
-            data=data,
+            data=sanitize_data(data),
             warnings=warnings,
         )
 

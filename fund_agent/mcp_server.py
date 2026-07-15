@@ -20,9 +20,17 @@ def create_mcp_server(
 ):
     FastMCP, ToolError = _load_mcp_api()
     resolved_output_dir = Path(output_dir)
+    resolved_audit_path = (
+        Path(audit_path)
+        if audit_path is not None
+        else resolved_output_dir / "audit" / "mcp_calls.jsonl"
+    )
     gateway = McpToolGateway(
         ResearchMcpAdapter(resolved_output_dir),
-        audit_path=audit_path or resolved_output_dir / "audit" / "mcp_calls.jsonl",
+        audit_path=resolved_audit_path,
+        audit_root=(
+            resolved_output_dir if audit_path is None else resolved_audit_path.parent
+        ),
         timeout_seconds=timeout_seconds,
     )
     server = FastMCP(

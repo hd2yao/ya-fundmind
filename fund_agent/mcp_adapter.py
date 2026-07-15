@@ -9,6 +9,7 @@ from typing import Any
 
 from .artifacts import ARTIFACT_PATTERNS, ArtifactCatalog
 from .models import McpToolResult
+from .redaction import sanitize_data
 from .research_copilot import ResearchCopilot
 from .research_evidence import build_evidence_bundle
 from .research_query import (
@@ -182,8 +183,8 @@ class ResearchMcpAdapter:
             generator="fund_agent",
             tool=tool,
             status=status,
-            data=json.loads(json.dumps(data, ensure_ascii=False)),
-            warnings=tuple(dict.fromkeys(warnings)),
+            data=sanitize_data(json.loads(json.dumps(data, ensure_ascii=False))),
+            warnings=tuple(dict.fromkeys(sanitize_data(warnings))),
             metadata={
                 "read_only": True,
                 "not_production_model": True,

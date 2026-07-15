@@ -1,6 +1,6 @@
 # Project Structure
 
-This document is the quick map for YA FundMind OS. V1 remains the stable runtime baseline while V2 Research Copilot is delivered through explicit milestone gates.
+This document is the quick map for YA FundMind OS. V1 remains the stable runtime baseline; V2 Research Copilot has reached `v2.0.0-rc.1` and is waiting for the post-RC observation gate before Final.
 
 ## Top-Level Directories
 
@@ -57,6 +57,10 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `fund_agent/mcp_adapter.py` | Framework-independent allowlisted read-only Research MCP adapter. |
 | `fund_agent/mcp_gateway.py` | MCP timeout, safe error mapping, and redacted append-only audit. |
 | `fund_agent/mcp_server.py` | Optional FastMCP server and transport boundary. |
+| `fund_agent/redaction.py` | Recursive secret and local-path redaction for public outputs and audits. |
+| `fund_agent/safe_io.py` | No-follow append-only JSONL writes for audit artifacts. |
+| `fund_agent/runtime_provenance.py` | Application/Git/trigger/Python provenance captured in daily run metadata. |
+| `fund_agent/release_readiness.py` | Historical compatibility and strict post-RC release-readiness evaluation. |
 
 ## Active Documentation
 
@@ -75,7 +79,9 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `specs/v2-research-copilot/` | V2 spec, plan, tasks and execution contract. |
 | `docs/contracts/*.md` | Machine-readable output contracts and versioning rules. |
 | `docs/ops/*.md` | Scheduler and readiness semantics. |
+| `docs/migrations/v1-to-v2.md` | Non-destructive V1-to-V2 upgrade and rollback guide. |
 | `docs/releases/v1.0.0-release-report.md` | V1 release verification report. |
+| `docs/releases/v2.0.0-rc.1-release-report.md` | V2 RC acceptance evidence and Final observation gate. |
 | `docs/archive/` | Historical phase plans, research notes, and review artifacts retained for traceability. |
 
 ## Generated Outputs
@@ -97,6 +103,7 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 - `outputs/evidence/`
 - `outputs/copilot/`
 - `outputs/audit/`
+- `outputs/release/`
 
 ## Cleanup Rules
 

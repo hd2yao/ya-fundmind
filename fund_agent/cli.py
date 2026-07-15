@@ -56,6 +56,7 @@ from .providers import (
     normalize_fund_code,
 )
 from .report import render_html, render_markdown, write_json_report
+from .release_readiness import evaluate_release_readiness, write_release_readiness
 from .research_evidence import build_evidence_bundle
 from .research_copilot import ResearchCopilot
 from .research_output import write_research_answer_outputs
@@ -67,6 +68,7 @@ from .research_loop import (
 )
 from .research_query import ResearchQueryService, SUPPORTED_RESEARCH_TOPICS
 from .review_state import list_review_state, summarize_review_state, update_review_state
+from .runtime_provenance import collect_runtime_provenance
 from .signal_candidates import (
     batch_signal_experiment,
     generate_signal_candidates_file,
@@ -289,6 +291,8 @@ def _run_validate_contract(args) -> int:
         results.append(validate_contract_file(args.research_answer, "research_answer"))
     if args.mcp_result:
         results.append(validate_contract_file(args.mcp_result, "mcp_tool_result"))
+    if args.release_readiness:
+        results.append(validate_contract_file(args.release_readiness, "release_readiness"))
     if not results:
         results = list(validate_output_dir(args.output_dir).results)
     summary = ContractValidationSummary(results=tuple(results))
@@ -303,6 +307,34 @@ def _run_validate_contract(args) -> int:
         for error in result.errors:
             print(f"  error: {error}")
     return 0 if summary.ok else 1
+
+
+def _run_release_readiness(args) -> int:
+    result = evaluate_release_readiness(
+        args.output_dir,
+        minimum_valid_runs=args.minimum_valid_runs,
+        release_target=args.release_target,
+        observation_mode=args.observation_mode,
+        required_app_version=args.required_app_version,
+        required_git_commit=args.required_git_commit,
+    )
+    output = args.json_output or args.output_dir / "release" / "v2_release_readiness.json"
+    write_release_readiness(result, output)
+    print(f"Release readiness: {output}")
+    print(
+        "Release gate: mode={mode} status={status} valid_runs={valid}/{minimum} "
+        "contracts={contracts} performance={performance}".format(
+            mode=result["observation_mode"],
+            status=result["status"],
+            valid=result["valid_run_count"],
+            minimum=result["minimum_valid_runs"],
+            contracts=result["contract_summary"]["ok"],
+            performance=result["performance"]["within_budget"],
+        )
+    )
+    for blocker in result["blockers"]:
+        print(f"  blocker: {blocker}")
+    return 0 if result["status"] == "pass" else 1
 
 
 def _run_research_query(args) -> int:
@@ -1145,14 +1177,27 @@ def _daily_research_status(steps, loop_config) -> str:
     return "failed" if any(step.step_name in critical and step.status == "failed" for step in steps) else "success"
 
 
-def _write_run_metadata(run_dir: Path, *, as_of: str, started_at: str, finished_at: str, duration_ms: int, steps, status: str) -> None:
+def _write_run_metadata(
+    run_dir: Path,
+    *,
+    as_of: str,
+    started_at: str,
+    finished_at: str,
+    duration_ms: int,
+    steps,
+    status: str,
+) -> None:
     payload = {
+        "schema_version": "1.0",
+        "generated_at": finished_at,
+        "generator": "fund_agent",
         "as_of": as_of,
         "started_at": started_at,
         "finished_at": finished_at,
         "duration_ms": duration_ms,
         "steps": [asdict(step) for step in steps],
         "status": status,
+        "provenance": collect_runtime_provenance(),
     }
     (run_dir / "run_metadata.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
@@ -1603,7 +1648,25 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--evidence-bundle", type=Path)
     validate.add_argument("--research-answer", type=Path)
     validate.add_argument("--mcp-result", type=Path)
+    validate.add_argument("--release-readiness", type=Path)
     validate.set_defaults(func=_run_validate_contract)
+
+    release_readiness = subparsers.add_parser(
+        "release-readiness",
+        help="只读检查 V2 contract、性能和真实 daily run 发布门禁",
+    )
+    release_readiness.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    release_readiness.add_argument("--minimum-valid-runs", type=int, default=3)
+    release_readiness.add_argument("--release-target", default="v2.0.0-rc.1")
+    release_readiness.add_argument(
+        "--observation-mode",
+        choices=["historical_compat", "post_rc"],
+        default="historical_compat",
+    )
+    release_readiness.add_argument("--required-app-version")
+    release_readiness.add_argument("--required-git-commit")
+    release_readiness.add_argument("--json-output", type=Path)
+    release_readiness.set_defaults(func=_run_release_readiness)
 
     research_query = subparsers.add_parser(
         "research-query",

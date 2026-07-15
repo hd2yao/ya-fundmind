@@ -4,6 +4,8 @@
 
 YA FundMind OS v2 是建立在 V1 稳定数据和报告底座上的本地 Research Copilot。它把分散的 market、fund detail、portfolio、news、snapshot、provider trace 和 report JSON 统一为可查询、可引用、可审核的研究上下文。
 
+当前实现状态为 `v2.0.0-rc.1`：M1-M5 用户能力和 M6 技术加固已完成。Final `v2.0.0` 只在三个不同日期的 post-RC scheduler run 通过 provenance、provider quality 和 strict contract 门后发布。
+
 V2 的核心价值不是“替用户做投资决定”，而是：
 
 - 用一个统一入口回答本地研究问题；
@@ -75,6 +77,16 @@ flowchart TB
     Skill --> Audit
     MCP --> Audit
     Console --> Audit
+  end
+
+  subgraph Release["Release Hardening"]
+    Provenance["Run Provenance"]
+    Strict["Strict Contract Gate"]
+    Readiness["Release Readiness"]
+    Ops --> Provenance
+    Provenance --> Readiness
+    Catalog --> Strict
+    Strict --> Readiness
   end
 
   subgraph Optional["可选能力"]
@@ -163,6 +175,10 @@ CLI / Web / Skill / MCP
 
 用于提交问题、查看回答、展开证据、检查数据质量、进行人工审核和查看 audit。它是本地工作台，不做公网、多用户或账号体系。
 
+### Release Hardening
+
+`runtime_provenance` 把应用版本、精确 Git commit、工作树状态和 scheduler trigger 写入 run metadata。`release-readiness` 在 RC 前只允许历史 run 证明兼容，在 Final 前要求三个不同日期、来自同一 RC main commit 的干净真实 scheduler run，并同时执行 strict contract、provider fallback/critical/degraded 和性能检查。
+
 ## 安全不变量
 
 - 不自动交易，不接券商。
@@ -180,3 +196,4 @@ CLI / Web / Skill / MCP
 - 单个 artifact 损坏不影响其他查询。
 - 每个回答明确 as_of、data quality 和证据缺口。
 - 所有新 JSON 都能通过 contract validation。
+- Final 发布证据不能由复制日期、修改 metadata 或 pre-RC 历史 run 代替。

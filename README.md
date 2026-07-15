@@ -1,13 +1,14 @@
 # YA FundMind OS
 
-YA FundMind OS v1 是本地个人基金/ETF 投研工作台。它每天或每周自动运行，生成 Market Intelligence、Market Trend、Fund Detail、Portfolio Analysis、News Evidence、daily/weekly report 和本地 dashboard，并保留人工审核入口。
+YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据驱动、只读 Research Copilot。它每天或每周自动运行，生成 Market Intelligence、Market Trend、Fund Detail、Portfolio Analysis、News Evidence、daily/weekly report 和本地 dashboard，并让 CLI、Web、Skill 与可选 MCP 通过同一套结构化证据回答研究问题。
 
 它只做研究辅助和报告生成：不自动交易，不接券商，不输出买卖建议，不承诺收益。
 
 ## 当前状态
 
-- 当前版本：`v1.5.0`
+- 当前版本：`v2.0.0-rc.1`（Python package version：`2.0.0rc1`）
 - 当前交付模式：V2 Research Copilot delivery mode
+- 当前发布状态：M1-M6 RC 技术门已完成；Final 仅等待 RC 合并后的 3 个不同日期真实 scheduler run 和最终发布门。
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
@@ -17,12 +18,15 @@ YA FundMind OS v1 是本地个人基金/ETF 投研工作台。它每天或每周
 - V2 Spec：`specs/v2-research-copilot/`
 - V2 剩余想法池：`docs/backlog/v2-ideas.md`
 - V1 验收报告：`docs/releases/v1.0.0-release-report.md`
+- V2 RC 报告：`docs/releases/v2.0.0-rc.1-release-report.md`
+- V1 -> V2 迁移：`docs/migrations/v1-to-v2.md`
+- V2 排障：`docs/ops/v2-troubleshooting.md`
 - 项目结构说明：`PROJECT_STRUCTURE.md`
 - 文档索引：`docs/README.md`
 
-V1 里程碑 M1 到 M6 已收口并保持稳定运行。下一大版本目标是 `v2.0.0`：建立本地、证据驱动、可解释、只读的 Research Copilot。V2 按 M1-M6 和中间版本 gate 推进，不再无限追加 Phase。
+V1 里程碑 M1 到 M6 已收口并保持稳定运行。V2 M1 到 M5 已分别通过 `v1.1.0` 至 `v1.5.0` 交付，M6 已形成 `v2.0.0-rc.1` release candidate。历史真实 run 只用于兼容验证；Final `v2.0.0` 必须由 RC main commit 在三个不同日期产生可追溯的真实 scheduler run 后才可发布。
 
-V2 会增加统一研究查询、证据引用、受约束 Copilot、只读 Skill/MCP 和本地 Copilot Console。自动推荐、自动交易、券商接入、SaaS、移动端和小程序不进入本次 V2 主线。
+V2 已提供统一研究查询、证据引用、受约束 Copilot、只读 Skill/MCP 和本地 Copilot Console。自动推荐、自动交易、券商接入、SaaS、移动端和小程序不进入本次 V2 主线。
 
 历史 Phase 计划、开源调研和旧 review 输出已归档到 `docs/archive/`，日常使用优先阅读 README、项目结构说明、contracts、ops 和 release report。
 
@@ -109,6 +113,31 @@ Tool 不接收任意 path、URL、配置或写参数。调用 audit 写入 `outp
 - `outputs/copilot/research_answer.md`
 - `outputs/audit/research_queries.jsonl`
 - `outputs/audit/mcp_calls.jsonl`
+- `outputs/release/v2_release_readiness.json`
+
+## V2 Release Readiness
+
+RC 前可用历史真实 run 检查兼容性，但不能用它们放行 Final：
+
+```bash
+python -m fund_agent.cli release-readiness \
+  --output-dir outputs \
+  --release-target v2.0.0-rc.1 \
+  --observation-mode historical_compat
+```
+
+RC 合并后，Final 必须核对版本、精确 commit、干净工作树和 scheduler provenance：
+
+```bash
+python -m fund_agent.cli release-readiness \
+  --output-dir outputs \
+  --release-target v2.0.0 \
+  --observation-mode post_rc \
+  --required-app-version 2.0.0rc1 \
+  --required-git-commit "$(git rev-parse HEAD)"
+```
+
+门禁要求至少 3 个不同日期有效 run、strict contracts 通过、无 fallback/critical/degraded，并保持 P0/P1 为 0。完整语义见 `docs/contracts/v2-release-readiness-v1.md` 和 `docs/ops/v2-troubleshooting.md`。
 
 ## Daily / Weekly Ops
 
@@ -290,7 +319,7 @@ python -m pytest -q
 python -m compileall -q fund_agent
 ```
 
-V1 release 还会验证：
+V2 release 还会验证：
 
 ```bash
 python -m fund_agent.cli validate-contract --output-dir outputs

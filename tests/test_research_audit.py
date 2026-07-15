@@ -37,6 +37,9 @@ def test_audit_is_append_only_and_redacts_secret_values(tmp_path) -> None:
     records = [json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()]
     assert len(records) == 2
     assert records[0]["question_hash"].startswith("sha256:")
+    assert records[0]["schema_version"] == "1.0"
+    assert records[0]["generated_at"]
+    assert records[0]["generator"] == "fund_agent"
     assert "secret-123" not in records[0]["question_preview"]
     assert "hunter2" not in records[0]["question_preview"]
     assert "token-value" not in records[0]["question_preview"]

@@ -5,6 +5,8 @@ from dataclasses import asdict
 from typing import Any, Protocol
 
 from .models import ResearchAnswer
+from .redaction import sanitize_data
+from .research_copilot import contains_blocked_research_request
 
 
 class AnswerRenderer(Protocol):
@@ -16,11 +18,15 @@ def render_research_answer(
     *,
     renderer: AnswerRenderer | None = None,
 ) -> str:
-    payload = json.loads(json.dumps(asdict(answer), ensure_ascii=False))
+    payload = sanitize_data(json.loads(json.dumps(asdict(answer), ensure_ascii=False)))
     if renderer is not None:
         try:
             rendered = renderer.render(payload)
-            if isinstance(rendered, str) and rendered.strip():
+            if (
+                isinstance(rendered, str)
+                and rendered.strip()
+                and not contains_blocked_research_request(rendered)
+            ):
                 return rendered
         except Exception:
             pass
