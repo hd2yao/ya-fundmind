@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 import hashlib
-import json
-import re
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .models import ResearchAnswer
-
-
-_KEY_VALUE_SECRET = re.compile(
-    r"(?i)\b(api[_-]?key|token|password|secret|cookie)\s*[:=]\s*[^\s,;]+"
-)
-_BEARER_SECRET = re.compile(r"(?i)\bbearer\s+[^\s,;]+")
+from .redaction import redact_text
+from .safe_io import append_json_line
 
 
 def append_research_audit(
@@ -24,12 +18,14 @@ def append_research_audit(
     output_path: Path | str | None = None,
 ) -> Path:
     path = Path(audit_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
     payload = asdict(answer)
     question = str(payload.get("question") or "")
+    generated_at = datetime.now(timezone.utc).isoformat()
     record: dict[str, Any] = {
         "schema_version": "1.0",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "generated_at": generated_at,
+        "generator": "fund_agent",
+        "timestamp": generated_at,
         "question_hash": f"sha256:{hashlib.sha256(question.encode('utf-8')).hexdigest()}",
         "question_preview": redact_preview(question),
         "intent": (payload.get("intent") or {}).get("intent"),
@@ -39,17 +35,14 @@ def append_research_audit(
         "data_gap_count": len(payload.get("data_gaps") or []),
         "warning_count": len(payload.get("warnings") or []),
         "review_required": bool(payload.get("review_required")),
-        "output_path": str(output_path) if output_path is not None else None,
+        "output_path": (
+            redact_preview(Path(output_path).name, limit=120)
+            if output_path is not None
+            else None
+        ),
     }
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True))
-        handle.write("\n")
-    return path
+    return append_json_line(path, record)
 
 
 def redact_preview(question: str, *, limit: int = 160) -> str:
-    redacted = _KEY_VALUE_SECRET.sub(lambda match: f"{match.group(1)}=[REDACTED]", question)
-    redacted = _BEARER_SECRET.sub("Bearer [REDACTED]", redacted)
-    if len(redacted) <= limit:
-        return redacted
-    return f"{redacted[: limit - 3]}..."
+    return redact_text(question, limit=limit)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -137,7 +138,12 @@ class ContractValidationSummary:
         return all(result.ok for result in self.results)
 
 
-def validate_contract_file(path: Path | str, contract_type: str) -> ContractValidationResult:
+def validate_contract_file(
+    path: Path | str,
+    contract_type: str,
+    *,
+    strict: bool = False,
+) -> ContractValidationResult:
     resolved_path = Path(path)
     errors: list[str] = []
     warnings: list[str] = []
@@ -161,9 +167,9 @@ def validate_contract_file(path: Path | str, contract_type: str) -> ContractVali
             ok=False,
             errors=tuple(errors),
         )
-    _validate_metadata(payload, contract_type, errors, warnings)
+    _validate_metadata(payload, contract_type, errors, warnings, strict=strict)
     required_fields = CORE_FIELDS[contract_type]
-    if contract_type == "snapshot" and "schema_version" not in payload:
+    if contract_type == "snapshot" and "schema_version" not in payload and not strict:
         required_fields = ("as_of", "candidates", "valuations")
     for field in required_fields:
         if field not in payload:
@@ -190,7 +196,11 @@ def validate_contract_file(path: Path | str, contract_type: str) -> ContractVali
     )
 
 
-def validate_output_dir(output_dir: Path | str) -> ContractValidationSummary:
+def validate_output_dir(
+    output_dir: Path | str,
+    *,
+    strict: bool = False,
+) -> ContractValidationSummary:
     resolved_dir = Path(output_dir)
     candidates = [
         (resolved_dir / "fund_agent_report.json", "report"),
@@ -202,7 +212,7 @@ def validate_output_dir(output_dir: Path | str) -> ContractValidationSummary:
         (resolved_dir / "release" / "v2_release_readiness.json", "release_readiness"),
     ]
     results = [
-        validate_contract_file(path, contract_type)
+        validate_contract_file(path, contract_type, strict=strict)
         for path, contract_type in candidates
         if path is not None and path.exists()
     ]
@@ -214,22 +224,41 @@ def _validate_metadata(
     contract_type: str,
     errors: list[str],
     warnings: list[str],
+    *,
+    strict: bool,
 ) -> None:
     schema_version = payload.get("schema_version")
-    if schema_version is None and contract_type == "snapshot":
+    if schema_version is None and contract_type == "snapshot" and not strict:
         warnings.append("Legacy snapshot missing schema_version; accepted for compatibility.")
     elif schema_version is None:
         errors.append("Missing core field: schema_version")
     elif str(schema_version) != SCHEMA_VERSION:
-        warnings.append(f"Unexpected schema_version {schema_version}; validator expects {SCHEMA_VERSION}.")
+        message = (
+            f"Unexpected schema_version {schema_version}; validator expects "
+            f"{SCHEMA_VERSION}."
+        )
+        if strict:
+            errors.append(message)
+        else:
+            warnings.append(message)
     if payload.get("generator") != GENERATOR and not (
         contract_type == "snapshot" and "schema_version" not in payload
     ):
         errors.append("Missing or invalid generator")
     if not payload.get("generated_at") and not (
-        contract_type == "snapshot" and "schema_version" not in payload
+        contract_type == "snapshot" and "schema_version" not in payload and not strict
     ):
         errors.append("Missing core field: generated_at")
+    elif strict and payload.get("generated_at"):
+        try:
+            generated_at = datetime.fromisoformat(
+                str(payload["generated_at"]).replace("Z", "+00:00")
+            )
+        except ValueError:
+            errors.append("Invalid generated_at timestamp")
+        else:
+            if generated_at.tzinfo is None:
+                errors.append("generated_at timestamp must include timezone")
 
 
 def _validate_shape(payload: dict[str, Any], contract_type: str, errors: list[str]) -> None:
@@ -385,6 +414,20 @@ def _validate_research_answer_values(payload: dict[str, Any], errors: list[str])
         errors.append("Field must be true: not_investment_advice")
     if status == "refused" and not payload.get("blocked_reason"):
         errors.append("Refused answer must include blocked_reason")
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        expected_boundaries = {
+            "read_only": True,
+            "not_production_model": True,
+            "main_score_changed": False,
+            "main_risk_changed": False,
+        }
+        for field, expected in expected_boundaries.items():
+            if metadata.get(field) is not expected:
+                errors.append(
+                    f"research_answer metadata.{field} must be "
+                    f"{str(expected).lower()}"
+                )
 
     evidence_items = payload.get("evidence")
     findings = payload.get("findings")

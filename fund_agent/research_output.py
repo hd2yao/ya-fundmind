@@ -7,6 +7,7 @@ from pathlib import Path
 from .audit import append_research_audit
 from .copilot_renderer import render_research_answer
 from .models import ResearchAnswer
+from .redaction import sanitize_data
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,12 @@ def write_research_answer_outputs(
     resolved_json.parent.mkdir(parents=True, exist_ok=True)
     resolved_markdown.parent.mkdir(parents=True, exist_ok=True)
     resolved_json.write_text(
-        json.dumps(asdict(answer), ensure_ascii=False, indent=2, sort_keys=True),
+        json.dumps(
+            sanitize_data(asdict(answer)),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
         encoding="utf-8",
     )
     resolved_markdown.write_text(render_research_answer(answer), encoding="utf-8")

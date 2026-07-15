@@ -226,6 +226,35 @@ def test_run_observation_requires_contracts_steps_and_artifacts(tmp_path) -> Non
     assert "required_step_failed:validate_contract" in observation["reasons"]
 
 
+def test_run_observation_uses_strict_contract_validation(tmp_path) -> None:
+    run_dir = _write_run(tmp_path / "outputs", "2026-07-12")
+    report_path = run_dir / "fund_agent_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report["schema_version"] = "2.0"
+    report["generated_at"] = "not-a-timestamp"
+    _write_json(report_path, report)
+
+    observation = inspect_run_bundle(run_dir)
+
+    assert observation["status"] == "excluded"
+    assert "artifact_contract_invalid:fund_agent_report.json" in observation["reasons"]
+
+
+def test_release_readiness_contract_summary_is_strict(tmp_path) -> None:
+    output_dir = tmp_path / "outputs"
+    _write_contract_baseline(output_dir)
+    _write_run(output_dir, "2026-07-12")
+    report_path = output_dir / "fund_agent_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report["schema_version"] = "2.0"
+    _write_json(report_path, report)
+
+    result = evaluate_release_readiness(output_dir, minimum_valid_runs=1)
+
+    assert result["status"] == "fail"
+    assert "contract_validation_failed" in result["blockers"]
+
+
 def test_release_readiness_fails_when_real_history_is_insufficient(tmp_path) -> None:
     output_dir = tmp_path / "outputs"
     _write_contract_baseline(output_dir)

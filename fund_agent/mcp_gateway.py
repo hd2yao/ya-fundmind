@@ -11,6 +11,7 @@ from typing import Any
 
 from .audit import redact_preview
 from .mcp_adapter import MCP_TOOL_NAMES, McpAdapterError
+from .safe_io import append_json_line
 
 
 _AUDIT_ARGUMENTS = frozenset({"topic", "code", "question", "artifact_type", "limit"})
@@ -88,10 +89,12 @@ class McpToolGateway:
         result: dict[str, Any] | None = None,
         error: McpAdapterError | None = None,
     ) -> None:
-        self.audit_path.parent.mkdir(parents=True, exist_ok=True)
+        generated_at = datetime.now(timezone.utc).isoformat()
         record = {
             "schema_version": "1.0",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "generated_at": generated_at,
+            "generator": "fund_agent",
+            "timestamp": generated_at,
             "tool": str(tool) if tool in MCP_TOOL_NAMES else "[REDACTED]",
             "status": "error" if error is not None else "ok",
             "duration_ms": max(0, int((perf_counter() - started) * 1000)),
@@ -102,9 +105,7 @@ class McpToolGateway:
             "error_code": error.code if error is not None else None,
             "error_message": str(error) if error is not None else None,
         }
-        with self.audit_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True))
-            handle.write("\n")
+        append_json_line(self.audit_path, record)
 
 
 def _argument_summary(arguments: dict[str, Any]) -> dict[str, Any]:

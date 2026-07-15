@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .models import EvidenceBundle, ResearchAnswer, ResearchIntent, ResearchPlan
+from .redaction import redact_text, sanitize_data
 from .research_evidence import build_evidence_bundle
 from .research_query import ResearchQueryService
 
@@ -33,6 +34,8 @@ _BLOCKED_PATTERNS = (
     "操作建议",
     "收益承诺",
     "保证收益",
+    "保证年化",
+    "保本保收益",
     "申购",
     "赎回",
     "调仓",
@@ -40,6 +43,13 @@ _BLOCKED_PATTERNS = (
     "自动交易",
     "交易",
 )
+
+_ENGLISH_BLOCKED_PATTERN = re.compile(
+    r"\b(?:buy|sell|purchase|trade|subscribe|redeem|rebalance)\b"
+    r"|\bguarantee(?:d)?\s+(?:return|yield|profit)\b",
+    re.IGNORECASE,
+)
+_COMPACT_PATTERN = re.compile(r"[\s\u3000_\-·,，。！？!?;；:：]+")
 
 _TOPIC_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("portfolio", ("组合", "持仓", "暴露", "集中度")),
@@ -99,7 +109,14 @@ def classify_research_intent(question: str) -> ResearchIntent:
 
 def _contains_blocked_request(question: str) -> bool:
     request_text = question.replace("交易日", "")
-    return any(pattern in request_text for pattern in _BLOCKED_PATTERNS)
+    if _ENGLISH_BLOCKED_PATTERN.search(request_text):
+        return True
+    compact = _COMPACT_PATTERN.sub("", request_text)
+    return any(_COMPACT_PATTERN.sub("", pattern) in compact for pattern in _BLOCKED_PATTERNS)
+
+
+def contains_blocked_research_request(text: str) -> bool:
+    return _contains_blocked_request(str(text or "").lower())
 
 
 def build_research_plan(question: str) -> ResearchPlan:
@@ -243,8 +260,8 @@ class ResearchCopilot:
             schema_version="1.0",
             generated_at=datetime.now(timezone.utc).isoformat(),
             generator="fund_agent",
-            question=intent.normalized_question,
-            intent=asdict(intent),
+            question=redact_text(intent.normalized_question),
+            intent=sanitize_data(asdict(intent)),
             answer_status=status,
             as_of=as_of,
             summary=summary,

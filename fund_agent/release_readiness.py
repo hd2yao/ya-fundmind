@@ -164,7 +164,7 @@ def inspect_run_bundle(run_dir: Path | str) -> dict[str, Any]:
         path = root / filename
         if not path.is_file():
             continue
-        result = validate_contract_file(path, contract_type)
+        result = validate_contract_file(path, contract_type, strict=True)
         contract_status[contract_type] = result.ok
         if not result.ok:
             reasons.append(f"artifact_contract_invalid:{filename}")
@@ -193,7 +193,7 @@ def write_release_readiness(result: dict[str, Any], path: Path | str) -> Path:
 
 
 def _contract_summary(output_dir: Path) -> dict[str, Any]:
-    results = validate_output_dir(output_dir).results
+    results = validate_output_dir(output_dir, strict=True).results
     failures = [
         {
             "contract_type": item.contract_type,
