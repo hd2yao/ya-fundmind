@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 web/node_modules/
 web/coverage/
+web/*.tsbuildinfo
 dist/
 build/
 *.egg-info/
