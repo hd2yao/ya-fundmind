@@ -39,7 +39,7 @@
 
 ```text
 python -m pytest -q
-432 passed, 1 skipped in 2.66s
+435 passed, 1 skipped in 1.68s
 
 python -m compileall -q fund_agent
 exit 0
@@ -49,7 +49,7 @@ API/CLI 聚焦测试：
 
 ```text
 python -m pytest -q tests/test_product_web_cli.py tests/test_web_api.py
-17 passed in 0.33s
+20 passed
 ```
 
 ### 3.2 Frontend
@@ -64,7 +64,7 @@ npm run typecheck
 exit 0
 
 npm test -- --run
-10 test files passed, 16 tests passed
+12 test files passed, 21 tests passed
 
 npm run build
 exit 0
@@ -118,6 +118,13 @@ console_warnings=0
 
 初次检查发现 375px 下 Review 长 signal id 将状态标签推出视口。通过允许摘要正文收缩和长词断行修复后，`documentWidth` 从 392px 恢复为 375px，并重新完成全部 24 个组合验收。
 
+对抗式评审后再次执行同一组 24 个组合，结果仍全部通过。补充验证确认：
+
+- 移动端关闭的侧栏同时设置 `inert` 与 `aria-hidden`，其中的导航链接不能获得焦点。
+- Evidence Drawer 打开后焦点进入关闭按钮，按 Escape 可关闭，并把焦点还给触发控件。
+- Market 数据质量为 `degraded` 或 `critical` 时使用风险色，不会显示为健康状态。
+- Portfolio 在当前估值真实存在但置信度字段缺失时仍展示数值；只有显式缺失或值为空时显示“暂无数据”。
+
 ## 5. 交互与可访问性
 
 - 移动端导航抽屉可打开，选择 Market 后自动关闭并保留正确焦点。
@@ -127,7 +134,15 @@ console_warnings=0
 - 主体文本、侧栏导航、次级按钮的实测对比分别为 `14.73:1`、`8.52:1`、`5.68:1`。
 - 页面没有需要 alt 的内容图片；图标为装饰时使用 `aria-hidden`，图标按钮提供可访问名称。
 
-## 6. 截图证据
+## 6. 本地 API 边界复核
+
+- 非允许 Host 请求返回 HTTP 400，降低 DNS rebinding 风险。
+- 浏览器携带非 loopback Origin 的写请求返回 HTTP 403；未吞掉合法本地调用的真实异常。
+- Review 写入使用服务端队列或状态中的 canonical `signal_id`，请求体不能把 review 重新绑定到其他信号。
+- 非对象或 `null` JSON 产物统一安全降级为空对象，页面显示空状态而不是崩溃。
+- 报告下载仍受固定 allowlist 约束，API 不接受任意本地路径。
+
+## 7. 截图证据
 
 - Desktop Overview：`/Users/dysania/.codex/visualizations/2026/06/22/019eef1d-7df1-7482-aaee-6193b40a8894/ya-fundmind-product-overview-1440.png`
 - Tablet Market：`/Users/dysania/.codex/visualizations/2026/06/22/019eef1d-7df1-7482-aaee-6193b40a8894/ya-fundmind-product-market-768.png`
@@ -135,8 +150,12 @@ console_warnings=0
 
 截图属于本地验收证据，不提交到仓库。
 
-## 7. 已知边界
+## 8. 已知边界
 
 - React 静态产物由 `web/` 构建，当前不打包进 Python wheel；本地源码运行前需要执行 `npm ci && npm run build`。
 - 前端只消费现有 JSON contract/Python service，不解析 Markdown，不在浏览器内重算评分。
+- 报告中心打开旧 dashboard 内部相对链接时，链接目标仍由原静态报告结构决定；本轮不重写历史 HTML。
+- 输出目录的真实路径包含关系已校验，但未来若开放更多文件入口，仍应补充 symlink 级别的路径测试。
+- Review state 当前是单机本地文件写入，没有多进程锁；符合单用户本地工作台边界，不适用于并发服务部署。
+- 主工作区现有 portfolio 产物中的当前估值本身不可用，因此真实页面仍显示“暂无数据”；前端单测已覆盖“当前值存在但 confidence 缺失”时应正常展示。
 - 本报告不等于允许合并：必须等 `v2.0.0` Final 发布并完成 post-release ops check，才能将该分支转为可合并 PR。
