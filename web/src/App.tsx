@@ -2,7 +2,10 @@ import { Link, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "./layout/AppShell";
 import { MarketPage } from "./pages/MarketPage";
+import { FundsPage } from "./pages/FundsPage";
+import { NewsPage } from "./pages/NewsPage";
 import { OverviewPage } from "./pages/OverviewPage";
+import { PortfolioPage } from "./pages/PortfolioPage";
 
 function PageIntro({ title, description }: { title: string; description: string }) {
   return (
@@ -39,9 +42,9 @@ export function App() {
       <Route element={<AppShell />}>
         <Route path="/" element={<OverviewPage />} />
         <Route path="/market" element={<MarketPage />} />
-        <Route path="/funds" element={<Placeholder title="自选研究" description="研究 watchlist 中的基金与 ETF，不代表全市场推荐。" />} />
-        <Route path="/portfolio" element={<Placeholder title="组合分析" description="查看持仓暴露、集中度和数据缺口。" />} />
-        <Route path="/news" element={<Placeholder title="新闻证据" description="浏览新闻与公告证据，并核对来源和时间。" />} />
+        <Route path="/funds" element={<FundsPage />} />
+        <Route path="/portfolio" element={<PortfolioPage />} />
+        <Route path="/news" element={<NewsPage />} />
         <Route path="/copilot" element={<Placeholder title="研究助手" description="基于本地结构化证据回答研究问题。" />} />
         <Route path="/review" element={<Placeholder title="人工审核" description="记录候选信号和证据的人工复核状态。" />} />
         <Route path="/reports" element={<Placeholder title="报告中心" description="浏览已生成的本地研究报告与运行产物。" />} />

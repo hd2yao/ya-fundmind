@@ -91,3 +91,92 @@ export type MarketData = {
     warnings?: string[];
   };
 };
+
+export type FundDetailItem = {
+  code?: string;
+  name?: string;
+  fund_type?: string;
+  primary_theme?: string;
+  themes?: string[];
+  nav?: number | null;
+  scale?: number | null;
+  rating?: string | number | null;
+  fund_company?: string | null;
+  fund_manager?: string | null;
+  inception_date?: string | null;
+  source?: string | null;
+  as_of?: string | null;
+  data_quality_grade?: string | null;
+  data_quality_warnings?: string[];
+  missing_fields?: string[];
+  return_windows?: Record<string, { total_return?: number | null; max_drawdown?: number | null; volatility?: number | null }>;
+  data_coverage?: { coverage_ratio?: number | null; status?: string | null };
+  signal_context?: { signal_status?: string; signal_reasons?: string[] };
+};
+
+export type FundsData = {
+  details?: {
+    as_of?: string | null;
+    detail_count?: number;
+    missing_count?: number;
+    warning_count?: number;
+    coverage_summary?: { average_coverage_ratio?: number | null };
+    fund_details?: FundDetailItem[];
+    funds?: FundDetailItem[];
+  };
+  signal_candidates?: {
+    summary?: { eligible_count?: number; excluded_count?: number; display_only_count?: number };
+  };
+};
+
+export type PortfolioPosition = {
+  code?: string;
+  name?: string;
+  shares?: number | null;
+  cost_value?: number | null;
+  current_value?: number | null;
+  weight?: number | null;
+  source?: string | null;
+  primary_theme?: string | null;
+  unrealized_return_pct?: number | null;
+  valuation_confidence?: string | null;
+};
+
+export type PortfolioData = {
+  as_of?: string | null;
+  status?: string | null;
+  portfolio_name?: string | null;
+  holding_count?: number;
+  total_value?: number | null;
+  cash_available?: number | null;
+  total_unrealized_return_pct?: number | null;
+  positions?: PortfolioPosition[];
+  theme_exposure?: Record<string, { holding_count?: number; current_value?: number; weight?: number }>;
+  fund_type_exposure?: Record<string, { holding_count?: number; current_value?: number; weight?: number }>;
+  observation_issues?: Array<{ issue_type?: string; severity?: string; message?: string; metadata?: Record<string, unknown> }>;
+  warnings?: string[];
+};
+
+export type NewsEvidenceItem = {
+  evidence_id?: string;
+  title?: string;
+  published_at?: string | null;
+  source?: string | null;
+  source_quality?: string | null;
+  evidence_strength?: string | null;
+  low_confidence?: boolean;
+  related_themes?: string[];
+  related_funds?: string[];
+  url?: string | null;
+  warnings?: string[];
+};
+
+export type NewsData = {
+  as_of?: string | null;
+  evidence_count?: number;
+  low_confidence_count?: number;
+  duplicate_count?: number;
+  source?: string | null;
+  items?: NewsEvidenceItem[];
+  warnings?: string[];
+};
