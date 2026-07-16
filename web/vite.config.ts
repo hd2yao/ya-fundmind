@@ -17,5 +17,27 @@ export default defineConfig({
     globals: true,
     setupFiles: "./src/test/setup.ts",
     css: true
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("/node_modules/recharts/") || id.includes("/node_modules/d3-")) {
+            return "charts";
+          }
+          if (id.includes("/node_modules/lucide-react/")) {
+            return "icons";
+          }
+          if (
+            id.includes("/node_modules/react/") ||
+            id.includes("/node_modules/react-dom/") ||
+            id.includes("/node_modules/react-router")
+          ) {
+            return "react";
+          }
+          return undefined;
+        }
+      }
+    }
   }
 });

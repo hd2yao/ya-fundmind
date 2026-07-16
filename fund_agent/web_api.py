@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from . import __version__
@@ -46,6 +47,7 @@ def create_web_app(
     *,
     output_dir: Path | str = Path("outputs"),
     review_state_path: Path | str | None = None,
+    static_dir: Path | str | None = None,
 ) -> FastAPI:
     """Build the local product Web Console API with fixed filesystem roots."""
 
@@ -55,6 +57,7 @@ def create_web_app(
         if review_state_path is not None
         else root / "manual_review_state.json"
     )
+    static_root = Path(static_dir).expanduser().resolve() if static_dir is not None else None
     app = FastAPI(
         title="YA FundMind OS Local API",
         version=__version__,
@@ -64,6 +67,7 @@ def create_web_app(
     )
     app.state.output_dir = root
     app.state.review_state_path = state_path
+    app.state.static_dir = static_root
 
     @app.get("/api/health")
     def health() -> dict[str, object]:
@@ -157,6 +161,22 @@ def create_web_app(
             available=any(item["exists"] for item in items),
         )
 
+    @app.get("/api/reports/{report_id}")
+    def open_report(report_id: str):
+        report = REPORT_ALLOWLIST.get(report_id)
+        if report is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "report_not_allowed", "message": "Report is not in the allowlist."},
+            )
+        path = root / report[1]
+        if not path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "report_missing", "message": "Report has not been generated."},
+            )
+        return FileResponse(path)
+
     @app.post("/api/copilot/ask")
     def ask_copilot(request: CopilotRequest) -> dict[str, object]:
         question = request.question.strip()
@@ -232,6 +252,20 @@ def create_web_app(
             signal_id=request.signal_id,
         )
         return _resource(item, source_paths=(state_path,), available=True)
+
+    if static_root is not None:
+        index_path = static_root / "index.html"
+
+        @app.get("/{requested_path:path}")
+        def serve_spa(requested_path: str):
+            if requested_path == "api" or requested_path.startswith("api/"):
+                raise HTTPException(status_code=404, detail="Not Found")
+            candidate = (static_root / requested_path).resolve()
+            if candidate.is_relative_to(static_root) and candidate.is_file():
+                return FileResponse(candidate)
+            if index_path.is_file():
+                return FileResponse(index_path)
+            raise HTTPException(status_code=404, detail="Product web build is missing.")
 
     return app
 

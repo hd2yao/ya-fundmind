@@ -326,6 +326,27 @@ python -m fund_agent.cli validate-contract --output-dir outputs
 python -m fund_agent.cli web-console --output-dir outputs --dry-run
 ```
 
+### 产品化本地 Web Console
+
+原 `web-console` Streamlit 入口继续保留。新的 React + TypeScript Console 通过本地 FastAPI 启动，只读取既有 JSON contract 和 Python research service：
+
+```bash
+python -m pip install -e ".[webapp]"
+cd web
+npm ci
+npm run build
+cd ..
+python -m fund_agent.cli product-web --output-dir outputs
+```
+
+默认地址为 `http://127.0.0.1:8765`。可先离线检查依赖和构建：
+
+```bash
+python -m fund_agent.cli product-web --output-dir outputs --dry-run
+```
+
+页面包括研究总览、市场情报、自选研究、组合分析、新闻证据、研究助手、人工审核和报告中心。服务默认只接受 loopback host，不提供公网部署；不修改主评分/主风险，不接券商，不生成交易动作。
+
 ## 风险边界
 
 本系统输出仅用于研究辅助，不构成投资建议，不承诺收益，不包含任何自动交易指令。基金投资有风险，历史表现不代表未来收益；跨境/QDII 产品还需要额外核对汇率、时区、申赎限制和折溢价。

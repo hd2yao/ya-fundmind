@@ -1142,6 +1142,69 @@ def _streamlit_available() -> bool:
     return importlib.util.find_spec("streamlit") is not None
 
 
+def _default_product_web_static_dir() -> Path:
+    return Path(__file__).resolve().parents[1] / "web" / "dist"
+
+
+def _product_web_dependencies_available() -> bool:
+    return importlib.util.find_spec("fastapi") is not None and importlib.util.find_spec("uvicorn") is not None
+
+
+def _run_product_web(args) -> int:
+    if args.host not in {"127.0.0.1", "localhost", "::1"}:
+        print("Product web only supports a loopback host by default; use 127.0.0.1, localhost, or ::1.")
+        return 2
+    api_ready = _product_web_dependencies_available()
+    static_ready = (args.static_dir / "index.html").is_file()
+    if args.dry_run:
+        print(
+            "Product web ready: output_dir={output_dir} static_dir={static_dir} api_ready={api_ready} static_ready={static_ready}".format(
+                output_dir=args.output_dir,
+                static_dir=args.static_dir,
+                api_ready=str(api_ready).lower(),
+                static_ready=str(static_ready).lower(),
+            )
+        )
+        print("not_production_model=true")
+        print("main_score_changed=false")
+        print("main_risk_changed=false")
+        return 0 if api_ready and static_ready else 2
+    if not api_ready:
+        print('FastAPI/Uvicorn are not installed; install the "webapp" optional dependencies.')
+        return 2
+    if not static_ready:
+        print(f"Product web build is missing: {args.static_dir / 'index.html'}; run npm run build in web/.")
+        return 2
+    return _run_product_web_server(
+        output_dir=args.output_dir,
+        review_state_path=args.review_state,
+        static_dir=args.static_dir,
+        host=args.host,
+        port=args.port,
+    )
+
+
+def _run_product_web_server(
+    *,
+    output_dir: Path,
+    review_state_path: Path | None,
+    static_dir: Path,
+    host: str,
+    port: int,
+) -> int:
+    import uvicorn
+
+    from .web_api import create_web_app
+
+    app = create_web_app(
+        output_dir=output_dir,
+        review_state_path=review_state_path,
+        static_dir=static_dir,
+    )
+    uvicorn.run(app, host=host, port=port, log_level="info")
+    return 0
+
+
 def _raise_if_contract_invalid(output_dir: Path) -> int:
     summary = validate_output_dir(output_dir)
     if not summary.results:
@@ -1628,6 +1691,15 @@ def build_parser() -> argparse.ArgumentParser:
     web_console.add_argument("--port", type=int, default=8501)
     web_console.add_argument("--dry-run", action="store_true")
     web_console.set_defaults(func=_run_web_console)
+
+    product_web = subparsers.add_parser("product-web", help="启动本地产品化 Web Console，保留研究只读边界")
+    product_web.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    product_web.add_argument("--review-state", type=Path)
+    product_web.add_argument("--static-dir", type=Path, default=_default_product_web_static_dir())
+    product_web.add_argument("--host", default="127.0.0.1")
+    product_web.add_argument("--port", type=int, default=8765)
+    product_web.add_argument("--dry-run", action="store_true")
+    product_web.set_defaults(func=_run_product_web)
 
     smoke = subparsers.add_parser("smoke-akshare", help="可选：使用 AKShare 真实数据跑 live smoke")
     add_report_args(

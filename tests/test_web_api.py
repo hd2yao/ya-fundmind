@@ -241,3 +241,42 @@ def test_review_api_rejects_unknown_item_and_invalid_status(tmp_path):
     assert missing.json()["detail"]["code"] == "review_not_found"
     assert invalid.status_code == 422
     assert invalid.json()["detail"]["code"] == "invalid_review_status"
+
+
+def test_report_download_uses_allowlist(tmp_path):
+    output_dir = tmp_path / "outputs"
+    output_dir.mkdir()
+    (output_dir / "fund_agent_report.html").write_text("<h1>Fund report</h1>", encoding="utf-8")
+    (output_dir / "secret.txt").write_text("secret", encoding="utf-8")
+    client = TestClient(create_web_app(output_dir=output_dir))
+
+    available = client.get("/api/reports/fund_agent_report")
+    unknown = client.get("/api/reports/secret")
+    missing = client.get("/api/reports/news")
+
+    assert available.status_code == 200
+    assert "Fund report" in available.text
+    assert unknown.status_code == 404
+    assert unknown.json()["detail"]["code"] == "report_not_allowed"
+    assert missing.status_code == 404
+    assert missing.json()["detail"]["code"] == "report_missing"
+
+
+def test_spa_fallback_serves_index_without_masking_api_routes(tmp_path):
+    output_dir = tmp_path / "outputs"
+    static_dir = tmp_path / "dist"
+    static_dir.mkdir()
+    (static_dir / "index.html").write_text("<!doctype html><title>Product console</title>", encoding="utf-8")
+    (static_dir / "app.js").write_text("window.ready=true", encoding="utf-8")
+    client = TestClient(create_web_app(output_dir=output_dir, static_dir=static_dir))
+
+    route = client.get("/market")
+    asset = client.get("/app.js")
+    missing_api = client.get("/api/not-a-route")
+
+    assert route.status_code == 200
+    assert "Product console" in route.text
+    assert asset.status_code == 200
+    assert "window.ready=true" in asset.text
+    assert missing_api.status_code == 404
+    assert "Product console" not in missing_api.text
