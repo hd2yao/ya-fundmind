@@ -180,3 +180,71 @@ export type NewsData = {
   items?: NewsEvidenceItem[];
   warnings?: string[];
 };
+
+export type CopilotCitation = {
+  evidence_id?: string;
+  source?: string;
+  as_of?: string | null;
+  quality_grade?: string | null;
+  stale?: boolean;
+  excerpt?: unknown;
+};
+
+export type CopilotFinding = {
+  finding_id?: string;
+  label?: string;
+  value?: unknown;
+  quality_grade?: string | null;
+  warnings?: string[];
+  citations?: CopilotCitation[];
+};
+
+export type CopilotResponseData = {
+  answer?: Record<string, unknown>;
+  view_model?: {
+    status?: string;
+    tone?: string;
+    summary?: string;
+    as_of?: string | null;
+    intent?: string;
+    confidence?: string;
+    review_required?: boolean;
+    finding_count?: number;
+    evidence_count?: number;
+    findings?: CopilotFinding[];
+    data_gaps?: string[];
+    warnings?: string[];
+  };
+};
+
+export type ReviewItem = {
+  review_id?: string;
+  signal_id?: string;
+  status?: string;
+  reason?: string;
+  excluded_reason?: string;
+  note?: string;
+  reviewer?: string;
+};
+
+export type ReviewsData = {
+  queue?: ReviewItem[];
+  state?: ReviewItem[];
+  summary?: {
+    total_review_items?: number;
+    unresolved_count?: number;
+    needs_more_data_count?: number;
+    approved_count?: number;
+  };
+};
+
+export type ReportItem = {
+  report_id: string;
+  label: string;
+  relative_path: string;
+  kind: string;
+  exists: boolean;
+  updated_at: string | null;
+};
+
+export type ReportsData = { reports?: ReportItem[] };
