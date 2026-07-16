@@ -4,6 +4,8 @@ import { MemoryRouter } from "react-router-dom";
 import { App } from "../App";
 
 describe("AppShell", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   it("renders all research workspaces and marks the current route", () => {
     render(
       <MemoryRouter initialEntries={["/market"]}>
@@ -28,6 +30,14 @@ describe("AppShell", () => {
   });
 
   it("opens and closes the responsive navigation", () => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn()
+      })
+    );
     render(
       <MemoryRouter initialEntries={["/"]}>
         <App />
@@ -35,13 +45,20 @@ describe("AppShell", () => {
     );
 
     const menuButton = screen.getByRole("button", { name: "打开导航" });
+    const sidebar = document.querySelector(".sidebar");
+    expect(sidebar).toHaveAttribute("inert");
+    expect(sidebar).toHaveAttribute("aria-hidden", "true");
+
     fireEvent.click(menuButton);
 
     expect(screen.getByRole("navigation", { name: "主要导航" })).toHaveAttribute("data-mobile-open", "true");
+    expect(sidebar).not.toHaveAttribute("inert");
     expect(screen.getByRole("button", { name: "关闭导航" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "关闭导航" }));
-    expect(screen.getByRole("navigation", { name: "主要导航" })).toHaveAttribute("data-mobile-open", "false");
+    expect(document.querySelector(".primary-nav")).toHaveAttribute("data-mobile-open", "false");
+    expect(sidebar).toHaveAttribute("inert");
+    expect(menuButton).toHaveFocus();
   });
 
   it("keeps the research-only boundary visible", () => {
