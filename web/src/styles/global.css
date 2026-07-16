@@ -920,6 +920,10 @@ textarea:focus-visible {
   gap: 16px;
 }
 
+.review-item__summary > div {
+  min-width: 0;
+}
+
 .finding-header span,
 .review-item__summary span {
   color: var(--color-text-subtle);
@@ -930,6 +934,7 @@ textarea:focus-visible {
 .finding-header h3,
 .review-item__summary h3 {
   margin: 3px 0 0;
+  overflow-wrap: anywhere;
   font-size: 15px;
 }
 
