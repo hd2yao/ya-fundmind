@@ -46,6 +46,28 @@ def test_health_starts_when_output_dir_is_missing(tmp_path):
     assert app.state.output_dir == output_dir.resolve()
 
 
+def test_local_api_rejects_untrusted_host_and_cross_origin_write(tmp_path):
+    output_dir = tmp_path / "outputs"
+    _write_json(output_dir / "manual_review_queue.json", [{"review_id": "r1", "signal_id": "s1"}])
+    client = TestClient(create_web_app(output_dir=output_dir))
+
+    untrusted_host = client.get("/api/health", headers={"host": "attacker.example:8765"})
+    cross_origin = client.post(
+        "/api/reviews/r1",
+        headers={"origin": "https://attacker.example"},
+        json={"status": "needs_more_data", "signal_id": "s1"},
+    )
+    local_origin = client.post(
+        "/api/reviews/r1",
+        headers={"origin": "http://127.0.0.1:8765"},
+        json={"status": "needs_more_data", "signal_id": "s1"},
+    )
+
+    assert untrusted_host.status_code == 400
+    assert cross_origin.status_code == 403
+    assert local_origin.status_code == 200
+
+
 def test_app_uses_explicit_review_state_path(tmp_path):
     output_dir = tmp_path / "outputs"
     review_state = tmp_path / "review" / "state.json"
@@ -96,6 +118,22 @@ def test_missing_research_payloads_are_explicit_and_non_fatal(tmp_path):
         assert response.status_code == 200
         assert response.json()["availability"] == "missing"
         assert response.json()["data"] in ({}, {"details": {}, "signal_candidates": {}}, {"intelligence": {}, "trend": {}})
+
+
+def test_read_api_normalizes_non_object_json_roots(tmp_path):
+    output_dir = tmp_path / "outputs"
+    _write_json(output_dir / "market" / "market_intelligence_report.json", None)
+    _write_json(output_dir / "market" / "market_trend_report.json", ["legacy"])
+    _write_json(output_dir / "fund_details" / "watchlist_fund_details.json", None)
+    _write_json(output_dir / "signal_candidates.json", ["legacy"])
+    _write_json(output_dir / "portfolio" / "portfolio_report.json", None)
+    _write_json(output_dir / "news" / "news_evidence_report.json", ["legacy"])
+    client = TestClient(create_web_app(output_dir=output_dir))
+
+    assert client.get("/api/market").json()["data"] == {"intelligence": {}, "trend": {}}
+    assert client.get("/api/funds").json()["data"] == {"details": {}, "signal_candidates": {}}
+    assert client.get("/api/portfolio").json()["data"] == {}
+    assert client.get("/api/news").json()["data"] == {}
 
 
 def test_reports_api_uses_fixed_allowlist_and_safe_relative_paths(tmp_path):
@@ -241,6 +279,21 @@ def test_review_api_rejects_unknown_item_and_invalid_status(tmp_path):
     assert missing.json()["detail"]["code"] == "review_not_found"
     assert invalid.status_code == 422
     assert invalid.json()["detail"]["code"] == "invalid_review_status"
+
+
+def test_review_api_rejects_signal_id_rebinding(tmp_path):
+    output_dir = tmp_path / "outputs"
+    _write_json(output_dir / "manual_review_queue.json", [{"review_id": "r1", "signal_id": "canonical-signal"}])
+    client = TestClient(create_web_app(output_dir=output_dir))
+
+    response = client.post(
+        "/api/reviews/r1",
+        json={"status": "needs_more_data", "signal_id": "forged-signal"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "review_signal_mismatch"
+    assert not (output_dir / "manual_review_state.json").exists()
 
 
 def test_report_download_uses_allowlist(tmp_path):

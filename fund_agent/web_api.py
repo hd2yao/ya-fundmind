@@ -5,10 +5,12 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import __version__
 from .review_state import VALID_REVIEW_STATUSES, list_review_state, summarize_review_state
@@ -65,9 +67,29 @@ def create_web_app(
         redoc_url=None,
         openapi_url=None,
     )
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver"],
+    )
     app.state.output_dir = root
     app.state.review_state_path = state_path
     app.state.static_dir = static_root
+
+    @app.middleware("http")
+    async def enforce_local_write_origin(request: Request, call_next):
+        if request.url.path.startswith("/api/") and request.method not in {"GET", "HEAD", "OPTIONS"}:
+            origin = request.headers.get("origin")
+            if origin and not _is_loopback_origin(origin):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "detail": {
+                            "code": "cross_origin_write_forbidden",
+                            "message": "Local API writes only accept loopback origins.",
+                        }
+                    },
+                )
+        return await call_next(request)
 
     @app.get("/api/health")
     def health() -> dict[str, object]:
@@ -110,8 +132,8 @@ def create_web_app(
         trend_path = root / "market" / "market_trend_report.json"
         return _resource(
             {
-                "intelligence": _load_json(intelligence_path),
-                "trend": _load_json(trend_path),
+                "intelligence": _load_json_object(intelligence_path),
+                "trend": _load_json_object(trend_path),
             },
             source_paths=(intelligence_path, trend_path),
         )
@@ -122,8 +144,8 @@ def create_web_app(
         signals_path = root / "signal_candidates.json"
         return _resource(
             {
-                "details": _load_json(details_path),
-                "signal_candidates": _load_json(signals_path),
+                "details": _load_json_object(details_path),
+                "signal_candidates": _load_json_object(signals_path),
             },
             source_paths=(details_path, signals_path),
         )
@@ -131,12 +153,12 @@ def create_web_app(
     @app.get("/api/portfolio")
     def portfolio() -> dict[str, object]:
         path = root / "portfolio" / "portfolio_report.json"
-        return _resource(_load_json(path), source_paths=(path,))
+        return _resource(_load_json_object(path), source_paths=(path,))
 
     @app.get("/api/news")
     def news() -> dict[str, object]:
         path = root / "news" / "news_evidence_report.json"
-        return _resource(_load_json(path), source_paths=(path,))
+        return _resource(_load_json_object(path), source_paths=(path,))
 
     @app.get("/api/reports")
     def reports() -> dict[str, object]:
@@ -243,13 +265,30 @@ def create_web_app(
                 status_code=404,
                 detail={"code": "review_not_found", "message": "Review item does not exist."},
             )
+        canonical_item = next(
+            (
+                item
+                for item in [*queue_items, *state_items]
+                if isinstance(item, dict) and str(item.get("review_id")) == review_id
+            ),
+            {},
+        )
+        canonical_signal_id = str(canonical_item.get("signal_id") or review_id)
+        if request.signal_id and request.signal_id != canonical_signal_id:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "review_signal_mismatch",
+                    "message": "Review signal_id must match the canonical queue item.",
+                },
+            )
         item = update_review_state_for_web(
             review_state_path=state_path,
             review_id=review_id,
             status=request.status,
             note=request.note,
             reviewer=request.reviewer,
-            signal_id=request.signal_id,
+            signal_id=canonical_signal_id,
         )
         return _resource(item, source_paths=(state_path,), available=True)
 
@@ -299,6 +338,21 @@ def _load_json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return {}
+
+
+def _load_json_object(path: Path) -> dict[str, Any]:
+    payload = _load_json(path)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _is_loopback_origin(origin: str) -> bool:
+    parsed = urlsplit(origin)
+    return (
+        parsed.scheme == "http"
+        and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+        and parsed.username is None
+        and parsed.password is None
+    )
 
 
 def _latest_updated_at(paths: tuple[Path, ...]) -> str | None:
