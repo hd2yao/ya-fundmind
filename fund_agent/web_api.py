@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
 from . import __version__
-from .web_console import build_web_console_state
+from .review_state import VALID_REVIEW_STATUSES, list_review_state, summarize_review_state
+from .web_console import (
+    build_copilot_view_model,
+    build_web_console_state,
+    run_copilot_for_web,
+    update_review_state_for_web,
+)
 
 
 REPORT_ALLOWLIST = {
@@ -21,6 +29,17 @@ REPORT_ALLOWLIST = {
     "news": ("新闻证据", "dashboard/news.html"),
     "review": ("人工审核", "dashboard/review.html"),
 }
+
+
+class CopilotRequest(BaseModel):
+    question: str = Field(max_length=1000)
+
+
+class ReviewUpdateRequest(BaseModel):
+    status: str = Field(max_length=80)
+    note: str = Field(default="", max_length=2000)
+    reviewer: str = Field(default="", max_length=120)
+    signal_id: str | None = Field(default=None, max_length=200)
 
 
 def create_web_app(
@@ -137,6 +156,82 @@ def create_web_app(
             source_paths=tuple(source_paths),
             available=any(item["exists"] for item in items),
         )
+
+    @app.post("/api/copilot/ask")
+    def ask_copilot(request: CopilotRequest) -> dict[str, object]:
+        question = request.question.strip()
+        if not question:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "invalid_question", "message": "Research question must not be blank."},
+            )
+        try:
+            answer = run_copilot_for_web(question=question, output_dir=root)
+        except Exception as exc:  # pragma: no cover - endpoint boundary protection
+            raise HTTPException(
+                status_code=500,
+                detail={"code": "copilot_failed", "message": type(exc).__name__},
+            ) from exc
+        payload = asdict(answer)
+        answer_path = root / "copilot" / "research_answer.json"
+        return _resource(
+            {
+                "answer": payload,
+                "view_model": build_copilot_view_model(payload),
+            },
+            source_paths=(answer_path,),
+            available=True,
+        )
+
+    @app.get("/api/reviews")
+    def reviews() -> dict[str, object]:
+        queue_path = root / "manual_review_queue.json"
+        queue = _load_json(queue_path)
+        if not isinstance(queue, list):
+            queue = []
+        state = list_review_state(state_path)
+        return _resource(
+            {
+                "queue": queue,
+                "state": state,
+                "summary": summarize_review_state(state),
+            },
+            source_paths=(queue_path, state_path),
+            available=bool(queue or state),
+        )
+
+    @app.post("/api/reviews/{review_id}")
+    def update_review(review_id: str, request: ReviewUpdateRequest) -> dict[str, object]:
+        if request.status not in VALID_REVIEW_STATUSES:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "invalid_review_status",
+                    "message": f"Unsupported review status: {request.status}",
+                },
+            )
+        queue = _load_json(root / "manual_review_queue.json")
+        queue_items = queue if isinstance(queue, list) else []
+        state_items = list_review_state(state_path)
+        known_ids = {
+            str(item.get("review_id"))
+            for item in [*queue_items, *state_items]
+            if isinstance(item, dict) and item.get("review_id")
+        }
+        if review_id not in known_ids:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "review_not_found", "message": "Review item does not exist."},
+            )
+        item = update_review_state_for_web(
+            review_state_path=state_path,
+            review_id=review_id,
+            status=request.status,
+            note=request.note,
+            reviewer=request.reviewer,
+            signal_id=request.signal_id,
+        )
+        return _resource(item, source_paths=(state_path,), available=True)
 
     return app
 

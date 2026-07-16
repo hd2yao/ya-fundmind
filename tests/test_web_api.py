@@ -1,9 +1,11 @@
 from pathlib import Path
 import json
+from dataclasses import asdict
 
 from fastapi.testclient import TestClient
 
 from fund_agent import __version__
+from fund_agent.models import ResearchAnswer
 from fund_agent.web_api import create_web_app
 
 
@@ -136,3 +138,106 @@ def test_read_api_does_not_accept_path_override(tmp_path):
     assert response.status_code == 200
     assert response.json()["availability"] == "missing"
     assert "secret" not in response.text
+
+
+def test_copilot_api_returns_structured_answer_and_citations(monkeypatch, tmp_path):
+    output_dir = tmp_path / "outputs"
+    answer = ResearchAnswer(
+        schema_version="1.0",
+        generated_at="2026-07-16T10:00:00+00:00",
+        generator="ya-fundmind/2.0.0rc1",
+        question="市场热点是什么？",
+        intent={"intent": "market_overview"},
+        answer_status="answered",
+        as_of="2026-07-16",
+        summary="人工智能主题热度较高，但仍需人工审核。",
+        findings=(
+            {
+                "finding_id": "f1",
+                "label": "人工智能主题",
+                "value": "热度上升",
+                "evidence_ids": ["e1"],
+                "quality_grade": "normal",
+            },
+        ),
+        evidence=(
+            {
+                "evidence_id": "e1",
+                "source": "market_intelligence",
+                "as_of": "2026-07-16",
+                "quality_grade": "normal",
+                "stale": False,
+            },
+        ),
+        data_gaps=(),
+        warnings=(),
+        review_required=True,
+        confidence="medium",
+    )
+    calls = []
+
+    def fake_run(*, question, output_dir):
+        calls.append((question, output_dir))
+        return answer
+
+    monkeypatch.setattr("fund_agent.web_api.run_copilot_for_web", fake_run)
+    client = TestClient(create_web_app(output_dir=output_dir))
+
+    response = client.post("/api/copilot/ask", json={"question": "  市场热点是什么？  "})
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    expected_answer = json.loads(json.dumps(asdict(answer), ensure_ascii=False))
+    assert payload["answer"] == expected_answer
+    assert payload["view_model"]["findings"][0]["citations"][0]["evidence_id"] == "e1"
+    assert calls == [("市场热点是什么？", output_dir.resolve())]
+
+
+def test_copilot_api_rejects_blank_or_oversized_question(tmp_path):
+    client = TestClient(create_web_app(output_dir=tmp_path / "outputs"))
+
+    blank = client.post("/api/copilot/ask", json={"question": "   "})
+    oversized = client.post("/api/copilot/ask", json={"question": "x" * 1001})
+
+    assert blank.status_code == 422
+    assert blank.json()["detail"]["code"] == "invalid_question"
+    assert oversized.status_code == 422
+
+
+def test_review_api_lists_and_updates_existing_review_item(tmp_path):
+    output_dir = tmp_path / "outputs"
+    _write_json(output_dir / "manual_review_queue.json", [{"review_id": "r1", "signal_id": "s1"}])
+    _write_json(output_dir / "manual_review_state.json", {"items": []})
+    client = TestClient(create_web_app(output_dir=output_dir))
+
+    listed = client.get("/api/reviews")
+    updated = client.post(
+        "/api/reviews/r1",
+        json={
+            "status": "needs_more_data",
+            "note": "等待更多有效运行日",
+            "reviewer": "local",
+            "signal_id": "s1",
+        },
+    )
+
+    assert listed.status_code == 200
+    assert listed.json()["data"]["queue"][0]["review_id"] == "r1"
+    assert updated.status_code == 200
+    assert updated.json()["data"]["status"] == "needs_more_data"
+    saved = json.loads((output_dir / "manual_review_state.json").read_text(encoding="utf-8"))
+    assert saved["items"][0]["review_id"] == "r1"
+
+
+def test_review_api_rejects_unknown_item_and_invalid_status(tmp_path):
+    output_dir = tmp_path / "outputs"
+    _write_json(output_dir / "manual_review_queue.json", [{"review_id": "r1"}])
+    client = TestClient(create_web_app(output_dir=output_dir))
+
+    missing = client.post("/api/reviews/unknown", json={"status": "needs_more_data"})
+    invalid = client.post("/api/reviews/r1", json={"status": "buy_now"})
+
+    assert missing.status_code == 404
+    assert missing.json()["detail"]["code"] == "review_not_found"
+    assert invalid.status_code == 422
+    assert invalid.json()["detail"]["code"] == "invalid_review_status"
