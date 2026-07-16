@@ -4,6 +4,14 @@ import { MemoryRouter } from "react-router-dom";
 import { App } from "./App";
 
 describe("App", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("renders the product boundary and overview route", () => {
     render(
       <MemoryRouter initialEntries={["/"]}>

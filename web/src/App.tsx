@@ -1,6 +1,8 @@
 import { Link, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "./layout/AppShell";
+import { MarketPage } from "./pages/MarketPage";
+import { OverviewPage } from "./pages/OverviewPage";
 
 function PageIntro({ title, description }: { title: string; description: string }) {
   return (
@@ -12,10 +14,6 @@ function PageIntro({ title, description }: { title: string; description: string 
       </div>
     </section>
   );
-}
-
-function Overview() {
-  return <PageIntro title="研究总览" description="查看最新运行、数据质量、待复核事项和研究摘要。" />;
 }
 
 function Placeholder({ title, description }: { title: string; description: string }) {
@@ -39,8 +37,8 @@ export function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route path="/" element={<Overview />} />
-        <Route path="/market" element={<Placeholder title="市场情报" description="观察市场主题、趋势变化与关联证据。" />} />
+        <Route path="/" element={<OverviewPage />} />
+        <Route path="/market" element={<MarketPage />} />
         <Route path="/funds" element={<Placeholder title="自选研究" description="研究 watchlist 中的基金与 ETF，不代表全市场推荐。" />} />
         <Route path="/portfolio" element={<Placeholder title="组合分析" description="查看持仓暴露、集中度和数据缺口。" />} />
         <Route path="/news" element={<Placeholder title="新闻证据" description="浏览新闻与公告证据，并核对来源和时间。" />} />
