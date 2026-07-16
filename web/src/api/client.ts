@@ -10,6 +10,21 @@ export class ApiError extends Error {
   }
 }
 
+function parseResource<T>(payload: unknown): ApiResource<T> {
+  if (
+    payload === null ||
+    typeof payload !== "object" ||
+    !("data" in payload) ||
+    payload.data === null ||
+    typeof payload.data !== "object" ||
+    !("availability" in payload) ||
+    (payload.availability !== "available" && payload.availability !== "missing")
+  ) {
+    throw new ApiError("Local API returned an invalid resource payload.", 502);
+  }
+  return payload as ApiResource<T>;
+}
+
 export async function getResource<T>(path: string, signal?: AbortSignal): Promise<ApiResource<T>> {
   const response = await fetch(path, {
     method: "GET",
@@ -19,7 +34,7 @@ export async function getResource<T>(path: string, signal?: AbortSignal): Promis
   if (!response.ok) {
     throw new ApiError(`Local API returned HTTP ${response.status}.`, response.status);
   }
-  return (await response.json()) as ApiResource<T>;
+  return parseResource<T>(await response.json());
 }
 
 export async function postResource<TResponse, TBody>(path: string, body: TBody): Promise<ApiResource<TResponse>> {
@@ -32,5 +47,5 @@ export async function postResource<TResponse, TBody>(path: string, body: TBody):
     const payload = (await response.json().catch(() => null)) as { detail?: { message?: string } } | null;
     throw new ApiError(payload?.detail?.message || `Local API returned HTTP ${response.status}.`, response.status);
   }
-  return (await response.json()) as ApiResource<TResponse>;
+  return parseResource<TResponse>(await response.json());
 }

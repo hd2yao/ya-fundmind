@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 
 import { PortfolioPage } from "./PortfolioPage";
 
@@ -48,5 +48,40 @@ describe("PortfolioPage", () => {
     expect(screen.queryByText("-100.00%")).not.toBeInTheDocument();
     expect(screen.getByText("510300 has no usable current valuation.")).toBeInTheDocument();
     expect(screen.getByText(/不生成调仓动作/)).toBeInTheDocument();
+  });
+
+  it("shows an available position valuation even when confidence is absent", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ...response,
+          data: {
+            ...response.data,
+            total_value: 3200,
+            positions: [
+              {
+                code: "510300",
+                name: "沪深300ETF",
+                shares: 800,
+                cost_value: 2960,
+                current_value: 3200,
+                unrealized_return_pct: 8.11,
+                source: "fund_agent_report"
+              }
+            ],
+            observation_issues: [],
+            warnings: []
+          }
+        })
+      })
+    );
+
+    render(<PortfolioPage />);
+
+    const row = await screen.findByRole("row", { name: /510300/ });
+    expect(within(row).getByText("¥3,200.00")).toBeInTheDocument();
+    expect(within(row).getByText("8.11%")).toBeInTheDocument();
   });
 });

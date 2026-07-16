@@ -50,7 +50,7 @@ export function PortfolioPage() {
           <thead><tr><th>代码</th><th>名称</th><th>主题</th><th>份额</th><th>成本</th><th>当前值</th><th>收益率</th><th>来源</th></tr></thead>
           <tbody>
             {(data.positions || []).map((position) => {
-              const missing = missingValuationCodes.has(position.code || "") || !position.valuation_confidence;
+              const missing = missingValuationCodes.has(position.code || "") || position.current_value == null;
               return (
                 <tr key={position.code}>
                   <td><strong>{position.code || "--"}</strong></td>

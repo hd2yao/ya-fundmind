@@ -77,4 +77,27 @@ describe("MarketPage", () => {
     await waitFor(() => expect(screen.getByText("尚无市场情报产物")).toBeInTheDocument());
     expect(screen.queryByText("热门板块")).not.toBeInTheDocument();
   });
+
+  it("renders degraded market quality as critical", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ...response,
+          data: {
+            ...response.data,
+            intelligence: {
+              ...response.data.intelligence,
+              data_quality_summary: { grade: "degraded", stale_record_count: 4 }
+            }
+          }
+        })
+      })
+    );
+
+    render(<MarketPage />);
+
+    expect(await screen.findByText("degraded")).toHaveClass("status-badge--critical");
+  });
 });

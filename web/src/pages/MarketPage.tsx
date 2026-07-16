@@ -6,7 +6,7 @@ import { EvidenceDrawer } from "../components/EvidenceDrawer";
 import { Metric } from "../components/Metric";
 import { PageHeader } from "../components/PageHeader";
 import { StatePanel } from "../components/StatePanel";
-import { StatusBadge } from "../components/StatusBadge";
+import { StatusBadge, type StatusTone } from "../components/StatusBadge";
 import { TrendChart } from "../components/TrendChart";
 import { useApiResource } from "../hooks/useApiResource";
 
@@ -15,6 +15,13 @@ const number = new Intl.NumberFormat("zh-CN");
 function formatReturn(value?: number | null) {
   if (value === null || value === undefined) return "--";
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function qualityTone(grade?: string | null): StatusTone {
+  if (grade === "normal" || grade === "success") return "success";
+  if (grade === "warning") return "warning";
+  if (grade === "degraded" || grade === "critical") return "critical";
+  return "neutral";
 }
 
 export function MarketPage() {
@@ -52,7 +59,7 @@ export function MarketPage() {
         eyebrow="Market intelligence"
         title="市场情报"
         description="全市场观察与历史趋势验证，不等同于自选池，也不构成板块推荐。"
-        actions={<StatusBadge tone={quality === "warning" ? "warning" : "success"}>{quality}</StatusBadge>}
+        actions={<StatusBadge tone={qualityTone(quality)}>{quality}</StatusBadge>}
       />
 
       <section className="metric-grid" aria-label="市场覆盖指标">
@@ -93,7 +100,7 @@ export function MarketPage() {
                   <td className={Number(theme.avg_return_3m) >= 0 ? "number-positive" : "number-negative"}>{formatReturn(theme.avg_return_3m)}</td>
                   <td>{theme.positive_ratio_1m == null ? "--" : `${(theme.positive_ratio_1m * 100).toFixed(1)}%`}</td>
                   <td>{number.format(theme.sample_size || 0)}</td>
-                  <td><StatusBadge tone={theme.data_quality_grade === "normal" ? "success" : "warning"}>{theme.data_quality_grade || "unknown"}</StatusBadge></td>
+                  <td><StatusBadge tone={qualityTone(theme.data_quality_grade)}>{theme.data_quality_grade || "unknown"}</StatusBadge></td>
                   <td>
                     <button className="table-action" type="button" aria-label={`查看${theme.theme || "未分类"}详情`} onClick={() => setSelectedTheme(theme)}>
                       查看
