@@ -1,6 +1,6 @@
 # Documentation Index
 
-当前文档同时维护稳定运行的 V1 基线和已完成 Final 发布门的 `v2.0.0` Research Copilot。M1-M6、post-RC 真实运行观察和 Final 验收已完成，Final 发布执行中；不再使用无限 Phase 追加方式。
+当前文档同时维护稳定运行的 V1 基线和已发布的 `v2.0.0` Research Copilot。M1-M6、post-RC 真实运行观察、Final 验收和 post-release ops check 已完成；不再使用无限 Phase 追加方式。
 
 ## Active Delivery Docs
 

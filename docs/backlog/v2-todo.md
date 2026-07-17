@@ -10,9 +10,9 @@
 ## 当前状态
 
 - 当前版本：`v2.0.0`。
-- 当前 Milestone：M6 与 V2 Final 发布门完成，Final 发布执行中。
+- 当前 Milestone：M6 与 V2 Final 全部完成，`v2.0.0` 已发布。
 - 当前 P0：无。
-- 当前 P1：完成 Final PR/CI/merge、`v2.0.0` tag 和 post-release ops check。
+- 当前 P1：无。
 
 ## P0 Blocking
 
@@ -34,10 +34,7 @@
 - 三个不同日期的真实 daily scheduler run provenance、AKShare live 和数据质量检查。
 - `post_rc` 模式 `outputs/release/v2_release_readiness.json` 通过。
 
-当前仍需完成：
-
-- Final fresh verification 证据提交、PR/CI/merge。
-- clean `main` final smoke、`v2.0.0` tag 和 post-release ops check。
+Final fresh verification、PR #33、Python 3.10/3.12 CI、merge commit、clean `main` smoke、`v2.0.0` tag 和 post-release ops check 均已完成。
 
 ## P2 Later Polish
 

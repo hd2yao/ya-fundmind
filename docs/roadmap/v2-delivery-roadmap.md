@@ -15,7 +15,7 @@
 | M4 | `v1.4.0` | 只读 Skill/MCP 可用 |
 | M5 | `v1.5.0` | 本地 Copilot Console 可用 |
 | M6 RC | `v2.0.0-rc.1` | V2 候选发布，技术门完成 |
-| V2 Final | `v2.0.0` | 全部验收通过，发布执行中 |
+| V2 Final | `v2.0.0` | 全部验收通过，已发布 |
 
 每个 Milestone 必须：
 
@@ -229,7 +229,7 @@ Codex 或其他兼容工具可以读取本地研究结果并获得证据引用�
 
 ## M6：V2 Release Hardening（`v2.0.0-rc.1` -> `v2.0.0`）
 
-状态：Final gate 通过，发布执行中。RC 技术实现、兼容、安全、性能、端到端和文档门已完成；2026-07-15、2026-07-16、2026-07-17 三个 post-RC scheduler run 通过 provenance、AKShare live、数据质量和 strict contract 门。
+状态：已完成并发布 `v2.0.0`。RC 技术实现、兼容、安全、性能、端到端和文档门已完成；2026-07-15、2026-07-16、2026-07-17 三个 post-RC scheduler run 通过 provenance、AKShare live、数据质量和 strict contract 门；PR #33、CI、merge、tag 与 post-release ops check 全部通过。
 
 ### 目标
 
