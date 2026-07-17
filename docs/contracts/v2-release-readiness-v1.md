@@ -116,5 +116,7 @@ python -m fund_agent.cli release-readiness --output-dir outputs \
   --release-target v2.0.0 \
   --observation-mode post_rc \
   --required-app-version 2.0.0rc1 \
-  --required-git-commit "$(git rev-parse HEAD)"
+  --required-git-commit "$(git rev-list -n 1 v2.0.0-rc.1)"
 ```
+
+Final 发布前在 RC tag 对应的 clean `main` 上可以使用当前 `HEAD`；Final 发布后复核历史 run 时必须继续使用 RC tag commit，不能改用 Final commit。

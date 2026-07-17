@@ -5,7 +5,8 @@
 ```bash
 python -m fund_agent.cli validate-contract --output-dir outputs
 python -m fund_agent.cli web-console --output-dir outputs --dry-run
-bash scripts/status_launchd_scheduler.sh
+YA_FUNDMIND_PROJECT_DIR=/Users/dysania/program/AI/agent/ya-fundmind \
+  bash scripts/status_launchd_scheduler.sh
 python -m fund_agent.cli release-readiness \
   --output-dir outputs \
   --release-target v2.0.0-rc.1 \
@@ -88,8 +89,10 @@ python -m fund_agent.cli release-readiness \
   --release-target v2.0.0 \
   --observation-mode post_rc \
   --required-app-version 2.0.0rc1 \
-  --required-git-commit "$(git rev-parse HEAD)"
+  --required-git-commit "$(git rev-list -n 1 v2.0.0-rc.1)"
 ```
+
+Final 发布前若当前 clean `main` 仍精确位于 RC tag，`git rev-parse HEAD` 与上述 tag 命令等价；Final 发布后必须使用 RC tag 复核历史 provenance，不能改成 Final commit。
 
 常见 blocker/reason：
 
@@ -111,12 +114,13 @@ python -m fund_agent.cli release-readiness \
 ## Scheduler
 
 ```bash
-bash scripts/status_launchd_scheduler.sh
+YA_FUNDMIND_PROJECT_DIR=/Users/dysania/program/AI/agent/ya-fundmind \
+  bash scripts/status_launchd_scheduler.sh
 launchctl print gui/$(id -u)/com.ya-fundmind.daily
 launchctl print gui/$(id -u)/com.ya-fundmind.weekly
 ```
 
-确认 daily 为 21:30、provider=akshare、Market Intelligence 开启，daily/weekly `last exit code=0`。`status_launchd_scheduler.sh` 会刷新 ops status/latest summary，因此不是纯只读命令。
+确认 daily 为 21:30、provider=akshare、Market Intelligence 开启，daily/weekly `last exit code=0`。Final worktree 验证时必须通过 `YA_FUNDMIND_PROJECT_DIR` 指向 launchd 实际使用的主工作区，避免误读隔离 worktree 的空 outputs。`status_launchd_scheduler.sh` 会刷新主工作区 ops status/latest summary，因此不是纯只读命令。
 
 ## Audit 与敏感信息
 

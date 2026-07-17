@@ -6,9 +6,9 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 ## 当前状态
 
-- 当前版本：`v2.0.0-rc.1`（Python package version：`2.0.0rc1`）
+- 当前版本：`v2.0.0`（Python package version：`2.0.0`）
 - 当前交付模式：V2 Research Copilot delivery mode
-- 当前发布状态：M1-M6 RC 技术门已完成；Final 仅等待 RC 合并后的 3 个不同日期真实 scheduler run 和最终发布门。
+- 当前发布状态：V2 M1-M6 与 Final 发布门已完成；`v2.0.0` Final PR/CI/merge/tag 与 post-release check 正在执行。
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
@@ -19,12 +19,13 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 - V2 剩余想法池：`docs/backlog/v2-ideas.md`
 - V1 验收报告：`docs/releases/v1.0.0-release-report.md`
 - V2 RC 报告：`docs/releases/v2.0.0-rc.1-release-report.md`
+- V2 Final 报告：`docs/releases/v2.0.0-release-report.md`
 - V1 -> V2 迁移：`docs/migrations/v1-to-v2.md`
 - V2 排障：`docs/ops/v2-troubleshooting.md`
 - 项目结构说明：`PROJECT_STRUCTURE.md`
 - 文档索引：`docs/README.md`
 
-V1 里程碑 M1 到 M6 已收口并保持稳定运行。V2 M1 到 M5 已分别通过 `v1.1.0` 至 `v1.5.0` 交付，M6 已形成 `v2.0.0-rc.1` release candidate。历史真实 run 只用于兼容验证；Final `v2.0.0` 必须由 RC main commit 在三个不同日期产生可追溯的真实 scheduler run 后才可发布。
+V1 里程碑 M1 到 M6 已收口并保持稳定运行。V2 M1 到 M5 已分别通过 `v1.1.0` 至 `v1.5.0` 交付，M6 先发布 `v2.0.0-rc.1`，再由同一 RC main commit 于 2026-07-15、2026-07-16、2026-07-17 产生三个可追溯的真实 scheduler run。`post_rc` 门已经通过，`v2.0.0` Final PR、CI、merge、tag 与 post-release check 正在执行。
 
 V2 已提供统一研究查询、证据引用、受约束 Copilot、只读 Skill/MCP 和本地 Copilot Console。自动推荐、自动交易、券商接入、SaaS、移动端和小程序不进入本次 V2 主线。
 
@@ -117,6 +118,8 @@ Tool 不接收任意 path、URL、配置或写参数。调用 audit 写入 `outp
 
 ## V2 Release Readiness
 
+`v2.0.0` Final 候选已经通过该门。以下命令继续用于审计历史兼容和复核 Final 证据；不得通过复制日期或修改历史 metadata 制造有效 run。
+
 RC 前可用历史真实 run 检查兼容性，但不能用它们放行 Final：
 
 ```bash
@@ -134,7 +137,7 @@ python -m fund_agent.cli release-readiness \
   --release-target v2.0.0 \
   --observation-mode post_rc \
   --required-app-version 2.0.0rc1 \
-  --required-git-commit "$(git rev-parse HEAD)"
+  --required-git-commit "$(git rev-list -n 1 v2.0.0-rc.1)"
 ```
 
 门禁要求至少 3 个不同日期有效 run、strict contracts 通过、无 fallback/critical/degraded，并保持 P0/P1 为 0。完整语义见 `docs/contracts/v2-release-readiness-v1.md` 和 `docs/ops/v2-troubleshooting.md`。
