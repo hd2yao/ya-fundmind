@@ -4,7 +4,7 @@
 
 YA FundMind OS v2 是建立在 V1 稳定数据和报告底座上的本地 Research Copilot。它把分散的 market、fund detail、portfolio、news、snapshot、provider trace 和 report JSON 统一为可查询、可引用、可审核的研究上下文。
 
-当前实现状态为 `v2.0.0-rc.1`：M1-M5 用户能力和 M6 技术加固已完成。Final `v2.0.0` 只在三个不同日期的 post-RC scheduler run 通过 provenance、provider quality 和 strict contract 门后发布。
+当前实现状态为 `v2.0.0` Final release candidate：M1-M5 用户能力、M6 技术加固，以及 2026-07-15、16、17 三个不同日期的 post-RC scheduler provenance、provider quality 和 strict contract 门均已完成；PR/CI/merge/tag 与 post-release check 正在执行。
 
 V2 的核心价值不是“替用户做投资决定”，而是：
 
