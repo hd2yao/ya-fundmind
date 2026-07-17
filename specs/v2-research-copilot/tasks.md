@@ -99,6 +99,6 @@
   状态：PR #29、#30、#31 已完成，RC tag 绑定 `aaf526fa6d67b6933a67b908021df9419a83c786`。
 - [x] `T606` 观察至少 3 个有效 daily run 并清零 P0/P1。
   映射：`AC-024`
-- [ ] `T607` fresh final verification、PR/CI/merge，发布 `v2.0.0`。
-  状态：Final 分支执行中；完成 CI、merge、tag 和 post-release ops check 后关闭。
+- [x] `T607` fresh final verification、PR/CI/merge，发布 `v2.0.0`。
+  状态：PR #33 合并为 `f419453ec3a21592ff4cad7c542a2846b290002e`，`v2.0.0` tag 与 post-release ops check 已完成。
   映射：全部 AC

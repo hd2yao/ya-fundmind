@@ -8,7 +8,7 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 - 当前版本：`v2.0.0`（Python package version：`2.0.0`）
 - 当前交付模式：V2 Research Copilot delivery mode
-- 当前发布状态：V2 M1-M6 与 Final 发布门已完成；`v2.0.0` Final PR/CI/merge/tag 与 post-release check 正在执行。
+- 当前发布状态：V2 M1-M6、Final 发布门、PR/CI/merge、`v2.0.0` tag 与 post-release check 全部完成。
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
@@ -25,7 +25,7 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 - 项目结构说明：`PROJECT_STRUCTURE.md`
 - 文档索引：`docs/README.md`
 
-V1 里程碑 M1 到 M6 已收口并保持稳定运行。V2 M1 到 M5 已分别通过 `v1.1.0` 至 `v1.5.0` 交付，M6 先发布 `v2.0.0-rc.1`，再由同一 RC main commit 于 2026-07-15、2026-07-16、2026-07-17 产生三个可追溯的真实 scheduler run。`post_rc` 门已经通过，`v2.0.0` Final PR、CI、merge、tag 与 post-release check 正在执行。
+V1 里程碑 M1 到 M6 已收口并保持稳定运行。V2 M1 到 M5 已分别通过 `v1.1.0` 至 `v1.5.0` 交付，M6 先发布 `v2.0.0-rc.1`，再由同一 RC main commit 于 2026-07-15、2026-07-16、2026-07-17 产生三个可追溯的真实 scheduler run。`post_rc` 门通过后，PR #33 完成 CI 与 merge，正式 tag `v2.0.0` 指向 merge commit `f419453ec3a21592ff4cad7c542a2846b290002e`。
 
 V2 已提供统一研究查询、证据引用、受约束 Copilot、只读 Skill/MCP 和本地 Copilot Console。自动推荐、自动交易、券商接入、SaaS、移动端和小程序不进入本次 V2 主线。
 
