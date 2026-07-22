@@ -41,6 +41,35 @@ jobs:
       - name: Compile package
         run: python -m compileall -q fund_agent
 
+  product-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Typecheck frontend
+        working-directory: web
+        run: npm run typecheck
+
+      - name: Test frontend
+        working-directory: web
+        run: npm test -- --run
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
   akshare-smoke:
     if: github.event_name == 'workflow_dispatch' && inputs.run_akshare_smoke == 'true'
     runs-on: ubuntu-latest

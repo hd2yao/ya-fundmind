@@ -329,6 +329,39 @@ python -m fund_agent.cli validate-contract --output-dir outputs
 python -m fund_agent.cli web-console --output-dir outputs --dry-run
 ```
 
+### 产品化本地 Web Console
+
+原 `web-console` Streamlit 入口继续保留。新的 React + TypeScript Console 通过本地 FastAPI 启动，只读取既有 JSON contract 和 Python research service：
+
+```bash
+python -m pip install -e ".[webapp]"
+cd web
+npm ci
+npm run build
+cd ..
+python -m fund_agent.cli product-web --output-dir outputs
+```
+
+默认地址为 `http://127.0.0.1:8768`。`v2.1.0rc1` 的“基金探索”支持在 Market Intelligence 全市场产物中按代码、名称、类型、主题、ETF 和数据质量进行服务端搜索、排序与分页；“我的自选”仍只展示 `configs/watchlist.yaml`，两者都不表示推荐。
+
+可先离线检查依赖和构建：
+
+```bash
+python -m fund_agent.cli product-web --output-dir outputs --dry-run
+```
+
+本地常驻运行：
+
+```bash
+bash scripts/deploy_local_product_web.sh
+bash scripts/install_local_product_web.sh
+bash scripts/status_local_product_web.sh
+```
+
+daily 更新 JSON 后页面会自动读取最新数据，不需要重新构建；只有代码升级时才运行 `deploy_local_product_web.sh`。卸载 Web 服务使用 `bash scripts/uninstall_local_product_web.sh`，不会修改 daily/weekly scheduler，也不会删除 outputs。
+
+页面包括研究总览、市场情报、基金探索、组合分析、新闻证据、研究助手、人工审核和报告中心。服务默认只接受 loopback host，不提供公网部署；不修改主评分/主风险，不接券商，不生成交易动作。完整运行手册见 [`docs/operations/local-product-web.md`](docs/operations/local-product-web.md)。
+
 ## 风险边界
 
 本系统输出仅用于研究辅助，不构成投资建议，不承诺收益，不包含任何自动交易指令。基金投资有风险，历史表现不代表未来收益；跨境/QDII 产品还需要额外核对汇率、时区、申赎限制和折溢价。

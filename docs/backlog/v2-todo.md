@@ -9,10 +9,10 @@
 
 ## 当前状态
 
-- 当前版本：`v2.0.0`。
-- 当前 Milestone：M6 与 V2 Final 全部完成，`v2.0.0` 已发布。
+- 当前版本：`v2.0.0` 已发布；`v2.1.0rc1` Product Web 正在独立验收。
+- 当前 Milestone：Local Product Web + Fund Explorer。
 - 当前 P0：无。
-- 当前 P1：无。
+- 当前 P1：完成真实全市场数据、三视口和本地 launchd 验收，通过 PR/CI 后发布 RC。
 
 ## P0 Blocking
 
@@ -27,6 +27,18 @@
 - V1 artifact 不兼容或被 V2 覆盖。
 
 ## P1 Current Milestone
+
+`v2.1.0rc1` 待完成：
+
+- 用最新真实 `market_intelligence_report.json` 验证 21,000+ 条服务端索引。
+- 运行全量 pytest、compileall、strict contracts 和前端 typecheck/test/build。
+- 完成 375/768/1440 页面截图、console error 和横向溢出检查。
+- 安装独立 Web launchd 并验证 health、首页和重启。
+- Draft PR #32 完成对抗式评审、CI、合并和 RC tag。
+
+以下边界不是 P1：Sites、公网部署、账号、云同步和自动交易。
+
+## v2.0 Final 记录
 
 以下 Final 门已完成：
 
@@ -46,7 +58,7 @@ Final fresh verification、PR #33、Python 3.10/3.12 CI、merge commit、clean `
 - 更细的 audit 检索和 retention。
 - 多语言 renderer。
 - 更丰富的非交易型情景比较。
-- 产品化 React/FastAPI Web Console 作为独立后续版本交付，不回写 `v2.0.0`。
+- Product Web 的高级图表、主题个性化、收藏编辑和跨设备访问。
 - 在后续 Streamlit 升级前，把 `use_container_width` 调用迁移到 `width="stretch"/"content"`，消除 1.59 服务端弃用提示。
 
 ## 仍留在 Ideas 的事项
