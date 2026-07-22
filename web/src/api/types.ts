@@ -129,6 +129,89 @@ export type FundsData = {
   };
 };
 
+export type FundSearchItem = {
+  code: string;
+  name: string;
+  fund_type: string;
+  primary_theme: string;
+  themes: string[];
+  classification_confidence: number | null;
+  nav: number | null;
+  scale: number | null;
+  exchange_traded: boolean;
+  returns: Partial<Record<"1m" | "3m" | "6m" | "1y", number>>;
+  source: string;
+  as_of: string | null;
+  valuation_date: string | null;
+  updated_at: string | null;
+  expires_at: string | null;
+  stale: boolean;
+  data_quality_grade: string;
+};
+
+export type FundSearchParams = {
+  q?: string;
+  fundType?: string;
+  theme?: string;
+  exchangeTraded?: boolean;
+  quality?: "normal" | "warning" | "degraded" | "unknown";
+  sort?: "code" | "name" | "return_1m" | "return_3m" | "return_6m" | "return_1y";
+  direction?: "asc" | "desc";
+  page?: number;
+  pageSize?: number;
+};
+
+export type FundSearchResponse = {
+  availability: Availability;
+  items: FundSearchItem[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  facets: {
+    fund_types: Record<string, number>;
+    themes: Record<string, number>;
+    exchange_traded: Record<string, number>;
+    qualities: Record<string, number>;
+  };
+  as_of: string | null;
+  source: string | null;
+  data_quality_grade: string;
+  index_stale: boolean;
+  warnings: string[];
+};
+
+export type FundResearchDetail = Pick<
+  FundDetailItem,
+  | "fund_company"
+  | "fund_manager"
+  | "inception_date"
+  | "rating"
+  | "data_quality_grade"
+  | "data_quality_warnings"
+  | "missing_fields"
+  | "return_windows"
+  | "data_coverage"
+  | "signal_context"
+> & {
+  accumulated_nav?: number | null;
+  market_rank_context?: Record<string, unknown>;
+  nav_history_summary?: Record<string, unknown>;
+  observation_notes?: string[];
+  peer_comparison?: Record<string, unknown>;
+  unknown_reason?: string;
+  is_watchlist?: boolean;
+  is_portfolio?: boolean;
+};
+
+export type FundDetailResponse = {
+  fund: FundSearchItem;
+  research_detail: FundResearchDetail;
+  not_production_model: boolean;
+  main_score_changed: boolean;
+  main_risk_changed: boolean;
+};
+
 export type PortfolioPosition = {
   code?: string;
   name?: string;
