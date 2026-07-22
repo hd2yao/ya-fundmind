@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## v2.0.0 - 2026-07-17
+
+- Released the evidence-grounded, local, read-only YA FundMind OS V2 Research Copilot after all M1-M6 acceptance gates passed.
+- Accepted three distinct post-RC scheduler runs from 2026-07-15, 2026-07-16 and 2026-07-17, all bound to `2.0.0rc1` and exact commit `aaf526fa6d67b6933a67b908021df9419a83c786` with clean provenance.
+- Confirmed AKShare live row counts of 19,987, 21,546 and 21,536 with no fallback, critical warning or degraded quality; strict report/snapshot/trace contracts passed for every accepted run.
+- Re-ran full offline tests, compileall, strict contracts, six-topic CLI end-to-end checks, optional MCP integration, responsive Web Console checks, scheduler status and fresh release-readiness before the Final merge gate.
+- Preserved the V1 daily/weekly workflow, main scoring, main risk, provider defaults, watchlist, portfolio and scheduler schedule.
+- Kept the separate product Web Console work in Draft PR #32; it is not part of `v2.0.0` and will use an independent later version gate.
+- No broker integration, automatic trading, buy/sell recommendations or return promises were added.
+
 ## v2.0.0-rc.1 - 2026-07-15
 
 - Completed V2 M6 compatibility, security, privacy, performance and end-to-end hardening without changing V1 scoring, risk or scheduled research behavior.

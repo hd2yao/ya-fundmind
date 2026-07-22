@@ -15,7 +15,7 @@
 | M4 | `v1.4.0` | 只读 Skill/MCP 可用 |
 | M5 | `v1.5.0` | 本地 Copilot Console 可用 |
 | M6 RC | `v2.0.0-rc.1` | V2 候选发布，技术门完成 |
-| V2 Final | `v2.0.0` | 全部验收通过 |
+| V2 Final | `v2.0.0` | 全部验收通过，已发布 |
 
 每个 Milestone 必须：
 
@@ -229,7 +229,7 @@ Codex 或其他兼容工具可以读取本地研究结果并获得证据引用�
 
 ## M6：V2 Release Hardening（`v2.0.0-rc.1` -> `v2.0.0`）
 
-状态：RC 技术实现、兼容、安全、性能、端到端和文档门已完成；RC 发布流程进行中。Final 尚未通过，因为 post-RC 的 3 个不同日期 scheduler run 必须在 RC 合并后产生，不能用历史数据替代。
+状态：已完成并发布 `v2.0.0`。RC 技术实现、兼容、安全、性能、端到端和文档门已完成；2026-07-15、2026-07-16、2026-07-17 三个 post-RC scheduler run 通过 provenance、AKShare live、数据质量和 strict contract 门；PR #33、CI、merge、tag 与 post-release ops check 全部通过。
 
 ### 目标
 
@@ -281,10 +281,18 @@ python -m fund_agent.cli release-readiness \
   --release-target v2.0.0 \
   --observation-mode post_rc \
   --required-app-version 2.0.0rc1 \
-  --required-git-commit "$(git rev-parse HEAD)"
+  --required-git-commit "$(git rev-list -n 1 v2.0.0-rc.1)"
 ```
 
 `historical_compat` 通过不等于 Final 通过，也不允许修改历史 run metadata 补门。
+
+### Final 验收证据
+
+- `post_rc status=pass`，有效 run 为 3/3，日期为 2026-07-15、2026-07-16、2026-07-17。
+- 三个 run 均为 `app_version=2.0.0rc1`、精确 commit `aaf526fa6d67b6933a67b908021df9419a83c786`、`git_dirty=false`、`trigger=daily_ops`。
+- AKShare live rows 分别为 19,987、21,546、21,536；无 fallback、critical warning 或 degraded quality。
+- report、snapshot、trace strict contracts 与发布机性能预算通过。
+- 产品化 React/FastAPI Web Console 保持独立 Draft PR，不进入本 Final 版本。
 
 ## 自主推进规则
 

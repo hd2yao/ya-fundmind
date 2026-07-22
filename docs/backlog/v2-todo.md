@@ -9,10 +9,10 @@
 
 ## 当前状态
 
-- 当前版本：`v2.0.0-rc.1`。
-- 当前 Milestone：M6 RC 技术门已完成，正在完成 RC 发布和 Final post-RC 观察。
+- 当前版本：`v2.0.0`。
+- 当前 Milestone：M6 与 V2 Final 全部完成，`v2.0.0` 已发布。
 - 当前 P0：无。
-- 当前 P1：发布 `v2.0.0-rc.1`；随后收集 3 个不同日期、满足 provenance 和数据质量门的 scheduler run，再发布 `v2.0.0`。
+- 当前 P1：无。
 
 ## P0 Blocking
 
@@ -28,10 +28,13 @@
 
 ## P1 Current Milestone
 
-- 完成 RC PR/CI/merge 和 `v2.0.0-rc.1` tag。
-- RC 合并后收集 3 个不同日期的真实 daily scheduler run；要求版本、commit、clean tree、trigger、AKShare live 和数据质量全部合格。
-- 以 `post_rc` 模式生成通过的 `outputs/release/v2_release_readiness.json`。
-- P0/P1 清零后完成 Final PR/CI/merge、fresh verification 和 `v2.0.0` tag。
+以下 Final 门已完成：
+
+- RC PR/CI/merge 和 `v2.0.0-rc.1` tag。
+- 三个不同日期的真实 daily scheduler run provenance、AKShare live 和数据质量检查。
+- `post_rc` 模式 `outputs/release/v2_release_readiness.json` 通过。
+
+Final fresh verification、PR #33、Python 3.10/3.12 CI、merge commit、clean `main` smoke、`v2.0.0` tag 和 post-release ops check 均已完成。
 
 ## P2 Later Polish
 
@@ -43,6 +46,8 @@
 - 更细的 audit 检索和 retention。
 - 多语言 renderer。
 - 更丰富的非交易型情景比较。
+- 产品化 React/FastAPI Web Console 作为独立后续版本交付，不回写 `v2.0.0`。
+- 在后续 Streamlit 升级前，把 `use_container_width` 调用迁移到 `width="stretch"/"content"`，消除 1.59 服务端弃用提示。
 
 ## 仍留在 Ideas 的事项
 

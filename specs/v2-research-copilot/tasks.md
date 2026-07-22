@@ -95,9 +95,10 @@
   映射：`AC-023`
 - [x] `T604` 完成 fixture/live optional/daily/weekly/scheduler/Web/MCP e2e。
   映射：`AC-022` 至 `AC-024`
-- [ ] `T605` 更新 README、migration、ops、contracts、release report，发布 `v2.0.0-rc.1`。
-  状态：文档和本地验收完成，等待 PR #29 CI/merge/tag 后勾选。
-- [ ] `T606` 观察至少 3 个有效 daily run 并清零 P0/P1。
+- [x] `T605` 更新 README、migration、ops、contracts、release report，发布 `v2.0.0-rc.1`。
+  状态：PR #29、#30、#31 已完成，RC tag 绑定 `aaf526fa6d67b6933a67b908021df9419a83c786`。
+- [x] `T606` 观察至少 3 个有效 daily run 并清零 P0/P1。
   映射：`AC-024`
-- [ ] `T607` fresh final verification、PR/CI/merge，发布 `v2.0.0`。
+- [x] `T607` fresh final verification、PR/CI/merge，发布 `v2.0.0`。
+  状态：PR #33 合并为 `f419453ec3a21592ff4cad7c542a2846b290002e`，`v2.0.0` tag 与 post-release ops check 已完成。
   映射：全部 AC

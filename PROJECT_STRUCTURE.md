@@ -1,6 +1,6 @@
 # Project Structure
 
-This document is the quick map for YA FundMind OS. V1 remains the stable runtime baseline; V2 Research Copilot has reached `v2.0.0-rc.1` and is waiting for the post-RC observation gate before Final.
+This document is the quick map for YA FundMind OS. V1 remains the stable runtime baseline; V2 Research Copilot completed the post-RC observation gate and was released as `v2.0.0`.
 
 ## Top-Level Directories
 
@@ -82,6 +82,7 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `docs/migrations/v1-to-v2.md` | Non-destructive V1-to-V2 upgrade and rollback guide. |
 | `docs/releases/v1.0.0-release-report.md` | V1 release verification report. |
 | `docs/releases/v2.0.0-rc.1-release-report.md` | V2 RC acceptance evidence and Final observation gate. |
+| `docs/releases/v2.0.0-release-report.md` | V2 Final runtime, validation, and release evidence. |
 | `docs/archive/` | Historical phase plans, research notes, and review artifacts retained for traceability. |
 
 ## Generated Outputs
