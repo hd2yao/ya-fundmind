@@ -16,6 +16,33 @@
 | M5 | `v1.5.0` | 本地 Copilot Console 可用 |
 | M6 RC | `v2.0.0-rc.1` | V2 候选发布，技术门完成 |
 | V2 Final | `v2.0.0` | 全部验收通过，已发布 |
+| Product Web RC | `v2.1.0rc1` | 本地产品化 Web、全市场 Fund Explorer 和独立 launchd |
+| Product Web Final | `v2.1.0` | RC 本地常驻与真实数据浏览验收通过后发布 |
+
+## v2.1：Local Product Web + Fund Explorer
+
+状态：实现中，独立于已发布的 `v2.0.0`。
+
+### 目标
+
+- 将 Draft Product Web Console 合入正式版本轨道。
+- 在浏览器中搜索约两万只基金与 ETF，不把全部记录传到前端。
+- 将全市场浏览和 `configs/watchlist.yaml` 自选研究明确分开。
+- 通过独立 launchd 在 `127.0.0.1:8768` 常驻运行。
+
+### Gate
+
+- 搜索 API 覆盖代码、名称、类型、主题、ETF、质量、排序和分页。
+- 生产静态资源进入 Python wheel，CLI 默认即可找到。
+- React typecheck、单测、build 和 375/768/1440 浏览器验收通过。
+- 使用真实 Market Intelligence 产物检索至少 21,000 条记录。
+- Web launchd health 与首页可访问，daily/weekly 配置无 diff。
+- 主评分、主风险、provider default、watchlist 和 portfolio 不变。
+
+### 延期范围
+
+- ChatGPT Sites、公网部署、局域网监听、账号系统和云端数据同步。
+- 自动交易、券商接入、买卖建议和收益承诺。
 
 每个 Milestone 必须：
 
