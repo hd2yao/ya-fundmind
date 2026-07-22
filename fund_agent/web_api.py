@@ -4,15 +4,16 @@ import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import __version__
+from .fund_explorer import FundExplorerIndex, FundSearchQuery
 from .review_state import VALID_REVIEW_STATUSES, list_review_state, summarize_review_state
 from .web_console import (
     build_copilot_view_model,
@@ -31,6 +32,27 @@ REPORT_ALLOWLIST = {
     "portfolio": ("组合分析", "dashboard/portfolio.html"),
     "news": ("新闻证据", "dashboard/news.html"),
     "review": ("人工审核", "dashboard/review.html"),
+}
+
+FUND_DETAIL_ALLOWLIST = {
+    "accumulated_nav",
+    "data_coverage",
+    "data_quality_grade",
+    "data_quality_warnings",
+    "fund_company",
+    "fund_manager",
+    "inception_date",
+    "is_portfolio",
+    "is_watchlist",
+    "market_rank_context",
+    "missing_fields",
+    "nav_history_summary",
+    "observation_notes",
+    "peer_comparison",
+    "rating",
+    "return_windows",
+    "signal_context",
+    "unknown_reason",
 }
 
 
@@ -74,6 +96,9 @@ def create_web_app(
     app.state.output_dir = root
     app.state.review_state_path = state_path
     app.state.static_dir = static_root
+    app.state.fund_explorer = FundExplorerIndex(
+        root / "market" / "market_intelligence_report.json"
+    )
 
     @app.middleware("http")
     async def enforce_local_write_origin(request: Request, call_next):
@@ -149,6 +174,60 @@ def create_web_app(
             },
             source_paths=(details_path, signals_path),
         )
+
+    @app.get("/api/funds/search")
+    def search_funds(
+        q: str = Query(default="", max_length=200),
+        fund_type: str | None = Query(default=None, max_length=120),
+        theme: str | None = Query(default=None, max_length=120),
+        exchange_traded: bool | None = None,
+        quality: Literal["normal", "warning", "degraded", "unknown"] | None = None,
+        sort: Literal[
+            "code",
+            "name",
+            "return_1m",
+            "return_3m",
+            "return_6m",
+            "return_1y",
+        ] = "code",
+        direction: Literal["asc", "desc"] = "asc",
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=25, ge=1, le=100),
+    ) -> dict[str, object]:
+        return app.state.fund_explorer.search(
+            FundSearchQuery(
+                q=q,
+                fund_type=fund_type,
+                theme=theme,
+                exchange_traded=exchange_traded,
+                quality=quality,
+                sort=sort,
+                direction=direction,
+                page=page,
+                page_size=page_size,
+            )
+        )
+
+    @app.get("/api/funds/{code}")
+    def fund_detail(code: str) -> dict[str, object]:
+        if len(code) != 6 or not code.isdigit():
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "invalid_fund_code", "message": "Fund code must be six digits."},
+            )
+        fund = app.state.fund_explorer.get(code)
+        if fund is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "fund_not_found", "message": "Fund is not present in the market index."},
+            )
+        return {
+            "fund": fund,
+            "research_detail": _find_research_detail(root, code),
+            "not_production_model": True,
+            "main_score_changed": False,
+            "main_risk_changed": False,
+        }
 
     @app.get("/api/portfolio")
     def portfolio() -> dict[str, object]:
@@ -343,6 +422,26 @@ def _load_json(path: Path) -> Any:
 def _load_json_object(path: Path) -> dict[str, Any]:
     payload = _load_json(path)
     return payload if isinstance(payload, dict) else {}
+
+
+def _find_research_detail(root: Path, code: str) -> dict[str, Any]:
+    candidates: list[dict[str, Any]] = []
+    watchlist = _load_json_object(root / "fund_details" / "watchlist_fund_details.json")
+    watchlist_items = watchlist.get("fund_details")
+    if isinstance(watchlist_items, list):
+        candidates.extend(item for item in watchlist_items if isinstance(item, dict))
+
+    single = _load_json_object(root / "fund_details" / f"fund_detail_{code}.json")
+    nested = single.get("fund_detail")
+    if isinstance(nested, dict):
+        candidates.append(nested)
+    elif single:
+        candidates.append(single)
+
+    detail = next((item for item in candidates if str(item.get("code") or "") == code), {})
+    allowed = {key: detail[key] for key in FUND_DETAIL_ALLOWLIST if key in detail}
+    sanitized = _sanitize_local_paths(allowed)
+    return sanitized if isinstance(sanitized, dict) else {}
 
 
 def _is_loopback_origin(origin: str) -> bool:
