@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import plistlib
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -27,11 +28,12 @@ def test_web_launchd_template_is_loopback_only_and_persistent() -> None:
 
 def test_install_script_dry_run_renders_valid_web_plist(tmp_path: Path) -> None:
     output_dir = tmp_path / "runtime"
+    python_bin = str(Path(sys.executable).resolve())
     env = {
         **os.environ,
         "YA_FUNDMIND_PROJECT_DIR": str(ROOT),
         "OUTPUT_DIR": str(output_dir),
-        "PYTHON_BIN": str(ROOT / ".venv" / "bin" / "python"),
+        "PYTHON_BIN": python_bin,
         "HOME": str(tmp_path / "home"),
     }
 
@@ -49,7 +51,7 @@ def test_install_script_dry_run_renders_valid_web_plist(tmp_path: Path) -> None:
     assert preview.is_file()
     payload = plistlib.loads(preview.read_bytes())
     assert payload["Label"] == "com.ya-fundmind.web"
-    assert payload["ProgramArguments"][0] == str(ROOT / ".venv" / "bin" / "python")
+    assert payload["ProgramArguments"][0] == python_bin
     assert payload["ProgramArguments"][-4:] == ["--host", "127.0.0.1", "--port", "8768"]
     assert payload["WorkingDirectory"] == str(ROOT)
     assert payload["RunAtLoad"] is True
