@@ -1143,7 +1143,7 @@ def _streamlit_available() -> bool:
 
 
 def _default_product_web_static_dir() -> Path:
-    return Path(__file__).resolve().parents[1] / "web" / "dist"
+    return Path(__file__).resolve().parent / "web_static"
 
 
 def _product_web_dependencies_available() -> bool:
@@ -1697,7 +1697,7 @@ def build_parser() -> argparse.ArgumentParser:
     product_web.add_argument("--review-state", type=Path)
     product_web.add_argument("--static-dir", type=Path, default=_default_product_web_static_dir())
     product_web.add_argument("--host", default="127.0.0.1")
-    product_web.add_argument("--port", type=int, default=8765)
+    product_web.add_argument("--port", type=int, default=8768)
     product_web.add_argument("--dry-run", action="store_true")
     product_web.set_defaults(func=_run_product_web)
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fund_agent.cli import main
+from fund_agent.cli import _default_product_web_static_dir, main
 
 
 def _write_static_app(path: Path) -> Path:
@@ -95,3 +95,29 @@ def test_product_web_starts_uvicorn_with_fixed_roots(monkeypatch, tmp_path):
             "port": 8765,
         }
     ]
+
+
+def test_product_web_uses_packaged_static_build_by_default(capsys):
+    static_dir = _default_product_web_static_dir()
+
+    exit_code = main(["product-web", "--dry-run"])
+
+    assert static_dir == Path(__file__).resolve().parents[1] / "fund_agent" / "web_static"
+    assert (static_dir / "index.html").is_file()
+    assert exit_code == 0
+    assert "static_ready=true" in capsys.readouterr().out
+
+
+def test_product_web_defaults_to_loopback_port_8768(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(
+        "fund_agent.cli._run_product_web_server",
+        lambda **kwargs: calls.append(kwargs) or 0,
+    )
+
+    exit_code = main(["product-web", "--output-dir", str(tmp_path / "outputs")])
+
+    assert exit_code == 0
+    assert calls[0]["host"] == "127.0.0.1"
+    assert calls[0]["port"] == 8768
+    assert calls[0]["static_dir"] == _default_product_web_static_dir()

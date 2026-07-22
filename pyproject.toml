@@ -23,5 +23,8 @@ fund-agent = "fund_agent.cli:main"
 [tool.setuptools.packages.find]
 include = ["fund_agent*"]
 
+[tool.setuptools.package-data]
+fund_agent = ["web_static/*", "web_static/assets/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

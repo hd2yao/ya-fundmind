@@ -9,7 +9,7 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     proxy: {
-      "/api": "http://127.0.0.1:8765"
+      "/api": "http://127.0.0.1:8768"
     }
   },
   test: {
@@ -19,6 +19,8 @@ export default defineConfig({
     css: true
   },
   build: {
+    outDir: "../fund_agent/web_static",
+    emptyOutDir: true,
     rollupOptions: {
       output: {
         manualChunks(id) {
