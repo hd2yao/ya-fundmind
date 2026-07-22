@@ -16,12 +16,12 @@
 | M5 | `v1.5.0` | 本地 Copilot Console 可用 |
 | M6 RC | `v2.0.0-rc.1` | V2 候选发布，技术门完成 |
 | V2 Final | `v2.0.0` | 全部验收通过，已发布 |
-| Product Web RC | `v2.1.0rc1` | 本地产品化 Web、全市场 Fund Explorer 和独立 launchd |
-| Product Web Final | `v2.1.0` | RC 本地常驻与真实数据浏览验收通过后发布 |
+| Product Web RC | `v2.1.0rc1` | 本地产品化 Web、全市场 Fund Explorer 和独立 launchd，已发布 |
+| Product Web Final | `v2.1.0` | RC 本地常驻与真实数据浏览验收通过，已发布 |
 
 ## v2.1：Local Product Web + Fund Explorer
 
-状态：实现中，独立于已发布的 `v2.0.0`。
+状态：完成。PR #32、CI、真实数据浏览、响应式页面和本地 launchd 验收均已通过。
 
 ### 目标
 

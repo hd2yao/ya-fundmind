@@ -9,10 +9,10 @@
 
 ## 当前状态
 
-- 当前版本：`v2.0.0` 已发布；`v2.1.0rc1` Product Web 正在独立验收。
-- 当前 Milestone：Local Product Web + Fund Explorer。
+- 当前版本：`v2.1.0` Local Product Web + Fund Explorer 已完成发布门禁。
+- 当前 Milestone：已完成，进入本地运行观察。
 - 当前 P0：无。
-- 当前 P1：完成真实全市场数据、三视口和本地 launchd 验收，通过 PR/CI 后发布 RC。
+- 当前 P1：无。
 
 ## P0 Blocking
 
@@ -28,13 +28,13 @@
 
 ## P1 Current Milestone
 
-`v2.1.0rc1` 待完成：
+`v2.1.0` 已完成：
 
-- 用最新真实 `market_intelligence_report.json` 验证 21,000+ 条服务端索引。
-- 运行全量 pytest、compileall、strict contracts 和前端 typecheck/test/build。
-- 完成 375/768/1440 页面截图、console error 和横向溢出检查。
-- 安装独立 Web launchd 并验证 health、首页和重启。
-- Draft PR #32 完成对抗式评审、CI、合并和 RC tag。
+- 最新真实 `market_intelligence_report.json` 的 21,570 条服务端索引验收。
+- 全量 pytest、compileall、contracts 和前端 typecheck/test/build。
+- 375/768/940/1440 页面、console error 和横向溢出检查。
+- 独立 Web launchd health、首页、main 路径和 daily/weekly 隔离验收。
+- PR #32 对抗式评审、CI、合并和 `v2.1.0rc1` tag。
 
 以下边界不是 P1：Sites、公网部署、账号、云同步和自动交易。
 
