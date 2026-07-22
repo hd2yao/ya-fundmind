@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### v2.1.0rc1
+
+- Promote the isolated Product Web Console into a local-first release candidate without changing the V2 research contracts or daily workflow.
+- Add server-side full-market fund search, filtering, pagination and evidence-oriented fund detail views backed by structured market artifacts.
+- Add an independent loopback-only launchd service so code upgrades require an explicit deploy while daily JSON updates appear without rebuilding the frontend.
+- Keep main scoring, main risk, provider defaults, watchlist, portfolio, daily/weekly schedules, trading and broker boundaries unchanged.
+
 ## v2.0.0 - 2026-07-17
 
 - Released the evidence-grounded, local, read-only YA FundMind OS V2 Research Copilot after all M1-M6 acceptance gates passed.
