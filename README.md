@@ -342,7 +342,7 @@ cd ..
 python -m fund_agent.cli product-web --output-dir outputs
 ```
 
-默认地址为 `http://127.0.0.1:8768`。`v2.1.0rc1` 的“基金探索”支持在 Market Intelligence 全市场产物中按代码、名称、类型、主题、ETF 和数据质量进行服务端搜索、排序与分页；“我的自选”仍只展示 `configs/watchlist.yaml`，两者都不表示推荐。
+默认地址为 `http://127.0.0.1:8768`。`v2.1.0` 的“基金探索”支持在 Market Intelligence 全市场产物中按代码、名称、类型、主题、ETF 和数据质量进行服务端搜索、排序与分页；“我的自选”仍只展示 `configs/watchlist.yaml`，两者都不表示推荐。
 
 可先离线检查依赖和构建：
 

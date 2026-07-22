@@ -2,11 +2,13 @@
 
 ## Unreleased
 
-### v2.1.0rc1
+## v2.1.0 - 2026-07-22
 
 - Promote the isolated Product Web Console into a local-first release candidate without changing the V2 research contracts or daily workflow.
 - Add server-side full-market fund search, filtering, pagination and evidence-oriented fund detail views backed by structured market artifacts.
 - Add an independent loopback-only launchd service so code upgrades require an explicit deploy while daily JSON updates appear without rebuilding the frontend.
+- Package the production React assets inside the Python wheel and preserve the Streamlit fallback command.
+- Validate 21,570 live AKShare market records, three primary responsive viewports and the 940px navigation boundary.
 - Keep main scoring, main risk, provider defaults, watchlist, portfolio, daily/weekly schedules, trading and broker boundaries unchanged.
 
 ## v2.0.0 - 2026-07-17
