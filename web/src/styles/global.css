@@ -1340,7 +1340,7 @@ textarea:focus-visible {
   }
 }
 
-@media (max-width: 920px) {
+@media (max-width: 960px) {
   .sidebar {
     width: min(var(--sidebar-width), calc(100vw - 44px));
     transform: translateX(-105%);
