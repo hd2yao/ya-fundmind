@@ -6,6 +6,9 @@
 - Add AKShare `fund_open_fund_info_em` mapping, bad-row isolation, timeout/retry reuse, SQLite `fund_navs` persistence and explicit stale fallback.
 - Add `GET /api/funds/{code}/history` with fixed windows, source, as-of, freshness, quality and non-production boundaries.
 - Upgrade the fund detail drawer with an interactive 1m/3m/6m/1y/all NAV chart and responsive desktop/tablet/mobile layout.
+- Add an independent SQLite market-series cache plus allowlisted index-history API for the Shanghai Composite, CSI 300 and ChiNext indices.
+- Add cache-first 1m/3m/6m/1y/all index charts and expandable OHLC tables to the Market workspace, including source, as-of, stale, fallback and quality states.
+- Harden real AKShare index access with an Eastmoney-to-Sina endpoint fallback inside the same provider while retaining endpoint traces and warnings.
 - Keep bulk all-market historical backfill, multi-source reconciliation, main scoring, main risk, recommendations and trading out of this delivery slice.
 
 ## v2.1.0 - 2026-07-22
