@@ -92,11 +92,26 @@ export function MarketPage() {
   }
   if (!resource || resource.availability === "missing") {
     return (
-      <StatePanel
-        kind="empty"
-        title="尚无市场情报产物"
-        description="运行 daily ops 并开启 ENABLE_MARKET_INTELLIGENCE=true 后再查看。"
-      />
+      <div className="page-stack">
+        <PageHeader
+          eyebrow="Market intelligence"
+          title="市场情报"
+          description="主要指数可独立按需读取；主题与趋势仍依赖每日 Market Intelligence 产物。"
+          actions={<StatusBadge tone="neutral">index only</StatusBadge>}
+        />
+        <IndexHistoryPanel
+          state={indexHistory}
+          symbol={selectedIndex}
+          window={indexWindow}
+          onSymbolChange={setSelectedIndex}
+          onWindowChange={setIndexWindow}
+        />
+        <StatePanel
+          kind="empty"
+          title="尚无市场情报产物"
+          description="指数浏览仍可使用；运行 daily ops 并开启 ENABLE_MARKET_INTELLIGENCE=true 后生成主题与趋势。"
+        />
+      </div>
     );
   }
 

@@ -152,6 +152,7 @@ describe("MarketPage", () => {
     render(<MarketPage />);
 
     await waitFor(() => expect(screen.getByText("尚无市场情报产物")).toBeInTheDocument());
+    expect(await screen.findByRole("img", { name: "沪深300 指数日线图" })).toBeInTheDocument();
     expect(screen.queryByText("热门板块")).not.toBeInTheDocument();
   });
 
