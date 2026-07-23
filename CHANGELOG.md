@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v2.2.0 - 2026-07-23
+
 - Start the v2.2 Fund Data Terminal delivery track with a cache-first, on-demand historical NAV path for any fund present in the full-market index.
 - Add AKShare `fund_open_fund_info_em` mapping, bad-row isolation, timeout/retry reuse, SQLite `fund_navs` persistence and explicit stale fallback.
 - Add `GET /api/funds/{code}/history` with fixed windows, source, as-of, freshness, quality and non-production boundaries.

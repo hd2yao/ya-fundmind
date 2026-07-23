@@ -18,7 +18,7 @@
 | V2 Final | `v2.0.0` | 全部验收通过，已发布 |
 | Product Web RC | `v2.1.0rc1` | 本地产品化 Web、全市场 Fund Explorer 和独立 launchd，已发布 |
 | Product Web Final | `v2.1.0` | RC 本地常驻与真实数据浏览验收通过，已发布 |
-| Fund Data Terminal | `v2.2.0` | 基金历史、指数/行业曲线和数据终端界面，M1-M4 已完成，M5 发布收口中 |
+| Fund Data Terminal | `v2.2.0` | 基金历史、指数/行业曲线和数据终端界面，M1-M5 已完成 |
 
 ## v2.1：Local Product Web + Fund Explorer
 
@@ -47,7 +47,7 @@
 
 ## v2.2：Fund Data Terminal
 
-状态：M1-M4 已完成，M5 发布收口中。
+状态：完成。PR #40、全量回归、真实本地数据、四视口、scheduler 和回滚门禁均已验收。
 
 ### 目标
 
@@ -68,6 +68,15 @@
 - 行业 live smoke 若仍受网络阻断，必须保留真实失败证据，不得伪造成功。
 - PR/CI/merge 后在 clean `main` 部署 `127.0.0.1:8768` 并验证回滚路径。
 - 更新版本、发布报告和 tag；不修改主评分、主风险、provider default、watchlist、portfolio 或 scheduler。
+
+### M5 结果
+
+- Python `514 passed, 1 skipped`，compileall 与现有 contract validation 通过。
+- React 12 个测试文件、36 个用例，typecheck 与 production build 通过。
+- 全市场基金 21,575 条；`021511` 基金历史与 `000300` 指数历史各 120 点，均非 stale/fallback。
+- 375 / 600 / 768 / 1440 无页面级横向溢出，全局搜索和基金详情闭环可用。
+- 行业 AKShare live 受东方财富代理连接中断影响，结构化降级为 `503`，未伪造成功。
+- Product Web、daily、weekly LaunchAgent 状态正常；未重装或修改 scheduler。
 
 每个 Milestone 必须：
 
