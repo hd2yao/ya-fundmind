@@ -1,6 +1,6 @@
 # Documentation Index
 
-当前文档同时维护稳定运行的 V1 基线和已发布的 `v2.0.0` Research Copilot。M1-M6、post-RC 真实运行观察、Final 验收和 post-release ops check 已完成；不再使用无限 Phase 追加方式。
+当前文档同时维护稳定运行的 V1 基线、`v2.0.0` Research Copilot、`v2.1.0` Local Product Web 和 `v2.2.0` Fund Data Terminal。各版本均使用有限 Milestone 和明确发布门，不再使用无限 Phase 追加方式。
 
 ## Active Delivery Docs
 
@@ -58,7 +58,12 @@ These files are runtime or OS noise and should not be committed:
 
 - `releases/v2.0.0-rc.1-release-report.md`：RC 验收证据和 Final 剩余门禁。
 - `releases/v2.0.0-release-report.md`：Final 真实运行、验证和发布证据。
+- `releases/v2.1.0-release-report.md`：本地 Product Web、全市场基金搜索和 launchd 发布证据。
+- `releases/v2.2.0-m1-acceptance.md`：任意已索引基金的按需历史净值验收。
+- `releases/v2.2.0-m2-acceptance.md`：主要指数历史行情、缓存和 API 验收。
 - `releases/v2.2.0-m3-acceptance.md`：行业板块目录、历史走势、缓存、API 和三视口验收记录。
+- `releases/v2.2.0-m4-acceptance.md`：数据终端信息架构、全局搜索和四视口验收。
+- `releases/v2.2.0-release-report.md`：Fund Data Terminal 最终发布、已知外部限制和回滚证据。
 - `migrations/v1-to-v2.md`：安装、兼容和回滚。
 - `ops/v2-troubleshooting.md`：查询、Evidence、MCP、Web、provider、scheduler 和 readiness 排障。
 - `contracts/v2-release-readiness-v1.md`：机器可读发布门契约。
