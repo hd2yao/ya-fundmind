@@ -1,11 +1,18 @@
-import { ArrowDownRight, ArrowUpRight, History, Sparkles } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, History, Search, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { getMarketIndexHistory } from "../api/client";
+import {
+  getMarketIndexHistory,
+  getMarketSectorHistory,
+  searchMarketSectors
+} from "../api/client";
 import type {
   MarketData,
   MarketIndexHistoryResponse,
   MarketIndexWindow,
+  MarketSectorHistoryResponse,
+  MarketSectorItem,
+  MarketSectorSearchResponse,
   ThemeSummary
 } from "../api/types";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
@@ -41,6 +48,18 @@ type IndexHistoryState = {
   error: string | null;
 };
 
+type SectorCatalogState = {
+  loading: boolean;
+  data: MarketSectorSearchResponse | null;
+  error: string | null;
+};
+
+type SectorHistoryState = {
+  loading: boolean;
+  data: MarketSectorHistoryResponse | null;
+  error: string | null;
+};
+
 function formatReturn(value?: number | null) {
   if (value === null || value === undefined) return "--";
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
@@ -60,6 +79,20 @@ export function MarketPage() {
   const [indexWindow, setIndexWindow] = useState<MarketIndexWindow>("6m");
   const [indexHistory, setIndexHistory] = useState<IndexHistoryState>({
     loading: true,
+    data: null,
+    error: null
+  });
+  const [sectorQuery, setSectorQuery] = useState("");
+  const [appliedSectorQuery, setAppliedSectorQuery] = useState("");
+  const [sectorCatalog, setSectorCatalog] = useState<SectorCatalogState>({
+    loading: true,
+    data: null,
+    error: null
+  });
+  const [selectedSector, setSelectedSector] = useState<MarketSectorItem | null>(null);
+  const [sectorWindow, setSectorWindow] = useState<MarketIndexWindow>("6m");
+  const [sectorHistory, setSectorHistory] = useState<SectorHistoryState>({
+    loading: false,
     data: null,
     error: null
   });
@@ -84,6 +117,80 @@ export function MarketPage() {
     return () => controller.abort();
   }, [selectedIndex, indexWindow]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    setSectorCatalog({ loading: true, data: null, error: null });
+    searchMarketSectors(
+      {
+        q: appliedSectorQuery,
+        page: 1,
+        pageSize: 12
+      },
+      controller.signal
+    )
+      .then((data) => {
+        setSectorCatalog({ loading: false, data, error: null });
+        setSelectedSector((current) => {
+          const retained = current
+            ? data.items.find((item) => item.symbol === current.symbol)
+            : null;
+          return retained || data.items[0] || null;
+        });
+      })
+      .catch((catalogError: unknown) => {
+        if (controller.signal.aborted) return;
+        setSectorCatalog({
+          loading: false,
+          data: null,
+          error: catalogError instanceof Error
+            ? catalogError.message
+            : "行业板块目录读取失败。"
+        });
+        setSelectedSector(null);
+      });
+    return () => controller.abort();
+  }, [appliedSectorQuery]);
+
+  useEffect(() => {
+    if (!selectedSector) {
+      setSectorHistory({ loading: false, data: null, error: null });
+      return;
+    }
+    const controller = new AbortController();
+    setSectorHistory({ loading: true, data: null, error: null });
+    getMarketSectorHistory(
+      selectedSector.symbol,
+      sectorWindow,
+      controller.signal
+    )
+      .then((data) => setSectorHistory({ loading: false, data, error: null }))
+      .catch((historyError: unknown) => {
+        if (controller.signal.aborted) return;
+        setSectorHistory({
+          loading: false,
+          data: null,
+          error: historyError instanceof Error
+            ? historyError.message
+            : "行业板块历史读取失败。"
+        });
+      });
+    return () => controller.abort();
+  }, [selectedSector, sectorWindow]);
+
+  const sectorPanel = (
+    <SectorMarketPanel
+      catalog={sectorCatalog}
+      history={sectorHistory}
+      query={sectorQuery}
+      selectedSector={selectedSector}
+      window={sectorWindow}
+      onQueryChange={setSectorQuery}
+      onSearch={() => setAppliedSectorQuery(sectorQuery.trim())}
+      onSectorChange={setSelectedSector}
+      onWindowChange={setSectorWindow}
+    />
+  );
+
   if (loading) {
     return <StatePanel kind="loading" title="正在读取市场情报" description="加载全市场分类、主题窗口和历史趋势。" />;
   }
@@ -106,6 +213,7 @@ export function MarketPage() {
           onSymbolChange={setSelectedIndex}
           onWindowChange={setIndexWindow}
         />
+        {sectorPanel}
         <StatePanel
           kind="empty"
           title="尚无市场情报产物"
@@ -121,6 +229,14 @@ export function MarketPage() {
   const persistent = trend.persistent_hot_themes || [];
   const newThemes = trend.new_hot_themes || [];
   const rising = trend.rising_themes || [];
+
+  function searchMatchingSector(themeName: string) {
+    setSectorQuery(themeName);
+    setAppliedSectorQuery(themeName);
+    globalThis.document
+      ?.getElementById("market-sector-title")
+      ?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <div className="page-stack">
@@ -145,6 +261,8 @@ export function MarketPage() {
         onSymbolChange={setSelectedIndex}
         onWindowChange={setIndexWindow}
       />
+
+      {sectorPanel}
 
       <section className="content-band" aria-labelledby="top-theme-title">
         <div className="section-heading">
@@ -179,9 +297,23 @@ export function MarketPage() {
                   <td>{number.format(theme.sample_size || 0)}</td>
                   <td><StatusBadge tone={qualityTone(theme.data_quality_grade)}>{theme.data_quality_grade || "unknown"}</StatusBadge></td>
                   <td>
-                    <button className="table-action" type="button" aria-label={`查看${theme.theme || "未分类"}详情`} onClick={() => setSelectedTheme(theme)}>
-                      查看
-                    </button>
+                    <div className="table-action-group">
+                      <button className="table-action" type="button" aria-label={`查看${theme.theme || "未分类"}详情`} onClick={() => setSelectedTheme(theme)}>
+                        查看
+                      </button>
+                      {theme.theme ? (
+                        <button
+                          className="table-action table-action--search"
+                          type="button"
+                          aria-label={`搜索${theme.theme}同名行业板块`}
+                          title="搜索同名行业板块，不代表主题与板块等价"
+                          onClick={() => searchMatchingSector(theme.theme || "")}
+                        >
+                          <Search size={13} aria-hidden />
+                          同名板块
+                        </button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -262,6 +394,249 @@ export function MarketPage() {
         ) : null}
       </EvidenceDrawer>
     </div>
+  );
+}
+
+function SectorMarketPanel({
+  catalog,
+  history,
+  query,
+  selectedSector,
+  window,
+  onQueryChange,
+  onSearch,
+  onSectorChange,
+  onWindowChange
+}: {
+  catalog: SectorCatalogState;
+  history: SectorHistoryState;
+  query: string;
+  selectedSector: MarketSectorItem | null;
+  window: MarketIndexWindow;
+  onQueryChange: (query: string) => void;
+  onSearch: () => void;
+  onSectorChange: (sector: MarketSectorItem) => void;
+  onWindowChange: (window: MarketIndexWindow) => void;
+}) {
+  const latest = history.data?.points.at(-1);
+  return (
+    <section className="content-band market-sector-panel" aria-labelledby="market-sector-title">
+      <div className="market-sector-toolbar">
+        <div>
+          <p className="eyebrow">Industry boards</p>
+          <h2 id="market-sector-title">行业板块行情</h2>
+          <p className="section-description">
+            按当日涨跌幅排序，可搜索板块名称或 BK 代码。
+          </p>
+        </div>
+        <form
+          className="market-sector-search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSearch();
+          }}
+        >
+          <label htmlFor="market-sector-query">搜索行业板块</label>
+          <div>
+            <input
+              id="market-sector-query"
+              type="search"
+              value={query}
+              placeholder="例如：半导体 / BK1036"
+              onChange={(event) => onQueryChange(event.target.value)}
+            />
+            <button
+              className="secondary-button"
+              type="submit"
+              aria-label="搜索板块"
+            >
+              <Search size={16} aria-hidden />
+              搜索
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {catalog.loading ? (
+        <StatePanel
+          kind="loading"
+          title="正在读取行业板块目录"
+          description="优先读取本地缓存，缺失时按需调用 AKShare。"
+        />
+      ) : null}
+      {catalog.error ? (
+        <StatePanel
+          kind="error"
+          title="行业板块目录暂不可用"
+          description={catalog.error}
+        />
+      ) : null}
+      {catalog.data && !catalog.data.items.length ? (
+        <StatePanel
+          kind="empty"
+          title="没有匹配的行业板块"
+          description="请尝试完整板块名称或 BK 开头的板块代码。"
+        />
+      ) : null}
+
+      {catalog.data?.items.length ? (
+        <div className="market-sector-workspace">
+          <div className="market-sector-directory">
+            <div className="market-sector-directory__meta">
+              <span>
+                当前结果 {catalog.data.items.length} / {catalog.data.total}
+              </span>
+              <span>{catalog.data.source} · {catalog.data.as_of || "--"}</span>
+            </div>
+            <div className="table-wrap market-sector-table">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>代码 / 板块</th>
+                    <th>最新</th>
+                    <th>涨跌幅</th>
+                    <th>换手率</th>
+                    <th>上涨 / 下跌</th>
+                    <th>领涨股票</th>
+                    <th aria-label="操作" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalog.data.items.map((sector) => (
+                    <tr
+                      key={sector.symbol}
+                      className={
+                        selectedSector?.symbol === sector.symbol
+                          ? "market-sector-row market-sector-row--active"
+                          : "market-sector-row"
+                      }
+                    >
+                      <td>
+                        <strong>{sector.symbol}</strong>
+                        <span className="table-secondary">{sector.name}</span>
+                      </td>
+                      <td>{sector.latest == null ? "--" : indexNumber.format(sector.latest)}</td>
+                      <td className={Number(sector.change_pct) >= 0 ? "number-positive" : "number-negative"}>
+                        {formatReturn(sector.change_pct)}
+                      </td>
+                      <td>{formatReturn(sector.turnover_rate)}</td>
+                      <td>{sector.rise_count ?? "--"} / {sector.fall_count ?? "--"}</td>
+                      <td>{sector.leader_name || "--"}</td>
+                      <td>
+                        <button
+                          className="table-action"
+                          type="button"
+                          aria-label={`查看${sector.name}走势`}
+                          aria-pressed={selectedSector?.symbol === sector.symbol}
+                          onClick={() => onSectorChange(sector)}
+                        >
+                          查看走势
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="status-row">
+              <StatusBadge tone={qualityTone(catalog.data.data_quality_grade)}>
+                {catalog.data.stale ? "stale" : catalog.data.data_quality_grade}
+              </StatusBadge>
+              {catalog.data.fallback_used ? (
+                <StatusBadge tone="warning">cache fallback</StatusBadge>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="market-sector-history">
+            <div className="market-sector-history__header">
+              <div>
+                <span>当前板块</span>
+                <strong>
+                  {selectedSector
+                    ? `${selectedSector.name} · ${selectedSector.symbol}`
+                    : "--"}
+                </strong>
+              </div>
+              <div className="history-window-tabs" aria-label="板块历史时间范围">
+                {INDEX_WINDOWS.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    aria-label={`板块 ${item.label}`}
+                    aria-pressed={window === item.value}
+                    className={window === item.value ? "history-window history-window--active" : "history-window"}
+                    onClick={() => onWindowChange(item.value)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {history.loading ? (
+              <StatePanel
+                kind="loading"
+                title="正在读取板块日线"
+                description="加载所选行业板块的历史行情。"
+              />
+            ) : null}
+            {history.error ? (
+              <StatePanel
+                kind="error"
+                title="板块日线暂不可用"
+                description={history.error}
+              />
+            ) : null}
+            {history.data && history.data.points.length ? (
+              <>
+                <div className="market-index-summary">
+                  <div>
+                    <span>{history.data.name}</span>
+                    <strong>{latest?.close == null ? "--" : indexNumber.format(latest.close)}</strong>
+                  </div>
+                  <div>
+                    <span>日涨跌</span>
+                    <strong className={Number(latest?.change_pct) >= 0 ? "number-positive" : "number-negative"}>
+                      {formatReturn(latest?.change_pct)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>样本</span>
+                    <strong>{history.data.point_count} 个交易点</strong>
+                  </div>
+                  <div className="market-index-summary__provenance">
+                    <span>来源 / 截至</span>
+                    <strong>{history.data.source} · {history.data.as_of || "--"}</strong>
+                  </div>
+                </div>
+                <MarketIndexChart
+                  name={history.data.name}
+                  points={history.data.points}
+                  seriesLabel="行业板块"
+                />
+                <div className="status-row">
+                  <StatusBadge tone={qualityTone(history.data.data_quality_grade)}>
+                    {history.data.stale ? "stale" : history.data.data_quality_grade}
+                  </StatusBadge>
+                  {history.data.fallback_used ? (
+                    <StatusBadge tone="warning">cache fallback</StatusBadge>
+                  ) : null}
+                </div>
+                {history.data.warnings.length ? (
+                  <p className="history-warning">
+                    {history.data.warnings.map((warning) => warning.message).join(" · ")}
+                  </p>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      <p className="market-sector-boundary">
+        行业板块行情只用于市场观察，不构成板块推荐，不改变主评分或主风险。
+      </p>
+    </section>
   );
 }
 

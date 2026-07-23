@@ -102,14 +102,15 @@ export type MarketIndexHistoryPoint = {
   low: number | null;
   volume: number | null;
   turnover: number | null;
+  turnover_rate?: number | null;
   change_pct: number | null;
   source: string;
 };
 
-export type MarketIndexHistoryResponse = {
+export type MarketSeriesHistoryResponse = {
   symbol: string;
   name: string;
-  series_type: "index";
+  series_type: "index" | "industry";
   range: MarketIndexWindow;
   point_count: number;
   required_points: number | null;
@@ -118,6 +119,67 @@ export type MarketIndexHistoryResponse = {
   as_of: string | null;
   updated_at: string | null;
   expires_at: string | null;
+  stale: boolean;
+  fallback_used: boolean;
+  fallback_reason?: string | null;
+  data_quality_grade: string;
+  warnings: Array<{ code: string; severity: string; message: string }>;
+  not_production_model: boolean;
+  main_score_changed: boolean;
+  main_risk_changed: boolean;
+};
+
+export type MarketIndexHistoryResponse = Omit<
+  MarketSeriesHistoryResponse,
+  "series_type"
+> & {
+  series_type: "index";
+};
+
+export type MarketSectorHistoryResponse = Omit<
+  MarketSeriesHistoryResponse,
+  "series_type"
+> & {
+  series_type: "industry";
+};
+
+export type MarketSectorItem = {
+  symbol: string;
+  name: string;
+  entity_type: "industry";
+  latest: number | null;
+  change_pct: number | null;
+  market_cap?: number | null;
+  turnover_rate?: number | null;
+  rise_count?: number | null;
+  fall_count?: number | null;
+  leader_name?: string | null;
+  leader_change_pct?: number | null;
+  source: string;
+  as_of: string | null;
+  updated_at?: string | null;
+  expires_at?: string | null;
+  stale: boolean;
+};
+
+export type MarketSectorSearchParams = {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export type MarketSectorSearchResponse = {
+  items: MarketSectorItem[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  query: string;
+  sort: string;
+  source: string | null;
+  as_of: string | null;
+  updated_at?: string | null;
+  expires_at?: string | null;
   stale: boolean;
   fallback_used: boolean;
   fallback_reason?: string | null;

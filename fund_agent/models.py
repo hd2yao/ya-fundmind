@@ -187,6 +187,25 @@ class FundNavPoint:
 
 
 @dataclass(frozen=True)
+class MarketEntity:
+    symbol: str
+    name: str
+    entity_type: str
+    latest: float | None = None
+    change_pct: float | None = None
+    market_cap: float | None = None
+    turnover_rate: float | None = None
+    rise_count: int | None = None
+    fall_count: int | None = None
+    leader_name: str | None = None
+    leader_change_pct: float | None = None
+    source: str = "unknown"
+    as_of: str | None = None
+    updated_at: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class MarketSeriesPoint:
     symbol: str
     name: str

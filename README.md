@@ -8,7 +8,7 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 - 当前稳定版本：`v2.1.0`（Python package version：`2.1.0`）
 - 当前交付模式：`v2.2 Fund Data Terminal` delivery mode
-- 当前发布状态：`v2.1.0` 本地 Product Web 已发布；`v2.2` 正在按 M0-M5 推进基金历史、指数、板块和数据终端界面。
+- 当前发布状态：`v2.1.0` 本地 Product Web 已发布；`v2.2` 的 M1 基金历史、M2 指数走势和 M3 行业板块链路已完成本地验收，继续按 M4-M5 收敛数据终端界面和版本发布。
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
@@ -363,6 +363,16 @@ python -m fund_agent.cli product-web --output-dir outputs
 - 页面同时显示最新收盘、日涨跌、样本、`source / as_of` 和可折叠日线数据表。
 
 指数曲线只用于行情浏览和研究观察，不改变主评分、主风险或报告主结论。实现与验收见 [`docs/plans/2026-07-23-v2.2-m2-index-market.md`](docs/plans/2026-07-23-v2.2-m2-index-market.md) 和 [`docs/releases/v2.2.0-m2-acceptance.md`](docs/releases/v2.2.0-m2-acceptance.md)。
+
+`v2.2` 的第三条数据终端链路在同一市场页增加行业板块目录与历史走势：
+
+- 支持按行业名称或 `BK` 代码搜索，目录展示最新价、涨跌幅、总市值、换手率、上涨/下跌家数和领涨股票。
+- 点击目录项后按需读取 `1 月 / 3 月 / 6 月 / 1 年 / 全部`历史日线；行业 OHLCV 继续写入独立 `market_series`，不与基金净值混存。
+- 行业目录使用独立 SQLite `market_entities` 缓存；新鲜缓存优先，live 失败且存在缓存时才显式 stale fallback。
+- 主题窗口表提供“搜索同名行业板块”入口；它只填入搜索条件，不声明研究主题与行情板块等同。
+- 页面保留 `source / as_of / stale / fallback / data_quality_grade`，并明确标注“观察数据，不构成板块推荐”。
+
+当前开发环境访问 AKShare 东方财富行业接口时发生代理连接中断，因此真实行业 smoke 如实记录为未成功；默认离线测试、cache fallback 和页面交互验收不依赖该网络。实现与验收见 [`docs/plans/2026-07-23-v2.2-m3-sector-market.md`](docs/plans/2026-07-23-v2.2-m3-sector-market.md) 和 [`docs/releases/v2.2.0-m3-acceptance.md`](docs/releases/v2.2.0-m3-acceptance.md)。
 
 可先离线检查依赖和构建：
 

@@ -2,9 +2,11 @@ import {
   getFundDetail,
   getFundHistory,
   getMarketIndexHistory,
+  getMarketSectorHistory,
   getResource,
   postResource,
-  searchFunds
+  searchFunds,
+  searchMarketSectors
 } from "./client";
 
 describe("API client response validation", () => {
@@ -175,5 +177,74 @@ describe("API client response validation", () => {
       "/api/market/indices/000300/history?range=6m"
     );
     expect(history.points[0].close).toBe(4652.8);
+  });
+
+  it("serializes industry sector search and validates the catalog", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [{ symbol: "BK1036", name: "半导体", entity_type: "industry" }],
+        page: 1,
+        page_size: 10,
+        total: 1,
+        total_pages: 1,
+        query: "半导体",
+        source: "cache:akshare",
+        stale: false,
+        fallback_used: false,
+        data_quality_grade: "normal",
+        warnings: []
+      })
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await searchMarketSectors({
+      q: "半导体",
+      page: 1,
+      pageSize: 10
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "/api/market/sectors?q=%E5%8D%8A%E5%AF%BC%E4%BD%93&page=1&page_size=10"
+    );
+    expect(result.items[0].symbol).toBe("BK1036");
+  });
+
+  it("loads a validated industry sector history window", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        symbol: "BK1036",
+        name: "半导体",
+        series_type: "industry",
+        range: "3m",
+        point_count: 1,
+        points: [
+          {
+            date: "2026-07-22",
+            close: 1823.4,
+            turnover_rate: 2.3,
+            source: "cache:akshare"
+          }
+        ],
+        source: "cache:akshare",
+        as_of: "2026-07-22",
+        stale: false,
+        fallback_used: false,
+        data_quality_grade: "normal",
+        warnings: [],
+        not_production_model: true,
+        main_score_changed: false,
+        main_risk_changed: false
+      })
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const history = await getMarketSectorHistory("BK1036", "3m");
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "/api/market/sectors/BK1036/history?range=3m"
+    );
+    expect(history.points[0].turnover_rate).toBe(2.3);
   });
 });

@@ -66,7 +66,90 @@ const indexHistory = {
   main_risk_changed: false
 };
 
-function stubMarketApi(marketResponse: unknown = response) {
+const sectorCatalog = {
+  items: [
+    {
+      symbol: "BK1036",
+      name: "半导体",
+      entity_type: "industry",
+      latest: 1823.4,
+      change_pct: 2.31,
+      turnover_rate: 3.25,
+      rise_count: 41,
+      fall_count: 6,
+      leader_name: "示例股份",
+      source: "cache:akshare",
+      as_of: "2026-07-22",
+      stale: false
+    }
+  ],
+  page: 1,
+  page_size: 12,
+  total: 1,
+  total_pages: 1,
+  query: "",
+  sort: "change_pct_desc",
+  source: "cache:akshare",
+  as_of: "2026-07-22",
+  stale: false,
+  fallback_used: false,
+  data_quality_grade: "normal",
+  warnings: [],
+  not_production_model: true,
+  main_score_changed: false,
+  main_risk_changed: false
+};
+
+const sectorHistory = {
+  symbol: "BK1036",
+  name: "半导体",
+  series_type: "industry",
+  range: "6m",
+  point_count: 2,
+  required_points: 120,
+  points: [
+    {
+      date: "2026-07-21",
+      open: 1800,
+      close: 1810,
+      high: 1820,
+      low: 1795,
+      volume: 123456,
+      turnover: 987654321,
+      turnover_rate: 2.1,
+      change_pct: 0.56,
+      source: "cache:akshare"
+    },
+    {
+      date: "2026-07-22",
+      open: 1810,
+      close: 1823.4,
+      high: 1830,
+      low: 1802,
+      volume: 130000,
+      turnover: 1000000000,
+      turnover_rate: 2.3,
+      change_pct: 0.74,
+      source: "cache:akshare"
+    }
+  ],
+  source: "cache:akshare",
+  as_of: "2026-07-22",
+  updated_at: "2026-07-22T10:00:00Z",
+  expires_at: "2026-07-23T10:00:00Z",
+  stale: false,
+  fallback_used: false,
+  data_quality_grade: "warning",
+  warnings: [{ code: "insufficient_history", severity: "warning", message: "Only 2 points are available." }],
+  not_production_model: true,
+  main_score_changed: false,
+  main_risk_changed: false
+};
+
+function stubMarketApi(
+  marketResponse: unknown = response,
+  sectorResponse: unknown = sectorCatalog
+) {
   const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
     const url = String(input);
     if (url === "/api/market") {
@@ -90,6 +173,20 @@ function stubMarketApi(marketResponse: unknown = response) {
         })
       });
     }
+    if (url.startsWith("/api/market/sectors/") && url.includes("/history")) {
+      const range = new URL(url, "http://localhost").searchParams.get("range") || "6m";
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ ...sectorHistory, range })
+      });
+    }
+    if (url.startsWith("/api/market/sectors")) {
+      const query = new URL(url, "http://localhost").searchParams.get("q") || "";
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ ...(sectorResponse as object), query })
+      });
+    }
     throw new Error(`Unexpected request: ${url}`);
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -102,7 +199,7 @@ describe("MarketPage", () => {
   });
 
   it("shows market coverage, theme trend and observation details", async () => {
-    stubMarketApi();
+    const fetchMock = stubMarketApi();
 
     render(<MarketPage />);
 
@@ -116,6 +213,21 @@ describe("MarketPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "查看医药详情" }));
     expect(screen.getByRole("dialog", { name: "医药观察详情" })).toBeInTheDocument();
     expect(screen.getByText("样本 527")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "搜索医药同名行业板块" })
+    );
+    expect(screen.getByLabelText("搜索行业板块")).toHaveValue("医药");
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(
+        urls.some((url) =>
+          url.includes(
+            "/api/market/sectors?q=%E5%8C%BB%E8%8D%AF"
+          )
+        )
+      ).toBe(true);
+    });
   });
 
   it("shows real index history and switches symbol and range", async () => {
@@ -125,7 +237,7 @@ describe("MarketPage", () => {
 
     expect(await screen.findByRole("img", { name: "沪深300 指数日线图" })).toBeInTheDocument();
     expect(screen.getAllByText("4,652.80").length).toBeGreaterThan(0);
-    expect(screen.getByText(/cache:akshare/)).toBeInTheDocument();
+    expect(screen.getAllByText(/cache:akshare/).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "创业板指" }));
     fireEvent.click(screen.getByRole("button", { name: "1 月" }));
@@ -135,6 +247,39 @@ describe("MarketPage", () => {
       expect(
         urls.some((url) =>
           url.endsWith("/api/market/indices/399006/history?range=1m")
+        )
+      ).toBe(true);
+    });
+  });
+
+  it("searches industry sectors and opens a sector history curve", async () => {
+    const fetchMock = stubMarketApi();
+
+    render(<MarketPage />);
+
+    expect(await screen.findByText("行业板块行情")).toBeInTheDocument();
+    expect(screen.getByText("BK1036")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "查看半导体走势" })
+    );
+
+    expect(
+      await screen.findByRole("img", { name: "半导体 行业板块日线图" })
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("1,823.40").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText("搜索行业板块"), {
+      target: { value: "半导体" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "搜索板块" }));
+
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(
+        urls.some((url) =>
+          url.includes(
+            "/api/market/sectors?q=%E5%8D%8A%E5%AF%BC%E4%BD%93"
+          )
         )
       ).toBe(true);
     });
@@ -174,5 +319,28 @@ describe("MarketPage", () => {
     render(<MarketPage />);
 
     expect(await screen.findByText("degraded")).toHaveClass("status-badge--critical");
+  });
+
+  it("shows stale sector catalog fallback without hiding market data", async () => {
+    stubMarketApi(response, {
+      ...sectorCatalog,
+      stale: true,
+      fallback_used: true,
+      data_quality_grade: "warning",
+      warnings: [
+        {
+          code: "stale_cache",
+          severity: "warning",
+          message: "Industry catalog is served from expired cache."
+        }
+      ]
+    });
+
+    render(<MarketPage />);
+
+    expect(await screen.findByText("行业板块行情")).toBeInTheDocument();
+    expect(screen.getByText("BK1036")).toBeInTheDocument();
+    expect(screen.getAllByText("cache fallback").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("stale").length).toBeGreaterThan(0);
   });
 });

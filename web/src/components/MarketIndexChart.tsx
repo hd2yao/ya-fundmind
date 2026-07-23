@@ -21,14 +21,16 @@ function formatValue(value: unknown) {
 
 export function MarketIndexChart({
   name,
-  points
+  points,
+  seriesLabel = "指数"
 }: {
   name: string;
   points: MarketIndexHistoryPoint[];
+  seriesLabel?: string;
 }) {
   return (
     <>
-      <div className="market-index-chart" role="img" aria-label={`${name} 指数日线图`}>
+      <div className="market-index-chart" role="img" aria-label={`${name} ${seriesLabel}日线图`}>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={points} margin={{ top: 12, right: 12, bottom: 4, left: 4 }}>
             <CartesianGrid stroke="#d7dfdc" strokeDasharray="3 3" vertical={false} />
@@ -63,7 +65,7 @@ export function MarketIndexChart({
         </ResponsiveContainer>
       </div>
       <details className="market-index-data">
-        <summary>查看指数日线数据</summary>
+        <summary>查看{seriesLabel}日线数据</summary>
         <div className="table-wrap market-index-data__table">
           <table className="data-table">
             <thead>

@@ -22,6 +22,7 @@ from .models import (
     FundDetail,
     FundNavPoint,
     FundRecord,
+    MarketEntity,
     MarketSeriesPoint,
     ProviderEndpointTrace,
     ProviderHealth,
@@ -582,6 +583,268 @@ class AkshareProvider:
         )
         return normalized_points
 
+    def fetch_industry_boards(
+        self,
+        *,
+        as_of: str | None = None,
+    ) -> list[MarketEntity]:
+        started_at = _utc_now()
+        resolved_as_of = as_of or date.today().isoformat()
+        endpoint = "stock_board_industry_name_em"
+        if self._ak is None:
+            reason = "AKShare is not installed"
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                warnings=(
+                    ProviderWarning(
+                        code="live_fetch_error",
+                        message=reason,
+                        severity="critical",
+                    ),
+                ),
+            )
+            raise ProviderUnavailable(reason)
+
+        result = self._call_akshare(endpoint)
+        mapping = (
+            _industry_entities_from_akshare_rows(
+                result.data,
+                endpoint=endpoint,
+                as_of=resolved_as_of,
+            )
+            if result.success
+            else None
+        )
+        endpoint_trace = result.trace
+        if mapping is not None:
+            endpoint_trace = replace(
+                endpoint_trace,
+                live_row_count=mapping.live_row_count,
+                mapped_row_count=len(mapping.entities),
+                skipped_row_count=mapping.skipped_row_count,
+            )
+        if not result.success:
+            message = f"{endpoint}: {result.error}"
+            warning = ProviderWarning(
+                code="live_fetch_error",
+                message=message,
+                severity="critical",
+                details={"endpoint": endpoint},
+            )
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                endpoints=(endpoint_trace,),
+                warnings=(warning,),
+            )
+            raise ProviderUnavailable(
+                f"AKShare industry catalog fetch failed: {message}"
+            )
+        if mapping is None or not mapping.entities:
+            mapping_warnings = mapping.warnings if mapping is not None else ()
+            warning = ProviderWarning(
+                code="empty_live_response",
+                message="AKShare returned no valid industry rows.",
+                severity="critical",
+                details={"endpoint": endpoint},
+            )
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                live_row_count=mapping.live_row_count if mapping else 0,
+                skipped_row_count=mapping.skipped_row_count if mapping else 0,
+                endpoints=(endpoint_trace,),
+                warnings=(*mapping_warnings, warning),
+            )
+            raise ProviderUnavailable(
+                "AKShare returned no valid industry rows."
+            )
+
+        updated_at = _utc_now()
+        expires_at = updated_at + timedelta(days=self.cache_ttl_days)
+        entities = [
+            replace(
+                entity,
+                updated_at=updated_at.isoformat(),
+                metadata={
+                    **entity.metadata,
+                    "provider": "akshare",
+                    "as_of": resolved_as_of,
+                    "updated_at": updated_at.isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "stale": False,
+                },
+            )
+            for entity in mapping.entities
+        ]
+        cache_write_count = 0
+        if self.cache is not None:
+            self.cache.upsert_market_entities(
+                entities,
+                as_of=resolved_as_of,
+                ttl_days=self.cache_ttl_days,
+                now=updated_at,
+            )
+            cache_write_count = len(entities)
+        self.last_health = _build_health(
+            provider="akshare",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=mapping.live_row_count,
+            mapped_row_count=len(entities),
+            skipped_row_count=mapping.skipped_row_count,
+            cache_write_count=cache_write_count,
+            endpoints=(endpoint_trace,),
+            warnings=mapping.warnings,
+        )
+        return entities
+
+    def fetch_industry_history(
+        self,
+        symbol: str,
+        *,
+        name: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        as_of: str | None = None,
+    ) -> list[MarketSeriesPoint]:
+        started_at = _utc_now()
+        resolved_symbol = str(symbol).strip()
+        resolved_as_of = as_of or date.today().isoformat()
+        endpoint = "stock_board_industry_hist_em"
+        if self._ak is None:
+            reason = "AKShare is not installed"
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                warnings=(
+                    ProviderWarning(
+                        code="live_fetch_error",
+                        message=reason,
+                        severity="critical",
+                    ),
+                ),
+            )
+            raise ProviderUnavailable(reason)
+
+        range_start = (start_date or "19700101").replace("-", "")
+        range_end = (end_date or resolved_as_of).replace("-", "")
+        result = self._call_akshare(
+            endpoint,
+            symbol=resolved_symbol,
+            start_date=range_start,
+            end_date=range_end,
+            period="日k",
+            adjust="",
+        )
+        mapping = (
+            _industry_points_from_akshare_rows(
+                result.data,
+                symbol=resolved_symbol,
+                name=name,
+                endpoint=endpoint,
+            )
+            if result.success
+            else None
+        )
+        endpoint_trace = result.trace
+        if mapping is not None:
+            endpoint_trace = replace(
+                endpoint_trace,
+                live_row_count=mapping.live_row_count,
+                mapped_row_count=len(mapping.points),
+                skipped_row_count=mapping.skipped_row_count,
+            )
+        if not result.success:
+            message = f"{endpoint}: {result.error}"
+            warning = ProviderWarning(
+                code="live_fetch_error",
+                message=message,
+                severity="critical",
+                details={"endpoint": endpoint},
+            )
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                endpoints=(endpoint_trace,),
+                warnings=(warning,),
+            )
+            raise ProviderUnavailable(
+                f"AKShare industry history fetch failed: {message}"
+            )
+        selected_points = [
+            point
+            for point in (mapping.points if mapping is not None else ())
+            if range_start <= point.date.replace("-", "") <= range_end
+        ]
+        if mapping is None or not selected_points:
+            mapping_warnings = mapping.warnings if mapping is not None else ()
+            warning = ProviderWarning(
+                code="empty_live_response",
+                message=(
+                    f"AKShare returned no valid industry history for "
+                    f"{resolved_symbol}."
+                ),
+                severity="critical",
+                details={"endpoint": endpoint, "symbol": resolved_symbol},
+            )
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                live_row_count=mapping.live_row_count if mapping else 0,
+                skipped_row_count=mapping.skipped_row_count if mapping else 0,
+                endpoints=(endpoint_trace,),
+                warnings=(*mapping_warnings, warning),
+            )
+            raise ProviderUnavailable(warning.message)
+
+        updated_at = _utc_now()
+        expires_at = updated_at + timedelta(days=self.cache_ttl_days)
+        normalized_points = [
+            replace(
+                point,
+                updated_at=updated_at.isoformat(),
+                metadata={
+                    **point.metadata,
+                    "provider": "akshare",
+                    "series_kind": "market_industry_history",
+                    "as_of": resolved_as_of,
+                    "updated_at": updated_at.isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "stale": False,
+                },
+            )
+            for point in selected_points
+        ]
+        cache_write_count = 0
+        if self.cache is not None:
+            self.cache.upsert_market_series(
+                normalized_points,
+                as_of=resolved_as_of,
+                ttl_days=self.cache_ttl_days,
+                now=updated_at,
+            )
+            cache_write_count = len(normalized_points)
+        self.last_health = _build_health(
+            provider="akshare",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=mapping.live_row_count,
+            mapped_row_count=len(normalized_points),
+            skipped_row_count=mapping.skipped_row_count,
+            cache_write_count=cache_write_count,
+            endpoints=(endpoint_trace,),
+            warnings=mapping.warnings,
+        )
+        return normalized_points
+
     def _fallback_to_cache(
         self,
         reason: str,
@@ -675,7 +938,22 @@ class AkshareProvider:
 
     def _call_akshare(self, name: str, **kwargs):
         started_at = _utc_now()
-        method = getattr(self._ak, name)
+        method = getattr(self._ak, name, None)
+        if not callable(method):
+            error = f"AKShare endpoint is unavailable: {name}"
+            return _EndpointCallResult(
+                data=None,
+                success=False,
+                error=error,
+                trace=_build_endpoint_trace(
+                    endpoint=name,
+                    started_at=started_at,
+                    attempts=0,
+                    success=False,
+                    error=error,
+                    timeout_seconds=self.timeout_seconds,
+                ),
+            )
         attempts = 0
         last_error: str | None = None
         for attempt in range(self.retry_count + 1):
@@ -959,6 +1237,14 @@ class _MarketSeriesMappingResult:
 
 
 @dataclass(frozen=True)
+class _MarketEntityMappingResult:
+    live_row_count: int
+    entities: tuple[MarketEntity, ...]
+    skipped_row_count: int
+    warnings: tuple[ProviderWarning, ...]
+
+
+@dataclass(frozen=True)
 class _EndpointCallResult:
     data: object | None
     success: bool
@@ -976,6 +1262,11 @@ def _to_float(value: object) -> float | None:
         return float(text)
     except ValueError:
         return None
+
+
+def _to_int(value: object) -> int | None:
+    number = _to_float(value)
+    return int(number) if number is not None else None
 
 
 def _first(row: object, *keys: str) -> object:
@@ -1301,6 +1592,174 @@ def _index_points_from_akshare_rows(
         points.append(point)
     points.sort(key=lambda item: item.date)
     points = _derive_market_change_pct(points)
+    return _MarketSeriesMappingResult(
+        live_row_count=live_row_count,
+        points=tuple(points),
+        skipped_row_count=skipped_row_count,
+        warnings=tuple(warnings),
+    )
+
+
+def _industry_entities_from_akshare_rows(
+    df: object,
+    *,
+    endpoint: str,
+    as_of: str,
+) -> _MarketEntityMappingResult:
+    entities: list[MarketEntity] = []
+    warnings: list[ProviderWarning] = []
+    live_row_count = 0
+    skipped_row_count = 0
+    iterrows = getattr(df, "iterrows", None)
+    if not callable(iterrows):
+        return _MarketEntityMappingResult(
+            live_row_count=0,
+            entities=(),
+            skipped_row_count=0,
+            warnings=(
+                ProviderWarning(
+                    code="invalid_response",
+                    message=f"{endpoint} returned a non-tabular response.",
+                    severity="critical",
+                    details={"endpoint": endpoint},
+                ),
+            ),
+        )
+    for row_index, row in iterrows():
+        live_row_count += 1
+        symbol = str(_first(row, "板块代码", "代码") or "").strip()
+        name = str(_first(row, "板块名称", "名称") or "").strip()
+        if not symbol or not name:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=(
+                        f"{endpoint} row {row_index} skipped: "
+                        "missing board code or name"
+                    ),
+                    severity="info",
+                    details={"endpoint": endpoint, "row_index": row_index},
+                )
+            )
+            continue
+        try:
+            entities.append(
+                MarketEntity(
+                    symbol=symbol,
+                    name=name,
+                    entity_type="industry",
+                    latest=_to_float(_first(row, "最新价")),
+                    change_pct=_to_float(_first(row, "涨跌幅")),
+                    market_cap=_to_float(_first(row, "总市值")),
+                    turnover_rate=_to_float(_first(row, "换手率")),
+                    rise_count=_to_int(_first(row, "上涨家数")),
+                    fall_count=_to_int(_first(row, "下跌家数")),
+                    leader_name=(
+                        str(_first(row, "领涨股票") or "").strip() or None
+                    ),
+                    leader_change_pct=_to_float(
+                        _first(row, "领涨股票-涨跌幅")
+                    ),
+                    source="akshare",
+                    as_of=as_of,
+                    metadata={"endpoint": endpoint},
+                )
+            )
+        except Exception as exc:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=f"{endpoint} row {row_index} skipped: {exc}",
+                    severity="warning",
+                    details={"endpoint": endpoint, "row_index": row_index},
+                )
+            )
+    return _MarketEntityMappingResult(
+        live_row_count=live_row_count,
+        entities=tuple(entities),
+        skipped_row_count=skipped_row_count,
+        warnings=tuple(warnings),
+    )
+
+
+def _industry_points_from_akshare_rows(
+    df: object,
+    *,
+    symbol: str,
+    name: str,
+    endpoint: str,
+) -> _MarketSeriesMappingResult:
+    points: list[MarketSeriesPoint] = []
+    warnings: list[ProviderWarning] = []
+    live_row_count = 0
+    skipped_row_count = 0
+    iterrows = getattr(df, "iterrows", None)
+    if not callable(iterrows):
+        return _MarketSeriesMappingResult(
+            live_row_count=0,
+            points=(),
+            skipped_row_count=0,
+            warnings=(
+                ProviderWarning(
+                    code="invalid_response",
+                    message=f"{endpoint} returned a non-tabular response.",
+                    severity="critical",
+                    details={"endpoint": endpoint},
+                ),
+            ),
+        )
+    for row_index, row in iterrows():
+        live_row_count += 1
+        try:
+            series_date = _date_text(_first(row, "日期", "date"))
+            close = _to_float(_first(row, "收盘", "close"))
+            point = MarketSeriesPoint(
+                symbol=symbol,
+                name=name,
+                series_type="industry",
+                date=series_date or "",
+                open=_to_float(_first(row, "开盘", "open")),
+                close=close,
+                high=_to_float(_first(row, "最高", "high")),
+                low=_to_float(_first(row, "最低", "low")),
+                volume=_to_float(_first(row, "成交量", "volume")),
+                turnover=_to_float(_first(row, "成交额", "amount", "turnover")),
+                change_pct=_to_float(_first(row, "涨跌幅", "change_pct")),
+                source="akshare",
+                metadata={
+                    "endpoint": endpoint,
+                    "turnover_rate": _to_float(_first(row, "换手率")),
+                },
+            )
+        except Exception as exc:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=f"{endpoint} row {row_index} skipped: {exc}",
+                    severity="warning",
+                    details={"endpoint": endpoint, "row_index": row_index},
+                )
+            )
+            continue
+        if not series_date or close is None:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=(
+                        f"{endpoint} row {row_index} skipped: "
+                        "missing date or close"
+                    ),
+                    severity="info",
+                    details={"endpoint": endpoint, "row_index": row_index},
+                )
+            )
+            continue
+        points.append(point)
+    points.sort(key=lambda item: item.date)
     return _MarketSeriesMappingResult(
         live_row_count=live_row_count,
         points=tuple(points),

@@ -7,7 +7,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
-from .models import FundDetail, FundNavPoint, FundRecord, MarketSeriesPoint
+from .models import (
+    FundDetail,
+    FundNavPoint,
+    FundRecord,
+    MarketEntity,
+    MarketSeriesPoint,
+)
 
 
 @dataclass(frozen=True)
@@ -106,6 +112,26 @@ class FundCache:
                     updated_at TEXT NOT NULL,
                     expires_at TEXT NOT NULL,
                     PRIMARY KEY (symbol, series_type, series_date, source)
+                );
+
+                CREATE TABLE IF NOT EXISTS market_entities (
+                    entity_type TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    latest REAL,
+                    change_pct REAL,
+                    market_cap REAL,
+                    turnover_rate REAL,
+                    rise_count INTEGER,
+                    fall_count INTEGER,
+                    leader_name TEXT,
+                    leader_change_pct REAL,
+                    source TEXT NOT NULL,
+                    as_of TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    PRIMARY KEY (entity_type, symbol, source)
                 );
                 """
             )
@@ -436,6 +462,94 @@ class FundCache:
                     ),
                 )
 
+    def upsert_market_entities(
+        self,
+        entities: Iterable[MarketEntity],
+        *,
+        as_of: str,
+        ttl_days: int = 1,
+        now: datetime | None = None,
+    ) -> None:
+        updated_at = _utc_now(now).isoformat()
+        expires_at = (_utc_now(now) + timedelta(days=ttl_days)).isoformat()
+        with self._connect() as conn:
+            for entity in entities:
+                conn.execute(
+                    """
+                    INSERT INTO market_entities (
+                        entity_type, symbol, name, latest, change_pct,
+                        market_cap, turnover_rate, rise_count, fall_count,
+                        leader_name, leader_change_pct, source, as_of,
+                        metadata_json, updated_at, expires_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(entity_type, symbol, source) DO UPDATE SET
+                        name = excluded.name,
+                        latest = excluded.latest,
+                        change_pct = excluded.change_pct,
+                        market_cap = excluded.market_cap,
+                        turnover_rate = excluded.turnover_rate,
+                        rise_count = excluded.rise_count,
+                        fall_count = excluded.fall_count,
+                        leader_name = excluded.leader_name,
+                        leader_change_pct = excluded.leader_change_pct,
+                        as_of = excluded.as_of,
+                        metadata_json = excluded.metadata_json,
+                        updated_at = excluded.updated_at,
+                        expires_at = excluded.expires_at
+                    """,
+                    (
+                        entity.entity_type,
+                        entity.symbol.strip(),
+                        entity.name,
+                        entity.latest,
+                        entity.change_pct,
+                        entity.market_cap,
+                        entity.turnover_rate,
+                        entity.rise_count,
+                        entity.fall_count,
+                        entity.leader_name,
+                        entity.leader_change_pct,
+                        entity.source.removeprefix("cache:"),
+                        entity.as_of or as_of,
+                        json.dumps(
+                            entity.metadata,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        ),
+                        updated_at,
+                        expires_at,
+                    ),
+                )
+
+    def load_market_entities(
+        self,
+        *,
+        entity_type: str,
+        source: str | None = None,
+        allow_stale: bool = False,
+        now: datetime | None = None,
+    ) -> list[MarketEntity]:
+        current_time = _utc_now(now).isoformat()
+        clauses = ["entity_type = ?"]
+        params: list[object] = [entity_type]
+        if source is not None:
+            clauses.append("source = ?")
+            params.append(source.removeprefix("cache:"))
+        if not allow_stale:
+            clauses.append("expires_at >= ?")
+            params.append(current_time)
+        where = f"WHERE {' AND '.join(clauses)}"
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM market_entities {where} ORDER BY symbol",
+                params,
+            ).fetchall()
+        return [
+            self._row_to_market_entity(row, current_time=current_time)
+            for row in rows
+        ]
+
     def load_market_series(
         self,
         *,
@@ -583,6 +697,41 @@ class FundCache:
             turnover=row["turnover"],
             change_pct=row["change_pct"],
             source=f"cache:{row['source']}",
+            updated_at=row["updated_at"],
+            metadata=metadata,
+        )
+
+    def _row_to_market_entity(
+        self,
+        row: sqlite3.Row,
+        *,
+        current_time: str,
+    ) -> MarketEntity:
+        metadata = json.loads(row["metadata_json"] or "{}")
+        stale = str(row["expires_at"]) < current_time
+        metadata.update(
+            {
+                "cache_source": row["source"],
+                "cache_as_of": row["as_of"],
+                "updated_at": row["updated_at"],
+                "expires_at": row["expires_at"],
+                "stale": stale,
+            }
+        )
+        return MarketEntity(
+            symbol=str(row["symbol"]),
+            name=str(row["name"]),
+            entity_type=str(row["entity_type"]),
+            latest=row["latest"],
+            change_pct=row["change_pct"],
+            market_cap=row["market_cap"],
+            turnover_rate=row["turnover_rate"],
+            rise_count=row["rise_count"],
+            fall_count=row["fall_count"],
+            leader_name=row["leader_name"],
+            leader_change_pct=row["leader_change_pct"],
+            source=f"cache:{row['source']}",
+            as_of=row["as_of"],
             updated_at=row["updated_at"],
             metadata=metadata,
         )

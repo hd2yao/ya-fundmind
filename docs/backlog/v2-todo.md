@@ -11,9 +11,9 @@
 
 - 当前稳定版本：`v2.1.0` Local Product Web + Fund Explorer。
 - 当前开发轨道：`v2.2 Fund Data Terminal`。
-- 当前 Milestone：M2 主要指数走势已通过本地验收，下一步进入 M3 板块走势。
+- 当前 Milestone：M3 行业板块走势已通过本地功能与三视口验收，下一步进入 M4 数据终端信息架构重组。
 - 当前 P0：无。
-- 当前 P1：行业板块日线、板块趋势 API、市场页板块详情及真实 smoke。
+- 当前 P1：M4 行情总览、基金终端、组合和研究证据四个工作区的信息架构与导航收敛。
 
 ## P0 Blocking
 
@@ -62,6 +62,16 @@
 - 把现有主题窗口统计与真实板块曲线建立可解释跳转，不输出板块推荐。
 - 保持默认测试离线，并完成至少一个真实板块 smoke 和三视口验收。
 
+`v2.2 M3` 已完成：
+
+- SQLite `market_entities` 独立保存行业板块目录，`market_series` 以 `series_type=industry` 保存历史 OHLCV。
+- AKShare 行业目录和历史字段完成标准化、坏行隔离、provider health、endpoint trace 与 cache 统计。
+- `GET /api/market/sectors` 支持名称/`BK` 代码搜索及分页；`GET /api/market/sectors/{symbol}/history` 支持固定代码边界和五档交易日窗口。
+- 市场页支持目录检索、板块选择、当前行情摘要、历史曲线和来源/新鲜度/质量状态。
+- 主题窗口表可以发起同名行业板块搜索，但不将主题与板块强制等同。
+- 375/768/1440 三视口交互验收、无页面横向溢出和无浏览器 console error。
+- 真实 AKShare 行业 smoke 已执行但未成功：当前开发环境访问东方财富接口时发生代理连接中断；未伪造 live 成功，功能以离线测试、缓存降级和受控浏览器 fixture 验收通过。
+
 以下边界不是 P1：多源自动核验、Sites、公网部署、账号、云同步、推荐和自动交易。
 
 ## v2.0 Final 记录
@@ -85,6 +95,8 @@ Final fresh verification、PR #33、Python 3.10/3.12 CI、merge commit、clean `
 - 多语言 renderer。
 - 更丰富的非交易型情景比较。
 - Product Web 的高级图表、主题个性化、收藏编辑和跨设备访问。
+- 行业板块目录增加翻页或“加载更多”，支持不修改关键词的失败重试。
+- 补充行业板块请求竞态和移动端实际溢出的自动化回归测试。
 - 在后续 Streamlit 升级前，把 `use_container_width` 调用迁移到 `width="stretch"/"content"`，消除 1.59 服务端弃用提示。
 
 ## 仍留在 Ideas 的事项

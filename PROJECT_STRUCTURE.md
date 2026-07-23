@@ -26,7 +26,7 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `fund_agent/cli.py` | Main command router for demo, daily, ops, market, backfill, fund detail, portfolio, news evidence, signal experiments, and Web Console. |
 | `fund_agent/models.py` | Shared dataclasses such as fund records, provider health, signal candidates, and experiment results. |
 | `fund_agent/providers.py` | Fixture, AKShare, and Tiantian provider boundaries plus normalization helpers. |
-| `fund_agent/cache.py` | SQLite cache for funds, fund details, and NAV history. |
+| `fund_agent/cache.py` | SQLite cache for funds, fund details, NAV history, market entities, and market time series. |
 | `fund_agent/report.py` | Main Markdown/HTML/JSON report rendering. |
 | `fund_agent/snapshot.py` | Snapshot writing and delta comparison. |
 | `fund_agent/trace.py` | Provider trace writing and retention. |
@@ -37,6 +37,8 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `fund_agent/portfolio.py` | Portfolio config parsing and holding-level analysis helpers. |
 | `fund_agent/portfolio_analysis.py` | Independent portfolio observation report. |
 | `fund_agent/market_intelligence.py` | Market scan, market snapshots, and market trend outputs. |
+| `fund_agent/market_history.py` | Allowlisted major-index history service with cache-first and stale fallback behavior. |
+| `fund_agent/sector_history.py` | Industry-board catalog search and history service with fixed BK-code boundaries. |
 | `fund_agent/fund_detail.py` | Watchlist and single-fund detail drilldown. |
 | `fund_agent/historical_backfill.py` | Historical backfill observation layer. |
 | `fund_agent/news_evidence.py` | Fixture-backed news/announcement evidence collection. |
@@ -61,6 +63,7 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `fund_agent/safe_io.py` | No-follow append-only JSONL writes for audit artifacts. |
 | `fund_agent/runtime_provenance.py` | Application/Git/trigger/Python provenance captured in daily run metadata. |
 | `fund_agent/release_readiness.py` | Historical compatibility and strict post-RC release-readiness evaluation. |
+| `fund_agent/web_api.py` | Loopback-only Product Web API for structured artifacts, fund history, index history, and industry-board browsing. |
 
 ## Active Documentation
 
