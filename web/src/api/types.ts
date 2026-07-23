@@ -92,6 +92,42 @@ export type MarketData = {
   };
 };
 
+export type MarketIndexWindow = "1m" | "3m" | "6m" | "1y" | "all";
+
+export type MarketIndexHistoryPoint = {
+  date: string;
+  open: number | null;
+  close: number | null;
+  high: number | null;
+  low: number | null;
+  volume: number | null;
+  turnover: number | null;
+  change_pct: number | null;
+  source: string;
+};
+
+export type MarketIndexHistoryResponse = {
+  symbol: string;
+  name: string;
+  series_type: "index";
+  range: MarketIndexWindow;
+  point_count: number;
+  required_points: number | null;
+  points: MarketIndexHistoryPoint[];
+  source: string;
+  as_of: string | null;
+  updated_at: string | null;
+  expires_at: string | null;
+  stale: boolean;
+  fallback_used: boolean;
+  fallback_reason?: string | null;
+  data_quality_grade: string;
+  warnings: Array<{ code: string; severity: string; message: string }>;
+  not_production_model: boolean;
+  main_score_changed: boolean;
+  main_risk_changed: boolean;
+};
+
 export type FundDetailItem = {
   code?: string;
   name?: string;

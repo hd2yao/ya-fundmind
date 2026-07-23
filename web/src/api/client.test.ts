@@ -1,6 +1,7 @@
 import {
   getFundDetail,
   getFundHistory,
+  getMarketIndexHistory,
   getResource,
   postResource,
   searchFunds
@@ -131,5 +132,48 @@ describe("API client response validation", () => {
 
     expect(fetchMock.mock.calls[0][0]).toBe("/api/funds/021511/history?range=3m");
     expect(history.points[0].unit_nav).toBe(2.9699);
+  });
+
+  it("loads a validated market index history window", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        symbol: "000300",
+        name: "沪深300",
+        series_type: "index",
+        range: "6m",
+        point_count: 1,
+        points: [
+          {
+            date: "2026-07-22",
+            open: 4620,
+            close: 4652.8,
+            high: 4660,
+            low: 4612,
+            volume: 130000,
+            turnover: 1000000000,
+            change_pct: 0.71,
+            source: "cache:akshare"
+          }
+        ],
+        source: "cache:akshare",
+        as_of: "2026-07-22",
+        stale: false,
+        fallback_used: false,
+        data_quality_grade: "normal",
+        warnings: [],
+        not_production_model: true,
+        main_score_changed: false,
+        main_risk_changed: false
+      })
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const history = await getMarketIndexHistory("000300", "6m");
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "/api/market/indices/000300/history?range=6m"
+    );
+    expect(history.points[0].close).toBe(4652.8);
   });
 });

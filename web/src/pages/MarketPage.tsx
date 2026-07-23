@@ -1,8 +1,15 @@
 import { ArrowDownRight, ArrowUpRight, History, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import type { MarketData, ThemeSummary } from "../api/types";
+import { getMarketIndexHistory } from "../api/client";
+import type {
+  MarketData,
+  MarketIndexHistoryResponse,
+  MarketIndexWindow,
+  ThemeSummary
+} from "../api/types";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
+import { MarketIndexChart } from "../components/MarketIndexChart";
 import { Metric } from "../components/Metric";
 import { PageHeader } from "../components/PageHeader";
 import { StatePanel } from "../components/StatePanel";
@@ -11,6 +18,28 @@ import { TrendChart } from "../components/TrendChart";
 import { useApiResource } from "../hooks/useApiResource";
 
 const number = new Intl.NumberFormat("zh-CN");
+const indexNumber = new Intl.NumberFormat("zh-CN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+const INDEX_OPTIONS = [
+  { symbol: "000001", name: "上证指数" },
+  { symbol: "000300", name: "沪深300" },
+  { symbol: "399006", name: "创业板指" }
+] as const;
+const INDEX_WINDOWS: Array<{ value: MarketIndexWindow; label: string }> = [
+  { value: "1m", label: "1 月" },
+  { value: "3m", label: "3 月" },
+  { value: "6m", label: "6 月" },
+  { value: "1y", label: "1 年" },
+  { value: "all", label: "全部" }
+];
+
+type IndexHistoryState = {
+  loading: boolean;
+  data: MarketIndexHistoryResponse | null;
+  error: string | null;
+};
 
 function formatReturn(value?: number | null) {
   if (value === null || value === undefined) return "--";
@@ -27,8 +56,33 @@ function qualityTone(grade?: string | null): StatusTone {
 export function MarketPage() {
   const { loading, resource, error } = useApiResource<MarketData>("/api/market");
   const [selectedTheme, setSelectedTheme] = useState<ThemeSummary | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState("000300");
+  const [indexWindow, setIndexWindow] = useState<MarketIndexWindow>("6m");
+  const [indexHistory, setIndexHistory] = useState<IndexHistoryState>({
+    loading: true,
+    data: null,
+    error: null
+  });
 
   const topThemes = useMemo(() => resource?.data.intelligence?.top_themes || [], [resource]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setIndexHistory({ loading: true, data: null, error: null });
+    getMarketIndexHistory(selectedIndex, indexWindow, controller.signal)
+      .then((data) => setIndexHistory({ loading: false, data, error: null }))
+      .catch((historyError: unknown) => {
+        if (controller.signal.aborted) return;
+        setIndexHistory({
+          loading: false,
+          data: null,
+          error: historyError instanceof Error
+            ? historyError.message
+            : "指数历史读取失败。"
+        });
+      });
+    return () => controller.abort();
+  }, [selectedIndex, indexWindow]);
 
   if (loading) {
     return <StatePanel kind="loading" title="正在读取市场情报" description="加载全市场分类、主题窗口和历史趋势。" />;
@@ -68,6 +122,14 @@ export function MarketPage() {
         <Metric label="趋势快照" value={trend.snapshots_processed || 0} detail={trend.enough_market_history ? "历史样本已满足" : "历史样本不足"} />
         <Metric label="持续热点" value={persistent.length} detail={`新出现 ${newThemes.length}`} />
       </section>
+
+      <IndexHistoryPanel
+        state={indexHistory}
+        symbol={selectedIndex}
+        window={indexWindow}
+        onSymbolChange={setSelectedIndex}
+        onWindowChange={setIndexWindow}
+      />
 
       <section className="content-band" aria-labelledby="top-theme-title">
         <div className="section-heading">
@@ -185,5 +247,103 @@ export function MarketPage() {
         ) : null}
       </EvidenceDrawer>
     </div>
+  );
+}
+
+function IndexHistoryPanel({
+  state,
+  symbol,
+  window,
+  onSymbolChange,
+  onWindowChange
+}: {
+  state: IndexHistoryState;
+  symbol: string;
+  window: MarketIndexWindow;
+  onSymbolChange: (symbol: string) => void;
+  onWindowChange: (window: MarketIndexWindow) => void;
+}) {
+  const latest = state.data?.points.at(-1);
+  return (
+    <section className="content-band market-index-panel" aria-labelledby="market-index-title">
+      <div className="market-index-toolbar">
+        <div>
+          <p className="eyebrow">Market indices</p>
+          <h2 id="market-index-title">主要指数走势</h2>
+        </div>
+        <div className="market-index-controls">
+          <div className="index-symbol-tabs" aria-label="主要指数">
+            {INDEX_OPTIONS.map((item) => (
+              <button
+                key={item.symbol}
+                type="button"
+                aria-label={item.name}
+                aria-pressed={symbol === item.symbol}
+                className={symbol === item.symbol ? "index-tab index-tab--active" : "index-tab"}
+                onClick={() => onSymbolChange(item.symbol)}
+              >
+                {item.name}
+              </button>
+            ))}
+          </div>
+          <div className="history-window-tabs" aria-label="指数历史时间范围">
+            {INDEX_WINDOWS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                aria-label={item.label}
+                aria-pressed={window === item.value}
+                className={window === item.value ? "history-window history-window--active" : "history-window"}
+                onClick={() => onWindowChange(item.value)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {state.loading ? (
+        <StatePanel kind="loading" title="正在读取指数日线" description="优先使用本地缓存，缺失时按需读取 AKShare。" />
+      ) : null}
+      {state.error ? (
+        <StatePanel kind="error" title="指数日线暂不可用" description={state.error} />
+      ) : null}
+      {state.data && state.data.points.length ? (
+        <>
+          <div className="market-index-summary">
+            <div>
+              <span>{state.data.name}</span>
+              <strong>{indexNumber.format(latest?.close || 0)}</strong>
+            </div>
+            <div>
+              <span>日涨跌</span>
+              <strong className={Number(latest?.change_pct) >= 0 ? "number-positive" : "number-negative"}>
+                {formatReturn(latest?.change_pct)}
+              </strong>
+            </div>
+            <div>
+              <span>样本</span>
+              <strong>{state.data.point_count} 个交易点</strong>
+            </div>
+            <div>
+              <span>来源 / 截至</span>
+              <strong>{state.data.source} · {state.data.as_of || "--"}</strong>
+            </div>
+          </div>
+          <MarketIndexChart name={state.data.name} points={state.data.points} />
+          <div className="status-row">
+            <StatusBadge tone={qualityTone(state.data.data_quality_grade)}>
+              {state.data.stale ? "stale" : state.data.data_quality_grade}
+            </StatusBadge>
+            {state.data.fallback_used ? <StatusBadge tone="warning">cache fallback</StatusBadge> : null}
+          </div>
+          {state.data.warnings.length ? (
+            <p className="history-warning">
+              {state.data.warnings.map((warning) => warning.message).join(" · ")}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+    </section>
   );
 }
