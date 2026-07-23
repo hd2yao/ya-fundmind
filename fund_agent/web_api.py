@@ -24,6 +24,11 @@ from .market_history import (
 )
 from .providers import AkshareProvider
 from .review_state import VALID_REVIEW_STATUSES, list_review_state, summarize_review_state
+from .sector_history import (
+    INDUSTRY_SYMBOL_PATTERN,
+    MarketSectorService,
+    MarketSectorUnavailable,
+)
 from .web_console import (
     build_copilot_view_model,
     build_web_console_state,
@@ -85,6 +90,7 @@ def create_web_app(
     static_dir: Path | str | None = None,
     fund_history_service: Any | None = None,
     market_history_service: Any | None = None,
+    market_sector_service: Any | None = None,
 ) -> FastAPI:
     """Build the local product Web Console API with fixed filesystem roots."""
 
@@ -114,6 +120,7 @@ def create_web_app(
     )
     app.state.fund_history_service = fund_history_service
     app.state.market_history_service = market_history_service
+    app.state.market_sector_service = market_sector_service
 
     @app.middleware("http")
     async def enforce_local_write_origin(request: Request, call_next):
@@ -215,6 +222,70 @@ def create_web_app(
                 status_code=503,
                 detail={
                     "code": "market_history_unavailable",
+                    "message": str(exc),
+                },
+            ) from exc
+
+    @app.get("/api/market/sectors")
+    def market_sectors(
+        q: str = Query(default="", max_length=200),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=25, ge=1, le=100),
+    ) -> dict[str, object]:
+        if app.state.market_sector_service is None:
+            app.state.market_sector_service = _build_market_sector_service(root)
+        try:
+            return app.state.market_sector_service.search_sectors(
+                q=q,
+                page=page,
+                page_size=page_size,
+            )
+        except MarketSectorUnavailable as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "market_sector_unavailable",
+                    "message": str(exc),
+                },
+            ) from exc
+
+    @app.get("/api/market/sectors/{symbol}/history")
+    def market_sector_history(
+        symbol: str,
+        window: Literal["1m", "3m", "6m", "1y", "all"] = Query(
+            default="6m",
+            alias="range",
+        ),
+    ) -> dict[str, object]:
+        resolved_symbol = symbol.strip().upper()
+        if not INDUSTRY_SYMBOL_PATTERN.fullmatch(resolved_symbol):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "invalid_sector_code",
+                    "message": "Industry sector code must match BK followed by four digits.",
+                },
+            )
+        if app.state.market_sector_service is None:
+            app.state.market_sector_service = _build_market_sector_service(root)
+        try:
+            return app.state.market_sector_service.get_sector_history(
+                resolved_symbol,
+                window=window,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "sector_not_found",
+                    "message": str(exc),
+                },
+            ) from exc
+        except MarketSectorUnavailable as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "market_sector_unavailable",
                     "message": str(exc),
                 },
             ) from exc
@@ -524,6 +595,34 @@ def _build_market_history_service(
         retry_backoff_seconds=provider_config.retry_backoff_seconds,
     )
     return MarketHistoryService(
+        cache=cache,
+        provider=provider,
+        cache_ttl_days=1,
+        allow_stale_fallback=True,
+    )
+
+
+def _build_market_sector_service(
+    root: Path,
+    *,
+    project_root: Path | None = None,
+) -> MarketSectorService:
+    del root
+    resolved_project_root = (project_root or PROJECT_ROOT).expanduser().resolve()
+    provider_config = load_provider_config(
+        resolved_project_root / "configs" / "providers.yaml"
+    ).akshare
+    cache = FundCache(resolved_project_root / "data" / "cache" / "funds.sqlite")
+    provider = AkshareProvider(
+        cache=cache,
+        allow_stale_cache=True,
+        cache_ttl_days=1,
+        verbose=provider_config.verbose,
+        timeout_seconds=provider_config.timeout_seconds,
+        retry_count=provider_config.retry_count,
+        retry_backoff_seconds=provider_config.retry_backoff_seconds,
+    )
+    return MarketSectorService(
         cache=cache,
         provider=provider,
         cache_ttl_days=1,
