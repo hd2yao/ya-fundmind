@@ -12,15 +12,16 @@ describe("App", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the product boundary and overview route", () => {
+  it("opens the product on the market terminal", () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
         <App />
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("heading", { name: "研究总览" })).toBeInTheDocument();
-    expect(screen.getByText(/本地基金与 ETF 投研工作台/)).toBeInTheDocument();
+    expect(screen.getByText("当前工作区 · 行情总览")).toBeInTheDocument();
+    expect(screen.getByText("正在读取市场情报")).toBeInTheDocument();
+    expect(screen.getByText(/本地基金数据终端/)).toBeInTheDocument();
     expect(screen.getByText(/不构成买卖建议/)).toBeInTheDocument();
   });
 
@@ -32,6 +33,6 @@ describe("App", () => {
     );
 
     expect(screen.getByRole("heading", { name: "页面不存在" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "返回研究总览" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "返回行情总览" })).toHaveAttribute("href", "/market");
   });
 });

@@ -201,8 +201,8 @@ export function MarketPage() {
     return (
       <div className="page-stack">
         <PageHeader
-          eyebrow="Market intelligence"
-          title="市场情报"
+          eyebrow="Market terminal"
+          title="行情总览"
           description="主要指数可独立按需读取；主题与趋势仍依赖每日 Market Intelligence 产物。"
           actions={<StatusBadge tone="neutral">index only</StatusBadge>}
         />
@@ -241,11 +241,18 @@ export function MarketPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Market intelligence"
-        title="市场情报"
+        eyebrow="Market terminal"
+        title="行情总览"
         description="全市场观察与历史趋势验证，不等同于自选池，也不构成板块推荐。"
         actions={<StatusBadge tone={qualityTone(quality)}>{quality}</StatusBadge>}
       />
+
+      <nav className="terminal-section-nav" aria-label="行情数据区域">
+        <a href="#market-index">主要指数</a>
+        <a href="#market-sector-title">行业板块</a>
+        <a href="#top-theme-title">主题窗口</a>
+        <a href="#trend-title">趋势验证</a>
+      </nav>
 
       <section className="metric-grid" aria-label="市场覆盖指标">
         <Metric label="基金覆盖" value={number.format(intelligence.total_funds || 0)} detail={`as_of ${intelligence.as_of || "--"}`} />
@@ -655,7 +662,7 @@ function IndexHistoryPanel({
 }) {
   const latest = state.data?.points.at(-1);
   return (
-    <section className="content-band market-index-panel" aria-labelledby="market-index-title">
+    <section id="market-index" className="content-band market-index-panel" aria-labelledby="market-index-title">
       <div className="market-index-toolbar">
         <div>
           <p className="eyebrow">Market indices</p>

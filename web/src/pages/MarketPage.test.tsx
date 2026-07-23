@@ -204,6 +204,11 @@ describe("MarketPage", () => {
     render(<MarketPage />);
 
     await waitFor(() => expect(screen.getByText("21,530")).toBeInTheDocument());
+    expect(screen.getByRole("navigation", { name: "行情数据区域" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "主要指数" })).toHaveAttribute("href", "#market-index");
+    expect(screen.getByRole("link", { name: "行业板块" })).toHaveAttribute("href", "#market-sector-title");
+    expect(screen.getByRole("link", { name: "主题窗口" })).toHaveAttribute("href", "#top-theme-title");
+    expect(screen.getByRole("link", { name: "趋势验证" })).toHaveAttribute("href", "#trend-title");
     expect(screen.getByText("3,529")).toBeInTheDocument();
     expect(screen.getAllByText("医药").length).toBeGreaterThan(0);
     expect(screen.getByText("QDII")).toBeInTheDocument();

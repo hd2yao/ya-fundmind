@@ -1,4 +1,4 @@
-import { Link, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "./layout/AppShell";
 import { CopilotPage } from "./pages/CopilotPage";
@@ -32,8 +32,8 @@ function NotFound() {
       <p className="eyebrow">404</p>
       <h1 id="not-found-title">页面不存在</h1>
       <p>该本地研究页面不存在，或地址已经变更。</p>
-      <Link className="text-link" to="/">
-        返回研究总览
+      <Link className="text-link" to="/market">
+        返回行情总览
       </Link>
     </section>
   );
@@ -43,13 +43,14 @@ export function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route path="/" element={<OverviewPage />} />
+        <Route path="/" element={<Navigate to="/market" replace />} />
         <Route path="/market" element={<MarketPage />} />
         <Route path="/funds" element={<FundsPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/copilot" element={<CopilotPage />} />
         <Route path="/review" element={<ReviewPage />} />
+        <Route path="/status" element={<OverviewPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>

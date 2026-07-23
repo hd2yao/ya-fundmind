@@ -8,7 +8,7 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 - 当前稳定版本：`v2.1.0`（Python package version：`2.1.0`）
 - 当前交付模式：`v2.2 Fund Data Terminal` delivery mode
-- 当前发布状态：`v2.1.0` 本地 Product Web 已发布；`v2.2` 的 M1 基金历史、M2 指数走势和 M3 行业板块链路已完成本地验收，继续按 M4-M5 收敛数据终端界面和版本发布。
+- 当前发布状态：`v2.1.0` 本地 Product Web 已发布；`v2.2` 的 M1-M4 已完成本地验收，下一步进入 M5 发布收口。
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
@@ -374,6 +374,16 @@ python -m fund_agent.cli product-web --output-dir outputs
 
 当前开发环境访问 AKShare 东方财富行业接口时发生代理连接中断，因此真实行业 smoke 如实记录为未成功；默认离线测试、cache fallback 和页面交互验收不依赖该网络。实现与验收见 [`docs/plans/2026-07-23-v2.2-m3-sector-market.md`](docs/plans/2026-07-23-v2.2-m3-sector-market.md) 和 [`docs/releases/v2.2.0-m3-acceptance.md`](docs/releases/v2.2.0-m3-acceptance.md)。
 
+`v2.2` 的 M4 将 Product Web 收敛为本地基金数据终端：
+
+- 根路径直接进入“行情总览”，一级工作区调整为“行情总览 / 基金终端 / 组合 / 研究证据”。
+- 顶栏提供全局基金代码或名称搜索，提交后进入 `/funds?q=<query>` 并复用现有服务端全市场检索。
+- 研究助手、人工审核、系统状态和报告中心保留为辅助入口，既有功能路由没有删除。
+- 行情页增加主要指数、行业板块、主题窗口和趋势验证的页内导航；数据表、指标和图表改为紧凑的终端式布局。
+- 375 / 768 / 1440 三视口无页面级横向溢出；provider 长错误会安全换行，不会破坏布局。
+
+实现与验收见 [`docs/plans/2026-07-23-v2.2-m4-data-terminal-ui.md`](docs/plans/2026-07-23-v2.2-m4-data-terminal-ui.md) 和 [`docs/releases/v2.2.0-m4-acceptance.md`](docs/releases/v2.2.0-m4-acceptance.md)。
+
 可先离线检查依赖和构建：
 
 ```bash
@@ -390,7 +400,7 @@ bash scripts/status_local_product_web.sh
 
 daily 更新 JSON 后页面会自动读取最新数据，不需要重新构建；只有代码升级时才运行 `deploy_local_product_web.sh`。卸载 Web 服务使用 `bash scripts/uninstall_local_product_web.sh`，不会修改 daily/weekly scheduler，也不会删除 outputs。
 
-页面包括研究总览、市场情报、基金探索、组合分析、新闻证据、研究助手、人工审核和报告中心。服务默认只接受 loopback host，不提供公网部署；不修改主评分/主风险，不接券商，不生成交易动作。完整运行手册见 [`docs/operations/local-product-web.md`](docs/operations/local-product-web.md)。
+页面包括行情总览、基金终端、组合、研究证据、研究助手、人工审核、系统状态和报告中心。服务默认只接受 loopback host，不提供公网部署；不修改主评分/主风险，不接券商，不生成交易动作。完整运行手册见 [`docs/operations/local-product-web.md`](docs/operations/local-product-web.md)。
 
 ## 风险边界
 

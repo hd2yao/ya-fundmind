@@ -1,7 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 import { App } from "../App";
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output aria-label="当前测试地址">{`${location.pathname}${location.search}`}</output>;
+}
 
 describe("AppShell", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -14,19 +19,50 @@ describe("AppShell", () => {
     );
 
     const labels = [
-      "研究总览",
-      "市场情报",
-      "基金探索",
-      "组合分析",
-      "新闻证据",
+      "行情总览",
+      "基金终端",
+      "组合",
+      "研究证据",
       "研究助手",
       "人工审核",
+      "系统状态",
       "报告中心"
     ];
     for (const label of labels) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
-    expect(screen.getByRole("link", { name: "市场情报" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("数据终端")).toBeInTheDocument();
+    expect(screen.getByText("研究工具")).toBeInTheDocument();
+    expect(screen.getByText("系统")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "行情总览" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("当前工作区 · 行情总览")).toBeInTheDocument();
+  });
+
+  it("sends the global fund search to the fund terminal", () => {
+    render(
+      <MemoryRouter initialEntries={["/market"]}>
+        <App />
+        <LocationProbe />
+      </MemoryRouter>
+    );
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "全局搜索基金" }), {
+      target: { value: "510300" }
+    });
+    fireEvent.submit(screen.getByRole("searchbox", { name: "全局搜索基金" }).closest("form")!);
+
+    expect(screen.getByLabelText("当前测试地址")).toHaveTextContent("/funds?q=510300");
+  });
+
+  it("reflects a fund terminal URL query in the global search", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+    render(
+      <MemoryRouter initialEntries={["/funds?q=510300"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("searchbox", { name: "全局搜索基金" })).toHaveValue("510300");
   });
 
   it("opens and closes the responsive navigation", () => {
@@ -53,11 +89,13 @@ describe("AppShell", () => {
 
     expect(screen.getByRole("navigation", { name: "主要导航" })).toHaveAttribute("data-mobile-open", "true");
     expect(sidebar).not.toHaveAttribute("inert");
+    expect(document.querySelector(".workspace")).toHaveAttribute("inert");
     expect(screen.getByRole("button", { name: "关闭导航" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "关闭导航" }));
+    fireEvent.keyDown(screen.getByRole("navigation", { name: "主要导航" }), { key: "Escape" });
     expect(document.querySelector(".primary-nav")).toHaveAttribute("data-mobile-open", "false");
     expect(sidebar).toHaveAttribute("inert");
+    expect(document.querySelector(".workspace")).not.toHaveAttribute("inert");
     expect(menuButton).toHaveFocus();
   });
 
