@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 import { FundsPage } from "./FundsPage";
 
@@ -147,14 +148,22 @@ function stubApi() {
   return fetchMock;
 }
 
+function renderFunds(initialEntry = "/funds") {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <FundsPage />
+    </MemoryRouter>
+  );
+}
+
 describe("FundsPage", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("opens on the full-market view and sends server-side search filters", async () => {
     const fetchMock = stubApi();
-    render(<FundsPage />);
+    renderFunds();
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "基金探索" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "基金终端" })).toBeInTheDocument());
     expect(screen.getByRole("tab", { name: "全市场" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getAllByText("21,570").length).toBeGreaterThan(0);
     expect(screen.getByText("沪深300ETF华泰柏瑞")).toBeInTheDocument();
@@ -173,9 +182,21 @@ describe("FundsPage", () => {
     });
   });
 
+  it("uses the global q parameter as the initial market search", async () => {
+    const fetchMock = stubApi();
+
+    renderFunds("/funds?q=510300");
+
+    expect(await screen.findByRole("searchbox", { name: "搜索全市场基金" })).toHaveValue("510300");
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes("q=510300"))).toBe(true);
+    });
+  });
+
   it("keeps the configured watchlist as a separate view", async () => {
     stubApi();
-    render(<FundsPage />);
+    renderFunds();
     await waitFor(() => expect(screen.getByRole("tab", { name: "我的自选" })).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("tab", { name: "我的自选" }));
@@ -187,7 +208,7 @@ describe("FundsPage", () => {
 
   it("loads structured fund detail and explains missing fields", async () => {
     const fetchMock = stubApi();
-    render(<FundsPage />);
+    renderFunds();
 
     await waitFor(() => expect(screen.getByRole("button", { name: "查看510300详情" })).toBeInTheDocument());
     const trigger = screen.getByRole("button", { name: "查看510300详情" });
@@ -233,7 +254,7 @@ describe("FundsPage", () => {
       }
       return baseImplementation?.(input);
     });
-    render(<FundsPage />);
+    renderFunds();
 
     fireEvent.click(await screen.findByRole("button", { name: "查看510300详情" }));
     await waitFor(() => expect(screen.getByText("3 个净值点")).toBeInTheDocument());
@@ -251,7 +272,7 @@ describe("FundsPage", () => {
 
   it("changes result pages without loading all rows in the browser", async () => {
     const fetchMock = stubApi();
-    render(<FundsPage />);
+    renderFunds();
     await waitFor(() => expect(screen.getByRole("button", { name: "下一页" })).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "下一页" }));

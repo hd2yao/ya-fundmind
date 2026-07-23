@@ -8,6 +8,7 @@ import {
   SlidersHorizontal
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { getFundDetail, getFundHistory, searchFunds } from "../api/client";
 import type {
@@ -73,9 +74,14 @@ function returnClass(value?: number | null) {
 }
 
 export function FundsPage() {
+  const [urlSearchParams] = useSearchParams();
+  const urlQuery = urlSearchParams.get("q")?.trim() || "";
   const watchlist = useApiResource<FundsData>("/api/funds");
   const [view, setView] = useState<FundView>("market");
-  const [search, setSearch] = useState<FundSearchParams>(DEFAULT_SEARCH);
+  const [search, setSearch] = useState<FundSearchParams>({
+    ...DEFAULT_SEARCH,
+    q: urlQuery
+  });
   const [market, setMarket] = useState<MarketState>({ loading: true, data: null, error: null });
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [historyWindow, setHistoryWindow] = useState<FundHistoryWindow>("6m");
@@ -89,6 +95,15 @@ export function FundsPage() {
     data: null,
     error: null
   });
+
+  useEffect(() => {
+    setView("market");
+    setSearch((current) => (
+      current.q === urlQuery
+        ? current
+        : { ...current, q: urlQuery, page: 1 }
+    ));
+  }, [urlQuery]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -162,8 +177,8 @@ export function FundsPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Fund explorer"
-        title="基金探索"
+        eyebrow="Fund terminal"
+        title="基金终端"
         description="浏览全市场结构化数据，并与配置中的自选池分开核验。结果仅用于研究观察，不构成推荐。"
         actions={
           <StatusBadge tone={qualityTone(marketData?.data_quality_grade)}>

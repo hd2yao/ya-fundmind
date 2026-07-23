@@ -1,9 +1,9 @@
-import { Menu, ShieldCheck, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Menu, Search, ShieldCheck, X } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { StatusBadge } from "../components/StatusBadge";
-import { NAVIGATION_ITEMS } from "../lib/routes";
+import { getNavigationItem, NAVIGATION_GROUPS } from "../lib/routes";
 
 const NARROW_VIEWPORT_QUERY = "(max-width: 960px)";
 
@@ -26,7 +26,11 @@ function useNarrowViewport() {
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [globalQuery, setGlobalQuery] = useState("");
   const isNarrow = useNarrowViewport();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentWorkspace = getNavigationItem(location.pathname);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const navigationHidden = isNarrow && !mobileOpen;
@@ -38,6 +42,12 @@ export function AppShell() {
   function closeMobileNavigation() {
     setMobileOpen(false);
     if (isNarrow) menuButtonRef.current?.focus();
+  }
+
+  function submitGlobalSearch(event: FormEvent) {
+    event.preventDefault();
+    const query = globalQuery.trim();
+    navigate(query ? `/funds?q=${encodeURIComponent(query)}` : "/funds");
   }
 
   return (
@@ -57,7 +67,7 @@ export function AppShell() {
           </div>
           <div className="brand-copy">
             <strong>FundMind OS</strong>
-            <span>Research Console</span>
+            <span>本地基金数据终端</span>
           </div>
           <button ref={closeButtonRef} className="icon-button sidebar-close" type="button" aria-label="关闭导航" onClick={closeMobileNavigation}>
             <X size={20} aria-hidden />
@@ -65,21 +75,25 @@ export function AppShell() {
         </div>
 
         <nav className="primary-nav" aria-label="主要导航" data-mobile-open={String(mobileOpen)}>
-          {NAVIGATION_ITEMS.map(({ path, label, description, icon: Icon }) => (
-            <NavLink
-              key={path}
-              to={path}
-              end={path === "/"}
-              aria-label={label}
-              onClick={closeMobileNavigation}
-              className={({ isActive }) => `nav-item${isActive ? " nav-item--active" : ""}`}
-            >
-              <Icon size={20} strokeWidth={1.8} aria-hidden />
-              <span>
-                <strong>{label}</strong>
-                <small>{description}</small>
-              </span>
-            </NavLink>
+          {NAVIGATION_GROUPS.map((group) => (
+            <section className="nav-section" key={group.label} aria-label={group.label}>
+              <p className="nav-section__label">{group.label}</p>
+              {group.items.map(({ path, label, description, icon: Icon }) => (
+                <NavLink
+                  key={path}
+                  to={path}
+                  aria-label={label}
+                  onClick={closeMobileNavigation}
+                  className={({ isActive }) => `nav-item${isActive ? " nav-item--active" : ""}`}
+                >
+                  <Icon size={19} strokeWidth={1.8} aria-hidden />
+                  <span>
+                    <strong>{label}</strong>
+                    <small>{description}</small>
+                  </span>
+                </NavLink>
+              ))}
+            </section>
           ))}
         </nav>
 
@@ -102,12 +116,25 @@ export function AppShell() {
             <Menu size={21} aria-hidden />
           </button>
           <div className="topbar-title">
-            <span>YA FundMind OS</span>
-            <small>本地基金与 ETF 投研工作台</small>
+            <span>当前工作区 · {currentWorkspace.label}</span>
+            <small>{currentWorkspace.description}</small>
           </div>
+          <form className="global-fund-search" role="search" onSubmit={submitGlobalSearch}>
+            <Search size={17} aria-hidden />
+            <input
+              type="search"
+              aria-label="全局搜索基金"
+              placeholder="搜索基金代码或名称"
+              value={globalQuery}
+              onChange={(event) => setGlobalQuery(event.target.value)}
+            />
+            <button type="submit" aria-label="提交全局基金搜索" title="搜索基金">
+              <Search size={16} aria-hidden />
+            </button>
+          </form>
           <div className="topbar-status" aria-label="应用状态">
             <StatusBadge tone="success">本地运行</StatusBadge>
-            <StatusBadge tone="info">研究模式</StatusBadge>
+            <StatusBadge tone="info">只读研究</StatusBadge>
           </div>
         </header>
         <main id="main-content" className="main-content" tabIndex={-1}>

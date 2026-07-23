@@ -20,7 +20,7 @@ export function OverviewPage() {
   const header = (
     <PageHeader
       eyebrow="Daily research pulse"
-      title="研究总览"
+      title="系统状态"
       description="确认最新运行、数据质量和需要人工处理的事项。所有指标来自本地结构化产物。"
     />
   );
@@ -55,7 +55,7 @@ export function OverviewPage() {
     <div className="page-stack">
       <PageHeader
         eyebrow="Daily research pulse"
-        title="研究总览"
+        title="系统状态"
         description="确认最新运行、数据质量和需要人工处理的事项。所有指标来自本地结构化产物。"
         actions={<StatusBadge tone={ops.ops_ready ? "success" : "critical"}>{ops.ops_ready ? "Daily ready" : "Daily blocked"}</StatusBadge>}
       />

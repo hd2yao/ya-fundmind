@@ -32,7 +32,7 @@ export function PortfolioPage() {
     <div className="page-stack">
       <PageHeader
         eyebrow="Configured holdings"
-        title="组合分析"
+        title="组合"
         description="来自 portfolio 配置的持仓观察，与 watchlist 自选池相互独立。"
         actions={<StatusBadge tone={data.status === "warning" ? "warning" : "success"}>{data.status || "unknown"}</StatusBadge>}
       />

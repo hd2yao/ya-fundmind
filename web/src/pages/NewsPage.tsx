@@ -38,7 +38,7 @@ export function NewsPage() {
     <div className="page-stack">
       <PageHeader
         eyebrow="News and announcements"
-        title="新闻证据"
+        title="研究证据"
         description="按来源、主题和基金核对新闻/公告证据。低置信度或缺 URL 的条目必须人工复核。"
         actions={fixtureEvidence ? <StatusBadge tone="warning">Fixture evidence</StatusBadge> : <StatusBadge tone="info">Evidence only</StatusBadge>}
       />
