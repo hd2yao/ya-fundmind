@@ -1,5 +1,5 @@
 import { Menu, Search, ShieldCheck, X } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { StatusBadge } from "../components/StatusBadge";
@@ -25,23 +25,65 @@ function useNarrowViewport() {
 }
 
 export function AppShell() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [globalQuery, setGlobalQuery] = useState("");
-  const isNarrow = useNarrowViewport();
   const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [globalQuery, setGlobalQuery] = useState(() => (
+    location.pathname === "/funds"
+      ? new URLSearchParams(location.search).get("q")?.trim() || ""
+      : ""
+  ));
+  const isNarrow = useNarrowViewport();
   const navigate = useNavigate();
   const currentWorkspace = getNavigationItem(location.pathname);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const navigationWasOpenRef = useRef(false);
   const navigationHidden = isNarrow && !mobileOpen;
 
   useEffect(() => {
-    if (isNarrow && mobileOpen) closeButtonRef.current?.focus();
+    if (!isNarrow) return;
+    if (mobileOpen) {
+      navigationWasOpenRef.current = true;
+      closeButtonRef.current?.focus();
+    } else if (navigationWasOpenRef.current) {
+      navigationWasOpenRef.current = false;
+      menuButtonRef.current?.focus();
+    }
   }, [isNarrow, mobileOpen]);
+
+  useEffect(() => {
+    if (location.pathname !== "/funds") return;
+    setGlobalQuery(new URLSearchParams(location.search).get("q")?.trim() || "");
+  }, [location.pathname, location.search]);
 
   function closeMobileNavigation() {
     setMobileOpen(false);
-    if (isNarrow) menuButtonRef.current?.focus();
+  }
+
+  function handleNavigationKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (!isNarrow || !mobileOpen) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMobileNavigation();
+      return;
+    }
+    if (event.key !== "Tab") return;
+
+    const focusable = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    );
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   function submitGlobalSearch(event: FormEvent) {
@@ -60,6 +102,7 @@ export function AppShell() {
         data-mobile-open={String(mobileOpen)}
         aria-hidden={navigationHidden || undefined}
         inert={navigationHidden || undefined}
+        onKeyDown={handleNavigationKeyDown}
       >
         <div className="brand-row">
           <div className="brand-mark" aria-hidden>
@@ -110,7 +153,7 @@ export function AppShell() {
         <button className="nav-scrim" type="button" aria-label="关闭导航遮罩" onClick={closeMobileNavigation} />
       ) : null}
 
-      <div className="workspace">
+      <div className="workspace" inert={(isNarrow && mobileOpen) || undefined}>
         <header className="topbar">
           <button ref={menuButtonRef} className="icon-button menu-button" type="button" aria-label="打开导航" onClick={() => setMobileOpen(true)}>
             <Menu size={21} aria-hidden />

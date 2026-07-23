@@ -54,6 +54,17 @@ describe("AppShell", () => {
     expect(screen.getByLabelText("当前测试地址")).toHaveTextContent("/funds?q=510300");
   });
 
+  it("reflects a fund terminal URL query in the global search", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+    render(
+      <MemoryRouter initialEntries={["/funds?q=510300"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("searchbox", { name: "全局搜索基金" })).toHaveValue("510300");
+  });
+
   it("opens and closes the responsive navigation", () => {
     vi.stubGlobal(
       "matchMedia",
@@ -78,11 +89,13 @@ describe("AppShell", () => {
 
     expect(screen.getByRole("navigation", { name: "主要导航" })).toHaveAttribute("data-mobile-open", "true");
     expect(sidebar).not.toHaveAttribute("inert");
+    expect(document.querySelector(".workspace")).toHaveAttribute("inert");
     expect(screen.getByRole("button", { name: "关闭导航" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "关闭导航" }));
+    fireEvent.keyDown(screen.getByRole("navigation", { name: "主要导航" }), { key: "Escape" });
     expect(document.querySelector(".primary-nav")).toHaveAttribute("data-mobile-open", "false");
     expect(sidebar).toHaveAttribute("inert");
+    expect(document.querySelector(".workspace")).not.toHaveAttribute("inert");
     expect(menuButton).toHaveFocus();
   });
 

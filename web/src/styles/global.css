@@ -452,6 +452,13 @@ textarea:focus-visible {
   background: var(--color-teal-soft);
 }
 
+#market-index,
+#market-sector-title,
+#top-theme-title,
+#trend-title {
+  scroll-margin-top: calc(var(--topbar-height) + 16px);
+}
+
 .view-tab {
   display: inline-flex;
   min-height: 38px;
@@ -1954,6 +1961,33 @@ textarea:focus-visible {
 
   .review-controls {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .topbar-title small {
+    display: none;
+  }
+
+  .global-fund-search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  .topbar-status .status-badge--info {
+    display: none;
+  }
+
+  #market-index,
+  #market-sector-title,
+  #top-theme-title,
+  #trend-title {
+    scroll-margin-top: 120px;
   }
 }
 
