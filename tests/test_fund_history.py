@@ -86,6 +86,7 @@ def test_history_service_fetches_live_writes_cache_and_applies_window(tmp_path):
     assert payload["points"][0]["date"] == "2026-06-06"
     assert payload["points"][-1]["date"] == "2026-06-25"
     assert payload["source"] == "akshare"
+    assert payload["as_of"] == "2026-06-25"
     assert payload["data_quality_grade"] == "normal"
     assert len(cache.load_nav_points(code="021511", source="akshare", now=now)) == 25
 

@@ -213,9 +213,7 @@ def _build_history_payload(
             for point in selected
         ],
         "source": latest.source,
-        "as_of": metadata.get("cache_as_of")
-        or metadata.get("as_of")
-        or latest.date,
+        "as_of": latest.date,
         "updated_at": metadata.get("updated_at") or latest.updated_at,
         "expires_at": metadata.get("expires_at"),
         "stale": stale,
