@@ -203,3 +203,20 @@ def test_akshare_industry_history_rejects_all_bad_rows(tmp_path):
 
     assert provider.last_health is not None
     assert provider.last_health.skipped_row_count == 1
+
+
+def test_akshare_industry_catalog_reports_missing_method(tmp_path):
+    provider = AkshareProvider(
+        ak_module=object(),
+        cache=FundCache(tmp_path / "funds.sqlite"),
+    )
+
+    with pytest.raises(ProviderUnavailable, match="endpoint is unavailable"):
+        provider.fetch_industry_boards(as_of="2026-07-23")
+
+    assert provider.last_health is not None
+    assert provider.last_health.endpoints[0].attempts == 0
+    assert provider.last_health.endpoints[0].success is False
+    assert "endpoint is unavailable" in (
+        provider.last_health.endpoints[0].error or ""
+    )

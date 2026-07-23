@@ -938,7 +938,22 @@ class AkshareProvider:
 
     def _call_akshare(self, name: str, **kwargs):
         started_at = _utc_now()
-        method = getattr(self._ak, name)
+        method = getattr(self._ak, name, None)
+        if not callable(method):
+            error = f"AKShare endpoint is unavailable: {name}"
+            return _EndpointCallResult(
+                data=None,
+                success=False,
+                error=error,
+                trace=_build_endpoint_trace(
+                    endpoint=name,
+                    started_at=started_at,
+                    attempts=0,
+                    success=False,
+                    error=error,
+                    timeout_seconds=self.timeout_seconds,
+                ),
+            )
         attempts = 0
         last_error: str | None = None
         for attempt in range(self.retry_count + 1):

@@ -13,6 +13,7 @@ from .providers import ProviderUnavailable
 
 
 INDUSTRY_SYMBOL_PATTERN = re.compile(r"^BK\d{4}$")
+FULL_HISTORY_START = "19900101"
 
 
 class MarketSectorUnavailable(RuntimeError):
@@ -173,7 +174,9 @@ class MarketSectorService:
                 now=current_time,
             )
         )
-        if fresh:
+        if fresh and (
+            window != "all" or _has_complete_history_horizon(fresh)
+        ):
             return _build_history_payload(
                 entity,
                 fresh,
@@ -183,8 +186,13 @@ class MarketSectorService:
             )
 
         try:
-            history_start = (current_time - timedelta(days=365 * 5)).strftime(
-                "%Y%m%d"
+            history_horizon = "all" if window == "all" else "5y"
+            history_start = (
+                FULL_HISTORY_START
+                if history_horizon == "all"
+                else (current_time - timedelta(days=365 * 5)).strftime(
+                    "%Y%m%d"
+                )
             )
             live_points = self.provider.fetch_industry_history(
                 resolved_symbol,
@@ -243,7 +251,7 @@ class MarketSectorService:
                         expires_at.isoformat(),
                     ),
                     "stale": False,
-                    "history_horizon": "5y",
+                    "history_horizon": history_horizon,
                 },
             )
             for point in live_points
@@ -367,6 +375,15 @@ def _industry_cache_points(
     ]
 
 
+def _has_complete_history_horizon(
+    points: list[MarketSeriesPoint],
+) -> bool:
+    return bool(points) and all(
+        point.metadata.get("history_horizon") == "all"
+        for point in points
+    )
+
+
 def _build_history_payload(
     entity: MarketEntity,
     points: list[MarketSeriesPoint],
@@ -381,6 +398,8 @@ def _build_history_payload(
     latest = selected[-1]
     stale = any(bool(point.metadata.get("stale")) for point in selected)
     insufficient = required_points is not None and len(selected) < required_points
+    history_horizon = latest.metadata.get("history_horizon")
+    partial_history = window == "all" and history_horizon != "all"
     warnings = _fallback_warnings(
         fallback_used=fallback_used,
         fallback_reason=fallback_reason,
@@ -398,6 +417,17 @@ def _build_history_payload(
                 ),
             }
         )
+    if partial_history:
+        warnings.append(
+            {
+                "code": "partial_history",
+                "severity": "warning",
+                "message": (
+                    "Complete industry history is unavailable; "
+                    "the all range contains only cached partial history."
+                ),
+            }
+        )
     metadata = latest.metadata
     return {
         "symbol": entity.symbol,
@@ -406,6 +436,7 @@ def _build_history_payload(
         "range": window,
         "point_count": len(selected),
         "required_points": required_points,
+        "history_horizon": history_horizon or "partial",
         "points": [
             {
                 "date": point.date,
@@ -429,7 +460,9 @@ def _build_history_payload(
         "fallback_used": fallback_used,
         "fallback_reason": fallback_reason,
         "data_quality_grade": (
-            "warning" if stale or insufficient or fallback_used else "normal"
+            "warning"
+            if stale or insufficient or fallback_used or partial_history
+            else "normal"
         ),
         "warnings": warnings,
         "not_production_model": True,

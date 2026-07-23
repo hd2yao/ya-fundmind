@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from fund_agent.cache import FundCache
 from fund_agent.models import MarketEntity, MarketSeriesPoint
-from fund_agent.providers import ProviderUnavailable
+from fund_agent.providers import AkshareProvider, ProviderUnavailable
 from fund_agent.sector_history import MarketSectorService, MarketSectorUnavailable
 
 
@@ -52,6 +53,19 @@ def _points(count: int = 25) -> list[MarketSeriesPoint]:
             metadata={"series_kind": "market_industry_history"},
         )
         for index in range(count)
+    ]
+
+
+def _complete_points(count: int = 25) -> list[MarketSeriesPoint]:
+    return [
+        replace(
+            point,
+            metadata={
+                **point.metadata,
+                "history_horizon": "all",
+            },
+        )
+        for point in _points(count)
     ]
 
 
@@ -198,7 +212,7 @@ def test_sector_history_fetches_live_and_writes_cache(tmp_path):
     assert provider.catalog_calls == 1
     assert len(provider.history_calls) == 1
     assert provider.history_calls[0][0] == "BK1036"
-    assert provider.history_calls[0][1]["start_date"] == "20210724"
+    assert provider.history_calls[0][1]["start_date"] == "19900101"
     assert provider.history_calls[0][1]["end_date"] == "20260723"
     assert payload["point_count"] == 25
     assert len(
@@ -209,6 +223,52 @@ def test_sector_history_fetches_live_and_writes_cache(tmp_path):
             now=NOW,
         )
     ) == 25
+
+
+def test_sector_history_all_refetches_when_fresh_cache_is_partial(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    cache.upsert_market_entities(
+        _entities(),
+        as_of="2026-07-23",
+        ttl_days=2,
+        now=NOW,
+    )
+    cache.upsert_market_series(
+        _points(25),
+        as_of="2026-07-23",
+        ttl_days=2,
+        now=NOW,
+    )
+    provider = LiveProvider()
+    service = MarketSectorService(cache=cache, provider=provider)
+
+    payload = service.get_sector_history("BK1036", window="all", now=NOW)
+
+    assert len(provider.history_calls) == 1
+    assert provider.history_calls[0][1]["start_date"] == "19900101"
+    assert payload["history_horizon"] == "all"
+
+
+def test_sector_history_all_uses_complete_fresh_cache(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    cache.upsert_market_entities(
+        _entities(),
+        as_of="2026-07-23",
+        ttl_days=2,
+        now=NOW,
+    )
+    cache.upsert_market_series(
+        _complete_points(25),
+        as_of="2026-07-23",
+        ttl_days=2,
+        now=NOW,
+    )
+    service = MarketSectorService(cache=cache, provider=NeverLiveProvider())
+
+    payload = service.get_sector_history("BK1036", window="all", now=NOW)
+
+    assert payload["point_count"] == 25
+    assert payload["history_horizon"] == "all"
 
 
 def test_sector_history_falls_back_to_stale_cache(tmp_path):
@@ -239,6 +299,28 @@ def test_sector_history_falls_back_to_stale_cache(tmp_path):
         warning["code"] == "stale_cache"
         for warning in payload["warnings"]
     )
+    assert any(
+        warning["code"] == "partial_history"
+        for warning in payload["warnings"]
+    )
+
+
+def test_sector_search_missing_akshare_method_uses_stale_cache(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    cache.upsert_market_entities(
+        _entities(),
+        as_of="2026-07-20",
+        ttl_days=1,
+        now=NOW - timedelta(days=3),
+    )
+    provider = AkshareProvider(ak_module=object(), cache=cache)
+    service = MarketSectorService(cache=cache, provider=provider)
+
+    payload = service.search_sectors(now=NOW)
+
+    assert payload["fallback_used"] is True
+    assert payload["stale"] is True
+    assert "endpoint is unavailable" in payload["fallback_reason"]
 
 
 @pytest.mark.parametrize(
