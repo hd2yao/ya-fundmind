@@ -4,7 +4,9 @@ import type {
   FundHistoryResponse,
   FundHistoryWindow,
   FundSearchParams,
-  FundSearchResponse
+  FundSearchResponse,
+  MarketIndexHistoryResponse,
+  MarketIndexWindow
 } from "./types";
 
 export class ApiError extends Error {
@@ -102,6 +104,26 @@ export async function getFundHistory(
     typeof payload.point_count !== "number"
   ) {
     throw new ApiError("Local API returned an invalid fund history payload.", 502);
+  }
+  return payload;
+}
+
+export async function getMarketIndexHistory(
+  symbol: string,
+  window: MarketIndexWindow = "6m",
+  signal?: AbortSignal
+): Promise<MarketIndexHistoryResponse> {
+  const payload = await getJson<MarketIndexHistoryResponse>(
+    `/api/market/indices/${encodeURIComponent(symbol)}/history?range=${encodeURIComponent(window)}`,
+    signal
+  );
+  if (
+    payload.symbol !== symbol ||
+    payload.series_type !== "index" ||
+    !Array.isArray(payload.points) ||
+    typeof payload.point_count !== "number"
+  ) {
+    throw new ApiError("Local API returned an invalid market index history payload.", 502);
   }
   return payload;
 }

@@ -354,6 +354,16 @@ python -m fund_agent.cli product-web --output-dir outputs
 
 该历史序列只用于浏览和研究观察，不进入主评分、主风险或推荐逻辑。完整设计和后续指数/板块里程碑见 [`docs/plans/2026-07-23-v2.2-fund-data-terminal-design.md`](docs/plans/2026-07-23-v2.2-fund-data-terminal-design.md)。
 
+`v2.2` 的第二条数据终端链路在“市场情报”页提供主要指数历史走势：
+
+- 支持上证指数、沪深 300、创业板指及 `1 月 / 3 月 / 6 月 / 1 年 / 全部`窗口。
+- 指数 OHLCV 使用独立 SQLite `market_series`，不与基金净值混存。
+- 新鲜缓存优先；缺失时按需读取 AKShare，live 失败且存在历史缓存时才显示 stale fallback。
+- 当前环境下 AKShare 东方财富指数端点不可用时，会切换到同一 AKShare provider 的新浪指数端点，并保留 endpoint warning；这不是多源交叉核验。
+- 页面同时显示最新收盘、日涨跌、样本、`source / as_of` 和可折叠日线数据表。
+
+指数曲线只用于行情浏览和研究观察，不改变主评分、主风险或报告主结论。实现与验收见 [`docs/plans/2026-07-23-v2.2-m2-index-market.md`](docs/plans/2026-07-23-v2.2-m2-index-market.md) 和 [`docs/releases/v2.2.0-m2-acceptance.md`](docs/releases/v2.2.0-m2-acceptance.md)。
+
 可先离线检查依赖和构建：
 
 ```bash

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
-from .models import FundDetail, FundNavPoint, FundRecord
+from .models import FundDetail, FundNavPoint, FundRecord, MarketSeriesPoint
 
 
 @dataclass(frozen=True)
@@ -86,6 +86,26 @@ class FundCache:
                     updated_at TEXT NOT NULL,
                     expires_at TEXT NOT NULL,
                     PRIMARY KEY (code, as_of, source)
+                );
+
+                CREATE TABLE IF NOT EXISTS market_series (
+                    symbol TEXT NOT NULL,
+                    series_type TEXT NOT NULL,
+                    series_date TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    open REAL,
+                    close REAL,
+                    high REAL,
+                    low REAL,
+                    volume REAL,
+                    turnover REAL,
+                    change_pct REAL,
+                    source TEXT NOT NULL,
+                    as_of TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    PRIMARY KEY (symbol, series_type, series_date, source)
                 );
                 """
             )
@@ -362,6 +382,89 @@ class FundCache:
             rows = conn.execute(f"SELECT * FROM fund_navs {where} ORDER BY nav_date", params).fetchall()
         return [self._row_to_nav_point(row, current_time=current_time) for row in rows]
 
+    def upsert_market_series(
+        self,
+        points: Iterable[MarketSeriesPoint],
+        *,
+        as_of: str,
+        ttl_days: int = 1,
+        now: datetime | None = None,
+    ) -> None:
+        updated_at = _utc_now(now).isoformat()
+        expires_at = (_utc_now(now) + timedelta(days=ttl_days)).isoformat()
+        with self._connect() as conn:
+            for point in points:
+                conn.execute(
+                    """
+                    INSERT INTO market_series (
+                        symbol, series_type, series_date, name,
+                        open, close, high, low, volume, turnover, change_pct,
+                        source, as_of, metadata_json, updated_at, expires_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(symbol, series_type, series_date, source) DO UPDATE SET
+                        name = excluded.name,
+                        open = excluded.open,
+                        close = excluded.close,
+                        high = excluded.high,
+                        low = excluded.low,
+                        volume = excluded.volume,
+                        turnover = excluded.turnover,
+                        change_pct = excluded.change_pct,
+                        as_of = excluded.as_of,
+                        metadata_json = excluded.metadata_json,
+                        updated_at = excluded.updated_at,
+                        expires_at = excluded.expires_at
+                    """,
+                    (
+                        point.symbol.strip(),
+                        point.series_type,
+                        point.date,
+                        point.name,
+                        point.open,
+                        point.close,
+                        point.high,
+                        point.low,
+                        point.volume,
+                        point.turnover,
+                        point.change_pct,
+                        point.source.removeprefix("cache:"),
+                        as_of,
+                        json.dumps(point.metadata, ensure_ascii=False, sort_keys=True),
+                        updated_at,
+                        expires_at,
+                    ),
+                )
+
+    def load_market_series(
+        self,
+        *,
+        symbol: str,
+        series_type: str,
+        source: str | None = None,
+        allow_stale: bool = False,
+        now: datetime | None = None,
+    ) -> list[MarketSeriesPoint]:
+        current_time = _utc_now(now).isoformat()
+        clauses = ["symbol = ?", "series_type = ?"]
+        params: list[object] = [symbol.strip(), series_type]
+        if source is not None:
+            clauses.append("source = ?")
+            params.append(source.removeprefix("cache:"))
+        if not allow_stale:
+            clauses.append("expires_at >= ?")
+            params.append(current_time)
+        where = f"WHERE {' AND '.join(clauses)}"
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM market_series {where} ORDER BY series_date",
+                params,
+            ).fetchall()
+        return [
+            self._row_to_market_series_point(row, current_time=current_time)
+            for row in rows
+        ]
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
@@ -445,6 +548,40 @@ class FundCache:
             unit_nav=row["nav"],
             accumulated_nav=row["accumulated_nav"],
             daily_return=row["daily_return"],
+            source=f"cache:{row['source']}",
+            updated_at=row["updated_at"],
+            metadata=metadata,
+        )
+
+    def _row_to_market_series_point(
+        self,
+        row: sqlite3.Row,
+        *,
+        current_time: str,
+    ) -> MarketSeriesPoint:
+        metadata = json.loads(row["metadata_json"] or "{}")
+        stale = str(row["expires_at"]) < current_time
+        metadata.update(
+            {
+                "cache_source": row["source"],
+                "cache_as_of": row["as_of"],
+                "updated_at": row["updated_at"],
+                "expires_at": row["expires_at"],
+                "stale": stale,
+            }
+        )
+        return MarketSeriesPoint(
+            symbol=str(row["symbol"]),
+            name=str(row["name"]),
+            series_type=str(row["series_type"]),
+            date=str(row["series_date"]),
+            open=row["open"],
+            close=row["close"],
+            high=row["high"],
+            low=row["low"],
+            volume=row["volume"],
+            turnover=row["turnover"],
+            change_pct=row["change_pct"],
             source=f"cache:{row['source']}",
             updated_at=row["updated_at"],
             metadata=metadata,

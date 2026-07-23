@@ -41,13 +41,68 @@ const response = {
   }
 };
 
+const indexHistory = {
+  symbol: "000300",
+  name: "沪深300",
+  series_type: "index",
+  range: "6m",
+  point_count: 3,
+  required_points: 120,
+  points: [
+    { date: "2026-07-18", open: 4580, close: 4600, high: 4610, low: 4570, volume: 100000, turnover: 800000000, change_pct: -0.2, source: "cache:akshare" },
+    { date: "2026-07-21", open: 4600, close: 4620, high: 4630, low: 4590, volume: 120000, turnover: 900000000, change_pct: 0.52, source: "cache:akshare" },
+    { date: "2026-07-22", open: 4620, close: 4652.8, high: 4660, low: 4612, volume: 130000, turnover: 1000000000, change_pct: 0.71, source: "cache:akshare" }
+  ],
+  source: "cache:akshare",
+  as_of: "2026-07-22",
+  updated_at: "2026-07-22T10:00:00Z",
+  expires_at: "2026-07-23T10:00:00Z",
+  stale: false,
+  fallback_used: false,
+  data_quality_grade: "warning",
+  warnings: [{ code: "insufficient_history", severity: "warning", message: "Only 3 points are available." }],
+  not_production_model: true,
+  main_score_changed: false,
+  main_risk_changed: false
+};
+
+function stubMarketApi(marketResponse: unknown = response) {
+  const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
+    const url = String(input);
+    if (url === "/api/market") {
+      return Promise.resolve({ ok: true, json: async () => marketResponse });
+    }
+    if (url.startsWith("/api/market/indices/")) {
+      const range = new URL(url, "http://localhost").searchParams.get("range") || "6m";
+      const symbol = url.split("/")[4];
+      const names: Record<string, string> = {
+        "000001": "上证指数",
+        "000300": "沪深300",
+        "399006": "创业板指"
+      };
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          ...indexHistory,
+          symbol,
+          name: names[symbol],
+          range
+        })
+      });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 describe("MarketPage", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it("shows market coverage, theme trend and observation details", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => response }));
+    stubMarketApi();
 
     render(<MarketPage />);
 
@@ -63,38 +118,58 @@ describe("MarketPage", () => {
     expect(screen.getByText("样本 527")).toBeInTheDocument();
   });
 
+  it("shows real index history and switches symbol and range", async () => {
+    const fetchMock = stubMarketApi();
+
+    render(<MarketPage />);
+
+    expect(await screen.findByRole("img", { name: "沪深300 指数日线图" })).toBeInTheDocument();
+    expect(screen.getAllByText("4,652.80").length).toBeGreaterThan(0);
+    expect(screen.getByText(/cache:akshare/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "创业板指" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 月" }));
+
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(
+        urls.some((url) =>
+          url.endsWith("/api/market/indices/399006/history?range=1m")
+        )
+      ).toBe(true);
+    });
+  });
+
   it("does not invent themes when market data is missing", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ availability: "missing", generated_at: null, data: { intelligence: {}, trend: {} } })
-      })
+    stubMarketApi(
+      {
+        availability: "missing",
+        generated_at: null,
+        data: { intelligence: {}, trend: {} }
+      }
     );
 
     render(<MarketPage />);
 
     await waitFor(() => expect(screen.getByText("尚无市场情报产物")).toBeInTheDocument());
+    expect(await screen.findByRole("img", { name: "沪深300 指数日线图" })).toBeInTheDocument();
     expect(screen.queryByText("热门板块")).not.toBeInTheDocument();
   });
 
   it("renders degraded market quality as critical", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          ...response,
-          data: {
-            ...response.data,
-            intelligence: {
-              ...response.data.intelligence,
-              data_quality_summary: { grade: "degraded", stale_record_count: 4 }
-            }
+    stubMarketApi({
+      ...response,
+      data: {
+        ...response.data,
+        intelligence: {
+          ...response.data.intelligence,
+          data_quality_summary: {
+            grade: "degraded",
+            stale_record_count: 4
           }
-        })
-      })
-    );
+        }
+      }
+    });
 
     render(<MarketPage />);
 

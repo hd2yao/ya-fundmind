@@ -11,9 +11,9 @@
 
 - 当前稳定版本：`v2.1.0` Local Product Web + Fund Explorer。
 - 当前开发轨道：`v2.2 Fund Data Terminal`。
-- 当前 Milestone：M1 单基金历史闭环已通过本地验收，下一步进入 M2 指数走势。
+- 当前 Milestone：M2 主要指数走势已通过本地验收，下一步进入 M3 板块走势。
 - 当前 P0：无。
-- 当前 P1：指数日线、市场页指数图表及其缓存/API/真实 smoke。
+- 当前 P1：行业板块日线、板块趋势 API、市场页板块详情及真实 smoke。
 
 ## P0 Blocking
 
@@ -45,6 +45,22 @@
 - 提供固定 symbol allowlist 的指数历史 API。
 - 市场页展示指数折线图、时间窗口、source/as_of/stale。
 - 默认 pytest 不访问网络，真实 smoke 与 scheduler 隔离。
+
+`v2.2 M2` 已完成：
+
+- SQLite `market_series` 独立保存指数 OHLCV、成交额、涨跌幅和新鲜度。
+- AKShare 东方财富指数端点失败时可切换到同一 provider 的新浪端点，并保留完整 endpoint trace。
+- `GET /api/market/indices/{symbol}/history` 支持固定 allowlist 和 `1m / 3m / 6m / 1y / all`。
+- 市场页支持上证指数、沪深 300、创业板指切换、日线曲线和可折叠 OHLC 数据表。
+- 真实 smoke、fresh cache 命中、375/768/1440 响应式和无 console error 验收通过。
+
+`v2.2 M3` 必做：
+
+- 建立行业板块标识与 AKShare 板块历史接口的稳定映射。
+- 复用 `market_series` 保存板块日线，不混入基金净值或指数序列。
+- 提供板块列表、板块历史和板块详情 API，保持固定参数边界。
+- 把现有主题窗口统计与真实板块曲线建立可解释跳转，不输出板块推荐。
+- 保持默认测试离线，并完成至少一个真实板块 smoke 和三视口验收。
 
 以下边界不是 P1：多源自动核验、Sites、公网部署、账号、云同步、推荐和自动交易。
 
