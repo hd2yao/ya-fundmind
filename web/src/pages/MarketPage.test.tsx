@@ -146,7 +146,10 @@ const sectorHistory = {
   main_risk_changed: false
 };
 
-function stubMarketApi(marketResponse: unknown = response) {
+function stubMarketApi(
+  marketResponse: unknown = response,
+  sectorResponse: unknown = sectorCatalog
+) {
   const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
     const url = String(input);
     if (url === "/api/market") {
@@ -181,7 +184,7 @@ function stubMarketApi(marketResponse: unknown = response) {
       const query = new URL(url, "http://localhost").searchParams.get("q") || "";
       return Promise.resolve({
         ok: true,
-        json: async () => ({ ...sectorCatalog, query })
+        json: async () => ({ ...(sectorResponse as object), query })
       });
     }
     throw new Error(`Unexpected request: ${url}`);
@@ -301,5 +304,28 @@ describe("MarketPage", () => {
     render(<MarketPage />);
 
     expect(await screen.findByText("degraded")).toHaveClass("status-badge--critical");
+  });
+
+  it("shows stale sector catalog fallback without hiding market data", async () => {
+    stubMarketApi(response, {
+      ...sectorCatalog,
+      stale: true,
+      fallback_used: true,
+      data_quality_grade: "warning",
+      warnings: [
+        {
+          code: "stale_cache",
+          severity: "warning",
+          message: "Industry catalog is served from expired cache."
+        }
+      ]
+    });
+
+    render(<MarketPage />);
+
+    expect(await screen.findByText("行业板块行情")).toBeInTheDocument();
+    expect(screen.getByText("BK1036")).toBeInTheDocument();
+    expect(screen.getAllByText("cache fallback").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("stale").length).toBeGreaterThan(0);
   });
 });
