@@ -337,6 +337,7 @@ class FundCache:
         code: str,
         start_date: str | None = None,
         end_date: str | None = None,
+        source: str | None = None,
         allow_stale: bool = False,
         now: datetime | None = None,
     ) -> list[FundNavPoint]:
@@ -349,6 +350,9 @@ class FundCache:
         if end_date is not None:
             clauses.append("nav_date <= ?")
             params.append(end_date)
+        if source is not None:
+            clauses.append("source = ?")
+            params.append(source.removeprefix("cache:"))
         if not allow_stale:
             clauses.append("expires_at >= ?")
             params.append(current_time)
