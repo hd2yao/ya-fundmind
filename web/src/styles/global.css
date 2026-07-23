@@ -518,6 +518,18 @@ textarea:focus-visible {
   border-color: #adc7e5;
 }
 
+.table-action-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.table-action--search {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .filter-bar {
   display: flex;
   align-items: center;

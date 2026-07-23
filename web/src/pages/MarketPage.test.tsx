@@ -199,7 +199,7 @@ describe("MarketPage", () => {
   });
 
   it("shows market coverage, theme trend and observation details", async () => {
-    stubMarketApi();
+    const fetchMock = stubMarketApi();
 
     render(<MarketPage />);
 
@@ -213,6 +213,21 @@ describe("MarketPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "查看医药详情" }));
     expect(screen.getByRole("dialog", { name: "医药观察详情" })).toBeInTheDocument();
     expect(screen.getByText("样本 527")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "搜索医药同名行业板块" })
+    );
+    expect(screen.getByLabelText("搜索行业板块")).toHaveValue("医药");
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(
+        urls.some((url) =>
+          url.includes(
+            "/api/market/sectors?q=%E5%8C%BB%E8%8D%AF"
+          )
+        )
+      ).toBe(true);
+    });
   });
 
   it("shows real index history and switches symbol and range", async () => {

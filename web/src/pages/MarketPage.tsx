@@ -230,6 +230,14 @@ export function MarketPage() {
   const newThemes = trend.new_hot_themes || [];
   const rising = trend.rising_themes || [];
 
+  function searchMatchingSector(themeName: string) {
+    setSectorQuery(themeName);
+    setAppliedSectorQuery(themeName);
+    globalThis.document
+      ?.getElementById("market-sector-title")
+      ?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -289,9 +297,23 @@ export function MarketPage() {
                   <td>{number.format(theme.sample_size || 0)}</td>
                   <td><StatusBadge tone={qualityTone(theme.data_quality_grade)}>{theme.data_quality_grade || "unknown"}</StatusBadge></td>
                   <td>
-                    <button className="table-action" type="button" aria-label={`查看${theme.theme || "未分类"}详情`} onClick={() => setSelectedTheme(theme)}>
-                      查看
-                    </button>
+                    <div className="table-action-group">
+                      <button className="table-action" type="button" aria-label={`查看${theme.theme || "未分类"}详情`} onClick={() => setSelectedTheme(theme)}>
+                        查看
+                      </button>
+                      {theme.theme ? (
+                        <button
+                          className="table-action table-action--search"
+                          type="button"
+                          aria-label={`搜索${theme.theme}同名行业板块`}
+                          title="搜索同名行业板块，不代表主题与板块等价"
+                          onClick={() => searchMatchingSector(theme.theme || "")}
+                        >
+                          <Search size={13} aria-hidden />
+                          同名板块
+                        </button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
