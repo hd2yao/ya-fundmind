@@ -1,4 +1,10 @@
-import { getFundDetail, getResource, postResource, searchFunds } from "./client";
+import {
+  getFundDetail,
+  getFundHistory,
+  getResource,
+  postResource,
+  searchFunds
+} from "./client";
 
 describe("API client response validation", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -90,5 +96,40 @@ describe("API client response validation", () => {
     await expect(getFundDetail("510300")).resolves.toMatchObject({ fund: { code: "510300" } });
     expect(fetchMock.mock.calls[0][0]).toBe("/api/funds/510300");
     await expect(getFundDetail("999999")).rejects.toThrow("Fund is not present");
+  });
+
+  it("loads a validated fund history window", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: "021511",
+        range: "3m",
+        point_count: 1,
+        points: [
+          {
+            date: "2026-07-21",
+            unit_nav: 2.9699,
+            accumulated_nav: 2.9699,
+            daily_return: 1.2,
+            source: "cache:akshare"
+          }
+        ],
+        source: "cache:akshare",
+        as_of: "2026-07-21",
+        stale: false,
+        fallback_used: false,
+        data_quality_grade: "normal",
+        warnings: [],
+        not_production_model: true,
+        main_score_changed: false,
+        main_risk_changed: false
+      })
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const history = await getFundHistory("021511", "3m");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/funds/021511/history?range=3m");
+    expect(history.points[0].unit_nav).toBe(2.9699);
   });
 });

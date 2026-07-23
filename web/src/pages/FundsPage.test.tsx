@@ -85,6 +85,30 @@ const searchResponse = {
   warnings: []
 };
 
+const historyResponse = {
+  code: "510300",
+  range: "6m",
+  point_count: 3,
+  required_points: 120,
+  points: [
+    { date: "2026-07-18", unit_nav: 4.1, accumulated_nav: 4.1, daily_return: -0.4, source: "cache:akshare" },
+    { date: "2026-07-20", unit_nav: 4.15, accumulated_nav: 4.15, daily_return: 1.22, source: "cache:akshare" },
+    { date: "2026-07-21", unit_nav: 4.2, accumulated_nav: 4.2, daily_return: 1.2, source: "cache:akshare" }
+  ],
+  source: "cache:akshare",
+  as_of: "2026-07-21",
+  updated_at: "2026-07-21T10:00:00Z",
+  expires_at: "2026-07-22T10:00:00Z",
+  stale: false,
+  fallback_used: false,
+  fallback_reason: null,
+  data_quality_grade: "warning",
+  warnings: [{ code: "insufficient_history", severity: "warning", message: "Only 3 points are available." }],
+  not_production_model: true,
+  main_score_changed: false,
+  main_risk_changed: false
+};
+
 function stubApi() {
   const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
     const url = String(input);
@@ -105,6 +129,13 @@ function stubApi() {
           main_score_changed: false,
           main_risk_changed: false
         })
+      });
+    }
+    if (url.startsWith("/api/funds/510300/history?range=")) {
+      const range = new URL(url, "http://localhost").searchParams.get("range") || "6m";
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ ...historyResponse, range })
       });
     }
     if (url === "/api/funds") {
@@ -155,7 +186,7 @@ describe("FundsPage", () => {
   });
 
   it("loads structured fund detail and explains missing fields", async () => {
-    stubApi();
+    const fetchMock = stubApi();
     render(<FundsPage />);
 
     await waitFor(() => expect(screen.getByRole("button", { name: "查看510300详情" })).toBeInTheDocument());
@@ -167,9 +198,55 @@ describe("FundsPage", () => {
     expect(screen.getByRole("dialog", { name: "510300 基金详情" })).toBeInTheDocument();
     expect(screen.getByText("rating")).toBeInTheDocument();
     expect(screen.getByText(/缺失字段不会形成正向信号/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "510300 历史净值曲线" })).toBeInTheDocument();
+    expect(screen.getByText("历史净值")).toBeInTheDocument();
+    expect(screen.getByText("3 个净值点")).toBeInTheDocument();
+    expect(screen.getByText("cache:akshare")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "1 月" }));
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.endsWith("history?range=1m"))).toBe(true);
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "关闭详情" }));
     expect(trigger).toHaveFocus();
+  });
+
+  it("clears the previous history while a new window is loading", async () => {
+    const fetchMock = stubApi();
+    const baseImplementation = fetchMock.getMockImplementation();
+    let resolveOneMonth: ((value: {
+      ok: boolean;
+      json: () => Promise<typeof historyResponse>;
+    }) => void) | undefined;
+    const oneMonthResponse = new Promise<{
+      ok: boolean;
+      json: () => Promise<typeof historyResponse>;
+    }>((resolve) => {
+      resolveOneMonth = resolve;
+    });
+    fetchMock.mockImplementation((input: string | URL) => {
+      const url = String(input);
+      if (url.endsWith("/history?range=1m")) {
+        return oneMonthResponse;
+      }
+      return baseImplementation?.(input);
+    });
+    render(<FundsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "查看510300详情" }));
+    await waitFor(() => expect(screen.getByText("3 个净值点")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "1 月" }));
+
+    expect(screen.getByText("正在读取历史净值")).toBeInTheDocument();
+    expect(screen.queryByText("3 个净值点")).not.toBeInTheDocument();
+    resolveOneMonth?.({
+      ok: true,
+      json: async () => ({ ...historyResponse, range: "1m" }),
+    });
+    await waitFor(() => expect(screen.getByText("3 个净值点")).toBeInTheDocument());
   });
 
   it("changes result pages without loading all rows in the browser", async () => {

@@ -733,7 +733,7 @@ textarea:focus-visible {
   position: fixed;
   z-index: 50;
   inset: var(--topbar-height) 0 0 auto;
-  width: min(420px, 100vw);
+  width: min(640px, 100vw);
   padding: 18px;
   overflow-y: auto;
   background: var(--color-surface);
@@ -800,6 +800,131 @@ textarea:focus-visible {
   margin: 0;
   color: var(--color-text-muted);
   font-size: 12px;
+}
+
+.fund-history-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.fund-history-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fund-history-header h3 {
+  margin: 3px 0 0;
+}
+
+.history-window-tabs {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.history-window {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 5px 8px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.history-window:hover {
+  color: var(--color-text);
+  background: var(--color-surface-muted);
+}
+
+.history-window--active {
+  color: white;
+  background: var(--color-teal);
+}
+
+.history-window--active:hover {
+  color: white;
+  background: var(--color-teal-strong);
+}
+
+.fund-nav-chart {
+  width: 100%;
+  height: 260px;
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.fund-nav-data {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.fund-nav-data summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--color-teal-strong);
+  font-weight: 700;
+}
+
+.fund-nav-data__table {
+  max-height: 280px;
+  margin-top: 8px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.fund-nav-data__table table {
+  min-width: 500px;
+}
+
+.history-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.history-summary div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.history-summary span,
+.history-warning {
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.history-summary strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-warning {
+  margin: 0;
+  line-height: 1.5;
 }
 
 .exposure-list,
@@ -1496,6 +1621,24 @@ textarea:focus-visible {
   .evidence-drawer {
     inset: 0;
     width: 100%;
+  }
+
+  .fund-history-header {
+    flex-direction: column;
+  }
+
+  .history-window-tabs {
+    width: 100%;
+  }
+
+  .history-window {
+    min-width: 0;
+    flex: 1;
+    padding-inline: 4px;
+  }
+
+  .history-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .report-grid {

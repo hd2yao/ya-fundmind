@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Start the v2.2 Fund Data Terminal delivery track with a cache-first, on-demand historical NAV path for any fund present in the full-market index.
+- Add AKShare `fund_open_fund_info_em` mapping, bad-row isolation, timeout/retry reuse, SQLite `fund_navs` persistence and explicit stale fallback.
+- Add `GET /api/funds/{code}/history` with fixed windows, source, as-of, freshness, quality and non-production boundaries.
+- Upgrade the fund detail drawer with an interactive 1m/3m/6m/1y/all NAV chart and responsive desktop/tablet/mobile layout.
+- Keep bulk all-market historical backfill, multi-source reconciliation, main scoring, main risk, recommendations and trading out of this delivery slice.
+
 ## v2.1.0 - 2026-07-22
 
 - Promote the isolated Product Web Console into a local-first release candidate without changing the V2 research contracts or daily workflow.

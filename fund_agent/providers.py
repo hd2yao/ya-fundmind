@@ -229,6 +229,130 @@ class AkshareProvider:
         )
         return normalized_funds
 
+    def fetch_nav_history(
+        self,
+        code: str,
+        *,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        as_of: str | None = None,
+    ) -> list[FundNavPoint]:
+        started_at = _utc_now()
+        resolved_code = normalize_fund_code(code)
+        resolved_as_of = as_of or date.today().isoformat()
+        if self._ak is None:
+            reason = "AKShare is not installed"
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                warnings=(
+                    ProviderWarning(
+                        code="live_fetch_error",
+                        message=reason,
+                        severity="critical",
+                    ),
+                ),
+            )
+            raise ProviderUnavailable(reason)
+
+        result = self._call_akshare(
+            "fund_open_fund_info_em",
+            symbol=resolved_code,
+            indicator="单位净值走势",
+        )
+        if not result.success:
+            message = f"fund_open_fund_info_em: {result.error}"
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                endpoints=(result.trace,),
+                warnings=(
+                    ProviderWarning(
+                        code="live_fetch_error",
+                        message=message,
+                        severity="critical",
+                    ),
+                ),
+            )
+            raise ProviderUnavailable(f"AKShare fund history fetch failed: {message}")
+
+        mapping = _nav_points_from_akshare_rows(
+            result.data,
+            code=resolved_code,
+            endpoint="fund_open_fund_info_em",
+        )
+        endpoint_trace = replace(
+            result.trace,
+            live_row_count=mapping.live_row_count,
+            mapped_row_count=len(mapping.nav_points),
+            skipped_row_count=mapping.skipped_row_count,
+        )
+        if not mapping.nav_points:
+            warning = ProviderWarning(
+                code="empty_live_response",
+                message=f"AKShare returned no valid NAV rows for {resolved_code}.",
+                severity="critical",
+            )
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                live_row_count=mapping.live_row_count,
+                skipped_row_count=mapping.skipped_row_count,
+                endpoints=(endpoint_trace,),
+                warnings=(*mapping.warnings, warning),
+            )
+            raise ProviderUnavailable(
+                f"AKShare returned no valid NAV rows for {resolved_code}."
+            )
+
+        updated_at = _utc_now()
+        expires_at = updated_at + timedelta(days=self.cache_ttl_days)
+        normalized_points = [
+            replace(
+                point,
+                updated_at=updated_at.isoformat(),
+                metadata={
+                    **point.metadata,
+                    "provider": "akshare",
+                    "series_kind": "fund_nav_history",
+                    "as_of": resolved_as_of,
+                    "updated_at": updated_at.isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "stale": False,
+                },
+            )
+            for point in mapping.nav_points
+        ]
+        cache_write_count = 0
+        if self.cache is not None:
+            self.cache.upsert_nav_points(
+                normalized_points,
+                as_of=resolved_as_of,
+                ttl_days=self.cache_ttl_days,
+                now=updated_at,
+            )
+            cache_write_count = len(normalized_points)
+        self.last_health = _build_health(
+            provider="akshare",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=mapping.live_row_count,
+            mapped_row_count=len(normalized_points),
+            skipped_row_count=mapping.skipped_row_count,
+            cache_write_count=cache_write_count,
+            endpoints=(endpoint_trace,),
+            warnings=mapping.warnings,
+        )
+        return [
+            point
+            for point in normalized_points
+            if (start_date is None or point.date >= start_date)
+            and (end_date is None or point.date <= end_date)
+        ]
+
     def _fallback_to_cache(
         self,
         reason: str,
@@ -590,6 +714,14 @@ class _RowMappingResult:
 
 
 @dataclass(frozen=True)
+class _NavMappingResult:
+    live_row_count: int
+    nav_points: tuple[FundNavPoint, ...]
+    skipped_row_count: int
+    warnings: tuple[ProviderWarning, ...]
+
+
+@dataclass(frozen=True)
 class _EndpointCallResult:
     data: object | None
     success: bool
@@ -774,6 +906,86 @@ def _funds_from_rows(df: object, mapper, *, endpoint: str) -> _RowMappingResult:
     return _RowMappingResult(
         live_row_count=live_row_count,
         funds=tuple(funds),
+        skipped_row_count=skipped_row_count,
+        warnings=tuple(warnings),
+    )
+
+
+def _nav_points_from_akshare_rows(
+    df: object,
+    *,
+    code: str,
+    endpoint: str,
+) -> _NavMappingResult:
+    nav_points: list[FundNavPoint] = []
+    warnings: list[ProviderWarning] = []
+    live_row_count = 0
+    skipped_row_count = 0
+    iterrows = getattr(df, "iterrows", None)
+    if not callable(iterrows):
+        return _NavMappingResult(
+            live_row_count=0,
+            nav_points=(),
+            skipped_row_count=0,
+            warnings=(
+                ProviderWarning(
+                    code="invalid_response",
+                    message=f"{endpoint} returned a non-tabular response.",
+                    severity="critical",
+                    details={"endpoint": endpoint},
+                ),
+            ),
+        )
+    for row_index, row in iterrows():
+        live_row_count += 1
+        try:
+            nav_date = _date_text(_first(row, "净值日期", "日期", "nav_date"))
+            unit_nav = _to_float(_first(row, "单位净值", "最新净值", "nav"))
+            accumulated_nav = _to_float(
+                _first(row, "累计净值", "accumulated_nav")
+            )
+            daily_return = _to_float(
+                _first(row, "日增长率", "日涨跌幅", "daily_return")
+            )
+        except Exception as exc:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=f"{endpoint} row {row_index} skipped: {exc}",
+                    severity="warning",
+                    details={"endpoint": endpoint, "row_index": row_index},
+                )
+            )
+            continue
+        if not nav_date or unit_nav is None:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=(
+                        f"{endpoint} row {row_index} skipped: "
+                        "missing NAV date or unit NAV"
+                    ),
+                    severity="info",
+                    details={"endpoint": endpoint, "row_index": row_index},
+                )
+            )
+            continue
+        nav_points.append(
+            FundNavPoint(
+                code=code,
+                date=nav_date,
+                unit_nav=unit_nav,
+                accumulated_nav=accumulated_nav,
+                daily_return=daily_return,
+                source="akshare",
+            )
+        )
+    nav_points.sort(key=lambda item: item.date)
+    return _NavMappingResult(
+        live_row_count=live_row_count,
+        nav_points=tuple(nav_points),
         skipped_row_count=skipped_row_count,
         warnings=tuple(warnings),
     )

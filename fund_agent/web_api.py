@@ -13,7 +13,11 @@ from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import __version__
+from .cache import FundCache
+from .config import load_provider_config
 from .fund_explorer import FundExplorerIndex, FundSearchQuery
+from .fund_history import FundHistoryService, FundHistoryUnavailable
+from .providers import AkshareProvider
 from .review_state import VALID_REVIEW_STATUSES, list_review_state, summarize_review_state
 from .web_console import (
     build_copilot_view_model,
@@ -33,6 +37,8 @@ REPORT_ALLOWLIST = {
     "news": ("新闻证据", "dashboard/news.html"),
     "review": ("人工审核", "dashboard/review.html"),
 }
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 FUND_DETAIL_ALLOWLIST = {
     "accumulated_nav",
@@ -72,6 +78,7 @@ def create_web_app(
     output_dir: Path | str = Path("outputs"),
     review_state_path: Path | str | None = None,
     static_dir: Path | str | None = None,
+    fund_history_service: Any | None = None,
 ) -> FastAPI:
     """Build the local product Web Console API with fixed filesystem roots."""
 
@@ -99,6 +106,7 @@ def create_web_app(
     app.state.fund_explorer = FundExplorerIndex(
         root / "market" / "market_intelligence_report.json"
     )
+    app.state.fund_history_service = fund_history_service
 
     @app.middleware("http")
     async def enforce_local_write_origin(request: Request, call_next):
@@ -207,6 +215,37 @@ def create_web_app(
                 page_size=page_size,
             )
         )
+
+    @app.get("/api/funds/{code}/history")
+    def fund_history(
+        code: str,
+        window: Literal["1m", "3m", "6m", "1y", "all"] = Query(
+            default="6m",
+            alias="range",
+        ),
+    ) -> dict[str, object]:
+        if len(code) != 6 or not code.isdigit():
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "invalid_fund_code", "message": "Fund code must be six digits."},
+            )
+        if app.state.fund_explorer.get(code) is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "fund_not_found", "message": "Fund is not present in the market index."},
+            )
+        if app.state.fund_history_service is None:
+            app.state.fund_history_service = _build_fund_history_service(root)
+        try:
+            return app.state.fund_history_service.get_history(code, window=window)
+        except FundHistoryUnavailable as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "fund_history_unavailable",
+                    "message": str(exc),
+                },
+            ) from exc
 
     @app.get("/api/funds/{code}")
     def fund_detail(code: str) -> dict[str, object]:
@@ -386,6 +425,34 @@ def create_web_app(
             raise HTTPException(status_code=404, detail="Product web build is missing.")
 
     return app
+
+
+def _build_fund_history_service(
+    root: Path,
+    *,
+    project_root: Path | None = None,
+) -> FundHistoryService:
+    del root
+    resolved_project_root = (project_root or PROJECT_ROOT).expanduser().resolve()
+    provider_config = load_provider_config(
+        resolved_project_root / "configs" / "providers.yaml"
+    ).akshare
+    cache = FundCache(resolved_project_root / "data" / "cache" / "funds.sqlite")
+    provider = AkshareProvider(
+        cache=cache,
+        allow_stale_cache=True,
+        cache_ttl_days=1,
+        verbose=provider_config.verbose,
+        timeout_seconds=provider_config.timeout_seconds,
+        retry_count=provider_config.retry_count,
+        retry_backoff_seconds=provider_config.retry_backoff_seconds,
+    )
+    return FundHistoryService(
+        cache=cache,
+        provider=provider,
+        cache_ttl_days=1,
+        allow_stale_fallback=True,
+    )
 
 
 def _resource(

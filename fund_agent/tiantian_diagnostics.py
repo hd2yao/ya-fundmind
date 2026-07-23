@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from .cache import FundCache
@@ -13,22 +14,36 @@ def build_tiantian_cache_diagnostics(
     *,
     code: str,
     as_of: str | None = None,
+    now: datetime | None = None,
 ) -> dict:
     normalized_code = normalize_fund_code(code)
     details = [
         item
-        for item in cache.load_fund_details(code=normalized_code, as_of=as_of, allow_stale=True)
+        for item in cache.load_fund_details(
+            code=normalized_code,
+            as_of=as_of,
+            allow_stale=True,
+            now=now,
+        )
         if item.source == "cache:tiantian"
     ]
     if not details and as_of is not None:
         details = [
             item
-            for item in cache.load_fund_details(code=normalized_code, allow_stale=True)
+            for item in cache.load_fund_details(
+                code=normalized_code,
+                allow_stale=True,
+                now=now,
+            )
             if item.source == "cache:tiantian"
         ]
     nav_points = [
         item
-        for item in cache.load_nav_points(code=normalized_code, allow_stale=True)
+        for item in cache.load_nav_points(
+            code=normalized_code,
+            allow_stale=True,
+            now=now,
+        )
         if item.source == "cache:tiantian"
     ]
     detail_stale = any(item.metadata.get("stale") for item in details)

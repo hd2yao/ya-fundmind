@@ -5,7 +5,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from fund_agent.web_api import create_web_app
+from fund_agent.fund_history import FundHistoryUnavailable
+from fund_agent.web_api import _build_fund_history_service, create_web_app
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -157,3 +158,119 @@ def test_existing_watchlist_funds_api_remains_compatible(tmp_path: Path) -> None
 
     assert response.status_code == 200
     assert response.json()["data"]["details"]["fund_details"][0]["code"] == "510300"
+
+
+class StubHistoryService:
+    def __init__(self):
+        self.calls = []
+
+    def get_history(self, code: str, *, window: str):
+        self.calls.append((code, window))
+        return {
+            "code": code,
+            "range": window,
+            "point_count": 2,
+            "points": [
+                {
+                    "date": "2026-07-20",
+                    "unit_nav": 4.1,
+                    "accumulated_nav": 4.1,
+                    "daily_return": 0.2,
+                    "source": "cache:akshare",
+                },
+                {
+                    "date": "2026-07-21",
+                    "unit_nav": 4.2,
+                    "accumulated_nav": 4.2,
+                    "daily_return": 2.44,
+                    "source": "cache:akshare",
+                },
+            ],
+            "source": "cache:akshare",
+            "as_of": "2026-07-21",
+            "updated_at": "2026-07-21T10:00:00+00:00",
+            "expires_at": "2026-07-22T10:00:00+00:00",
+            "stale": False,
+            "fallback_used": False,
+            "data_quality_grade": "warning",
+            "warnings": [],
+            "not_production_model": True,
+            "main_score_changed": False,
+            "main_risk_changed": False,
+        }
+
+
+def test_fund_history_api_returns_structured_nav_series(tmp_path: Path) -> None:
+    output_dir = tmp_path / "outputs"
+    _write_market(output_dir)
+    service = StubHistoryService()
+    client = TestClient(
+        create_web_app(
+            output_dir=output_dir,
+            fund_history_service=service,
+        )
+    )
+
+    response = client.get("/api/funds/510300/history", params={"range": "3m"})
+
+    assert response.status_code == 200
+    assert service.calls == [("510300", "3m")]
+    payload = response.json()
+    assert payload["code"] == "510300"
+    assert payload["range"] == "3m"
+    assert payload["points"][-1]["unit_nav"] == 4.2
+    assert payload["source"] == "cache:akshare"
+    assert payload["not_production_model"] is True
+
+
+def test_fund_history_api_validates_code_window_and_market_membership(tmp_path: Path) -> None:
+    output_dir = tmp_path / "outputs"
+    _write_market(output_dir)
+    client = TestClient(
+        create_web_app(
+            output_dir=output_dir,
+            fund_history_service=StubHistoryService(),
+        )
+    )
+
+    assert client.get("/api/funds/not-code/history").status_code == 422
+    assert client.get("/api/funds/510300/history", params={"range": "2y"}).status_code == 422
+    missing = client.get("/api/funds/999999/history")
+    assert missing.status_code == 404
+    assert missing.json()["detail"]["code"] == "fund_not_found"
+
+
+class UnavailableHistoryService:
+    def get_history(self, code: str, *, window: str):
+        raise FundHistoryUnavailable("history endpoint down")
+
+
+def test_fund_history_api_returns_explainable_503(tmp_path: Path) -> None:
+    output_dir = tmp_path / "outputs"
+    _write_market(output_dir)
+    client = TestClient(
+        create_web_app(
+            output_dir=output_dir,
+            fund_history_service=UnavailableHistoryService(),
+        )
+    )
+
+    response = client.get("/api/funds/510300/history")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == {
+        "code": "fund_history_unavailable",
+        "message": "history endpoint down",
+    }
+
+
+def test_fund_history_service_resolves_cache_from_project_root(tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    output_dir = tmp_path / "external" / "nested" / "outputs"
+
+    service = _build_fund_history_service(
+        output_dir,
+        project_root=project_root,
+    )
+
+    assert service.cache.path == project_root / "data" / "cache" / "funds.sqlite"

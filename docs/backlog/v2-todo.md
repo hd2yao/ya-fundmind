@@ -9,10 +9,11 @@
 
 ## 当前状态
 
-- 当前版本：`v2.1.0` Local Product Web + Fund Explorer 已完成发布门禁。
-- 当前 Milestone：已完成，进入本地运行观察。
+- 当前稳定版本：`v2.1.0` Local Product Web + Fund Explorer。
+- 当前开发轨道：`v2.2 Fund Data Terminal`。
+- 当前 Milestone：M1 单基金历史闭环已通过本地验收，下一步进入 M2 指数走势。
 - 当前 P0：无。
-- 当前 P1：无。
+- 当前 P1：指数日线、市场页指数图表及其缓存/API/真实 smoke。
 
 ## P0 Blocking
 
@@ -28,15 +29,24 @@
 
 ## P1 Current Milestone
 
-`v2.1.0` 已完成：
+`v2.2 M1` 已完成：
 
-- 最新真实 `market_intelligence_report.json` 的 21,570 条服务端索引验收。
-- 全量 pytest、compileall、contracts 和前端 typecheck/test/build。
-- 375/768/940/1440 页面、console error 和横向溢出检查。
-- 独立 Web launchd health、首页、main 路径和 daily/weekly 隔离验收。
-- PR #32 对抗式评审、CI、合并和 `v2.1.0rc1` tag。
+- 任意全市场搜索结果的历史净值按需获取。
+- AKShare 历史净值规范化、坏行隔离和 SQLite 缓存。
+- 新鲜缓存命中、live 获取、stale fallback 和无数据 503。
+- `1m / 3m / 6m / 1y / all` 曲线和数据新鲜度摘要。
+- 真实 `021511` smoke：6m 120 点，首次 live 后第二次缓存命中。
+- 375/768/1440 页面、console error 和横向溢出检查。
 
-以下边界不是 P1：Sites、公网部署、账号、云同步和自动交易。
+`v2.2 M2` 必做：
+
+- 建立独立市场时间序列模型，不复用 `fund_navs` 存储指数 OHLCV。
+- 接入上证指数、沪深 300、创业板指日线。
+- 提供固定 symbol allowlist 的指数历史 API。
+- 市场页展示指数折线图、时间窗口、source/as_of/stale。
+- 默认 pytest 不访问网络，真实 smoke 与 scheduler 隔离。
+
+以下边界不是 P1：多源自动核验、Sites、公网部署、账号、云同步、推荐和自动交易。
 
 ## v2.0 Final 记录
 
