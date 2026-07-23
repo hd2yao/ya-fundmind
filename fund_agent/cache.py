@@ -140,7 +140,7 @@ class FundCache:
                         metadata_json = excluded.metadata_json,
                         updated_at = excluded.updated_at,
                         expires_at = excluded.expires_at
-                    """,
+                        """,
                     (
                         code,
                         as_of,
@@ -179,6 +179,7 @@ class FundCache:
                             metadata_json = excluded.metadata_json,
                             updated_at = excluded.updated_at,
                             expires_at = excluded.expires_at
+                        WHERE instr(fund_navs.metadata_json, 'fund_nav_history') = 0
                         """,
                         (
                             code,

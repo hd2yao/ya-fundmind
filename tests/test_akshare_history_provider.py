@@ -81,18 +81,18 @@ def test_akshare_history_maps_rows_filters_dates_and_writes_cache(tmp_path):
     assert points[0].metadata["stale"] is False
 
     cached = cache.load_nav_points(code="021511")
-    assert len(cached) == 1
-    assert cached[0].source == "cache:akshare"
-    assert cached[0].unit_nav == 1.05
+    assert len(cached) == 2
+    assert {point.source for point in cached} == {"cache:akshare"}
+    assert [point.unit_nav for point in cached] == [1.02, 1.05]
 
     health = provider.last_health
     assert health is not None
     assert health.provider == "akshare"
     assert health.provider_version == "9.9.9"
     assert health.live_row_count == 4
-    assert health.mapped_row_count == 1
+    assert health.mapped_row_count == 2
     assert health.skipped_row_count == 2
-    assert health.cache_write_count == 1
+    assert health.cache_write_count == 2
     assert health.endpoints[0].endpoint == "fund_open_fund_info_em"
     assert health.endpoints[0].success is True
     assert any(warning.code == "skipped_rows" for warning in health.warnings)
@@ -137,3 +137,24 @@ def test_akshare_history_rejects_empty_response(tmp_path):
 
     assert provider.last_health is not None
     assert provider.last_health.warnings[0].code == "empty_live_response"
+
+
+class InvalidHistoryAkshare:
+    def fund_open_fund_info_em(self, *, symbol, indicator):
+        return {"unexpected": "shape"}
+
+
+def test_akshare_history_rejects_non_tabular_response(tmp_path):
+    provider = AkshareProvider(
+        ak_module=InvalidHistoryAkshare(),
+        cache=FundCache(tmp_path / "funds.sqlite"),
+    )
+
+    with pytest.raises(ProviderUnavailable, match="no valid NAV rows"):
+        provider.fetch_nav_history("021511", as_of="2026-07-22")
+
+    assert provider.last_health is not None
+    assert any(
+        warning.code == "invalid_response"
+        for warning in provider.last_health.warnings
+    )

@@ -283,19 +283,13 @@ class AkshareProvider:
             code=resolved_code,
             endpoint="fund_open_fund_info_em",
         )
-        nav_points = [
-            point
-            for point in mapping.nav_points
-            if (start_date is None or point.date >= start_date)
-            and (end_date is None or point.date <= end_date)
-        ]
         endpoint_trace = replace(
             result.trace,
             live_row_count=mapping.live_row_count,
-            mapped_row_count=len(nav_points),
+            mapped_row_count=len(mapping.nav_points),
             skipped_row_count=mapping.skipped_row_count,
         )
-        if not nav_points:
+        if not mapping.nav_points:
             warning = ProviderWarning(
                 code="empty_live_response",
                 message=f"AKShare returned no valid NAV rows for {resolved_code}.",
@@ -330,7 +324,7 @@ class AkshareProvider:
                     "stale": False,
                 },
             )
-            for point in nav_points
+            for point in mapping.nav_points
         ]
         cache_write_count = 0
         if self.cache is not None:
@@ -352,7 +346,12 @@ class AkshareProvider:
             endpoints=(endpoint_trace,),
             warnings=mapping.warnings,
         )
-        return normalized_points
+        return [
+            point
+            for point in normalized_points
+            if (start_date is None or point.date >= start_date)
+            and (end_date is None or point.date <= end_date)
+        ]
 
     def _fallback_to_cache(
         self,
@@ -922,7 +921,22 @@ def _nav_points_from_akshare_rows(
     warnings: list[ProviderWarning] = []
     live_row_count = 0
     skipped_row_count = 0
-    for row_index, row in df.iterrows():
+    iterrows = getattr(df, "iterrows", None)
+    if not callable(iterrows):
+        return _NavMappingResult(
+            live_row_count=0,
+            nav_points=(),
+            skipped_row_count=0,
+            warnings=(
+                ProviderWarning(
+                    code="invalid_response",
+                    message=f"{endpoint} returned a non-tabular response.",
+                    severity="critical",
+                    details={"endpoint": endpoint},
+                ),
+            ),
+        )
+    for row_index, row in iterrows():
         live_row_count += 1
         try:
             nav_date = _date_text(_first(row, "净值日期", "日期", "nav_date"))

@@ -116,6 +116,50 @@ def test_cache_round_trips_fund_nav_points(tmp_path):
     assert cached[0].metadata["cache_as_of"] == "2026-06-23"
 
 
+def test_daily_fund_upsert_does_not_overwrite_same_day_history_metadata(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    history_point = FundNavPoint(
+        code="021511",
+        date="2026-07-22",
+        unit_nav=2.9481,
+        accumulated_nav=3.1481,
+        daily_return=-0.73,
+        source="akshare",
+        metadata={"series_kind": "fund_nav_history"},
+    )
+    cache.upsert_nav_points(
+        [history_point],
+        as_of="2026-07-22",
+        ttl_days=2,
+    )
+
+    cache.upsert_funds(
+        [
+            FundRecord(
+                code="021511",
+                name="宏利半导体产业混合发起C",
+                category="混合型",
+                nav=2.9481,
+                nav_date="2026-07-22",
+                source="akshare",
+            )
+        ],
+        as_of="2026-07-23",
+        ttl_days=1,
+    )
+
+    cached = cache.load_nav_points(
+        code="021511",
+        source="akshare",
+        allow_stale=True,
+    )
+
+    assert len(cached) == 1
+    assert cached[0].metadata["series_kind"] == "fund_nav_history"
+    assert cached[0].accumulated_nav == 3.1481
+    assert cached[0].daily_return == -0.73
+
+
 def test_tiantian_cache_stale_metadata_is_available_for_fallback(tmp_path):
     cache = FundCache(tmp_path / "funds.sqlite")
     old_now = datetime(2026, 6, 1, tzinfo=timezone.utc)
