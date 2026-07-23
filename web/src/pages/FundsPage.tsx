@@ -9,10 +9,12 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { getFundDetail, searchFunds } from "../api/client";
+import { getFundDetail, getFundHistory, searchFunds } from "../api/client";
 import type {
   FundDetailItem,
   FundDetailResponse,
+  FundHistoryResponse,
+  FundHistoryWindow,
   FundSearchItem,
   FundSearchParams,
   FundSearchResponse,
@@ -21,6 +23,7 @@ import type {
 import { DataTable } from "../components/DataTable";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
 import { FilterBar } from "../components/FilterBar";
+import { FundNavChart } from "../components/FundNavChart";
 import { Metric } from "../components/Metric";
 import { PageHeader } from "../components/PageHeader";
 import { StatePanel } from "../components/StatePanel";
@@ -31,6 +34,11 @@ type FundView = "market" | "watchlist";
 type MarketState = {
   loading: boolean;
   data: FundSearchResponse | null;
+  error: string | null;
+};
+type FundHistoryState = {
+  loading: boolean;
+  data: FundHistoryResponse | null;
   error: string | null;
 };
 
@@ -70,7 +78,13 @@ export function FundsPage() {
   const [search, setSearch] = useState<FundSearchParams>(DEFAULT_SEARCH);
   const [market, setMarket] = useState<MarketState>({ loading: true, data: null, error: null });
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [historyWindow, setHistoryWindow] = useState<FundHistoryWindow>("6m");
   const [detail, setDetail] = useState<{ loading: boolean; data: FundDetailResponse | null; error: string | null }>({
+    loading: false,
+    data: null,
+    error: null
+  });
+  const [history, setHistory] = useState<FundHistoryState>({
     loading: false,
     data: null,
     error: null
@@ -111,6 +125,31 @@ export function FundsPage() {
       });
     return () => controller.abort();
   }, [selectedCode]);
+
+  useEffect(() => {
+    if (!selectedCode) {
+      setHistory({ loading: false, data: null, error: null });
+      return undefined;
+    }
+    const controller = new AbortController();
+    setHistory((current) => ({ loading: true, data: current.data, error: null }));
+    getFundHistory(selectedCode, historyWindow, controller.signal)
+      .then((data) => setHistory({ loading: false, data, error: null }))
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setHistory({
+          loading: false,
+          data: null,
+          error: error instanceof Error ? error.message : "历史净值读取失败。"
+        });
+      });
+    return () => controller.abort();
+  }, [selectedCode, historyWindow]);
+
+  const selectFund = (code: string) => {
+    setHistoryWindow("6m");
+    setSelectedCode(code);
+  };
 
   const setSearchField = <K extends keyof FundSearchParams>(key: K, value: FundSearchParams[K]) => {
     setSearch((current) => ({ ...current, [key]: value, page: key === "page" ? Number(value) : 1 }));
@@ -163,14 +202,14 @@ export function FundsPage() {
           state={market}
           search={search}
           onSearchChange={setSearchField}
-          onSelect={setSelectedCode}
+          onSelect={selectFund}
         />
       ) : (
         <WatchlistView
           loading={watchlist.loading}
           resource={watchlist.resource}
           error={watchlist.error}
-          onSelect={setSelectedCode}
+          onSelect={selectFund}
         />
       )}
 
@@ -179,7 +218,12 @@ export function FundsPage() {
         title={`${selectedCode || "--"} 基金详情`}
         onClose={() => setSelectedCode(null)}
       >
-        <FundDetailPanel state={detail} />
+        <FundDetailPanel
+          state={detail}
+          history={history}
+          historyWindow={historyWindow}
+          onHistoryWindowChange={setHistoryWindow}
+        />
       </EvidenceDrawer>
     </div>
   );
@@ -481,7 +525,17 @@ function FilterSelect({
   );
 }
 
-function FundDetailPanel({ state }: { state: { loading: boolean; data: FundDetailResponse | null; error: string | null } }) {
+function FundDetailPanel({
+  state,
+  history,
+  historyWindow,
+  onHistoryWindowChange
+}: {
+  state: { loading: boolean; data: FundDetailResponse | null; error: string | null };
+  history: FundHistoryState;
+  historyWindow: FundHistoryWindow;
+  onHistoryWindowChange: (window: FundHistoryWindow) => void;
+}) {
   if (state.loading) return <StatePanel kind="loading" title="正在读取基金详情" description="合并市场记录和已有 enrichment 产物。" />;
   if (state.error) return <StatePanel kind="error" title="基金详情读取失败" description={state.error} />;
   if (!state.data) return null;
@@ -498,6 +552,12 @@ function FundDetailPanel({ state }: { state: { loading: boolean; data: FundDetai
         <StatusBadge tone={qualityTone(fund.data_quality_grade)}>{fund.stale ? "stale" : fund.data_quality_grade}</StatusBadge>
         {fund.exchange_traded ? <StatusBadge tone="info">ETF</StatusBadge> : null}
       </div>
+      <FundHistoryPanel
+        code={fund.code}
+        state={history}
+        window={historyWindow}
+        onWindowChange={onHistoryWindowChange}
+      />
       <dl className="detail-list">
         <div><dt>净值</dt><dd>{formatNumber(fund.nav, 4)}</dd></div>
         <div><dt>1 月 / 3 月</dt><dd>{formatReturn(fund.returns["1m"])} · {formatReturn(fund.returns["3m"])}</dd></div>
@@ -519,5 +579,77 @@ function FundDetailPanel({ state }: { state: { loading: boolean; data: FundDetai
         <p>该详情没有修改主评分或主风险，也不构成买卖建议。</p>
       </div>
     </div>
+  );
+}
+
+const HISTORY_WINDOWS: Array<{ value: FundHistoryWindow; label: string }> = [
+  { value: "1m", label: "1 月" },
+  { value: "3m", label: "3 月" },
+  { value: "6m", label: "6 月" },
+  { value: "1y", label: "1 年" },
+  { value: "all", label: "全部" }
+];
+
+function FundHistoryPanel({
+  code,
+  state,
+  window,
+  onWindowChange
+}: {
+  code: string;
+  state: FundHistoryState;
+  window: FundHistoryWindow;
+  onWindowChange: (window: FundHistoryWindow) => void;
+}) {
+  const latest = state.data?.points.at(-1);
+  return (
+    <section className="fund-history-panel" aria-labelledby="fund-history-title">
+      <div className="fund-history-header">
+        <div>
+          <p className="eyebrow">NAV history</p>
+          <h3 id="fund-history-title">历史净值</h3>
+        </div>
+        <div className="history-window-tabs" aria-label="历史净值时间范围">
+          {HISTORY_WINDOWS.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              aria-label={item.label}
+              aria-pressed={window === item.value}
+              className={window === item.value ? "history-window history-window--active" : "history-window"}
+              onClick={() => onWindowChange(item.value)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {state.loading && !state.data ? (
+        <StatePanel kind="loading" title="正在读取历史净值" description="优先使用本地缓存，缺失时按需读取 AKShare。" />
+      ) : null}
+      {state.error ? (
+        <StatePanel kind="error" title="历史净值暂不可用" description={state.error} />
+      ) : null}
+      {state.data && state.data.points.length ? (
+        <>
+          <FundNavChart code={code} points={state.data.points} />
+          <div className="history-summary">
+            <div><span>最新净值</span><strong>{formatNumber(latest?.unit_nav, 4)}</strong></div>
+            <div><span>样本</span><strong>{state.data.point_count} 个净值点</strong></div>
+            <div><span>来源</span><strong>{state.data.source}</strong></div>
+            <div><span>截至</span><strong>{state.data.as_of || latest?.date || "--"}</strong></div>
+          </div>
+          <div className="status-row">
+            <StatusBadge tone={qualityTone(state.data.data_quality_grade)}>
+              {state.data.stale ? "stale" : state.data.data_quality_grade}
+            </StatusBadge>
+            {state.data.fallback_used ? <StatusBadge tone="warning">cache fallback</StatusBadge> : null}
+          </div>
+          {state.data.warnings.length ? (
+            <p className="history-warning">{state.data.warnings.map((warning) => warning.message).join(" · ")}</p>
+          ) : null}
+        </>
+      ) : null}
+    </section>
   );
 }

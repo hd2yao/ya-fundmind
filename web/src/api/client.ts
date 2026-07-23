@@ -1,6 +1,8 @@
 import type {
   ApiResource,
   FundDetailResponse,
+  FundHistoryResponse,
+  FundHistoryWindow,
   FundSearchParams,
   FundSearchResponse
 } from "./types";
@@ -81,6 +83,25 @@ export async function getFundDetail(code: string, signal?: AbortSignal): Promise
   const payload = await getJson<FundDetailResponse>(`/api/funds/${encodeURIComponent(code)}`, signal);
   if (!payload.fund || typeof payload.fund !== "object" || !payload.fund.code) {
     throw new ApiError("Local API returned an invalid fund detail payload.", 502);
+  }
+  return payload;
+}
+
+export async function getFundHistory(
+  code: string,
+  window: FundHistoryWindow = "6m",
+  signal?: AbortSignal
+): Promise<FundHistoryResponse> {
+  const payload = await getJson<FundHistoryResponse>(
+    `/api/funds/${encodeURIComponent(code)}/history?range=${encodeURIComponent(window)}`,
+    signal
+  );
+  if (
+    payload.code !== code ||
+    !Array.isArray(payload.points) ||
+    typeof payload.point_count !== "number"
+  ) {
+    throw new ApiError("Local API returned an invalid fund history payload.", 502);
   }
   return payload;
 }

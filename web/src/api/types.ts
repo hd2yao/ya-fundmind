@@ -212,6 +212,36 @@ export type FundDetailResponse = {
   main_risk_changed: boolean;
 };
 
+export type FundHistoryWindow = "1m" | "3m" | "6m" | "1y" | "all";
+
+export type FundHistoryPoint = {
+  date: string;
+  unit_nav: number | null;
+  accumulated_nav: number | null;
+  daily_return: number | null;
+  source: string;
+};
+
+export type FundHistoryResponse = {
+  code: string;
+  range: FundHistoryWindow;
+  point_count: number;
+  required_points: number | null;
+  points: FundHistoryPoint[];
+  source: string;
+  as_of: string | null;
+  updated_at: string | null;
+  expires_at: string | null;
+  stale: boolean;
+  fallback_used: boolean;
+  fallback_reason?: string | null;
+  data_quality_grade: string;
+  warnings: Array<{ code: string; severity: string; message: string }>;
+  not_production_model: boolean;
+  main_score_changed: boolean;
+  main_risk_changed: boolean;
+};
+
 export type PortfolioPosition = {
   code?: string;
   name?: string;
