@@ -17,6 +17,11 @@ from .cache import FundCache
 from .config import load_provider_config
 from .fund_explorer import FundExplorerIndex, FundSearchQuery
 from .fund_history import FundHistoryService, FundHistoryUnavailable
+from .market_history import (
+    INDEX_DEFINITIONS,
+    MarketHistoryService,
+    MarketHistoryUnavailable,
+)
 from .providers import AkshareProvider
 from .review_state import VALID_REVIEW_STATUSES, list_review_state, summarize_review_state
 from .web_console import (
@@ -79,6 +84,7 @@ def create_web_app(
     review_state_path: Path | str | None = None,
     static_dir: Path | str | None = None,
     fund_history_service: Any | None = None,
+    market_history_service: Any | None = None,
 ) -> FastAPI:
     """Build the local product Web Console API with fixed filesystem roots."""
 
@@ -107,6 +113,7 @@ def create_web_app(
         root / "market" / "market_intelligence_report.json"
     )
     app.state.fund_history_service = fund_history_service
+    app.state.market_history_service = market_history_service
 
     @app.middleware("http")
     async def enforce_local_write_origin(request: Request, call_next):
@@ -170,6 +177,47 @@ def create_web_app(
             },
             source_paths=(intelligence_path, trend_path),
         )
+
+    @app.get("/api/market/indices")
+    def market_indices() -> dict[str, object]:
+        return {
+            "items": [
+                {"symbol": symbol, "name": name}
+                for symbol, name in INDEX_DEFINITIONS.items()
+            ]
+        }
+
+    @app.get("/api/market/indices/{symbol}/history")
+    def market_index_history(
+        symbol: str,
+        window: Literal["1m", "3m", "6m", "1y", "all"] = Query(
+            default="6m",
+            alias="range",
+        ),
+    ) -> dict[str, object]:
+        if symbol not in INDEX_DEFINITIONS:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "index_not_found",
+                    "message": "Index symbol is not in the supported allowlist.",
+                },
+            )
+        if app.state.market_history_service is None:
+            app.state.market_history_service = _build_market_history_service(root)
+        try:
+            return app.state.market_history_service.get_index_history(
+                symbol,
+                window=window,
+            )
+        except MarketHistoryUnavailable as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "market_history_unavailable",
+                    "message": str(exc),
+                },
+            ) from exc
 
     @app.get("/api/funds")
     def funds() -> dict[str, object]:
@@ -448,6 +496,34 @@ def _build_fund_history_service(
         retry_backoff_seconds=provider_config.retry_backoff_seconds,
     )
     return FundHistoryService(
+        cache=cache,
+        provider=provider,
+        cache_ttl_days=1,
+        allow_stale_fallback=True,
+    )
+
+
+def _build_market_history_service(
+    root: Path,
+    *,
+    project_root: Path | None = None,
+) -> MarketHistoryService:
+    del root
+    resolved_project_root = (project_root or PROJECT_ROOT).expanduser().resolve()
+    provider_config = load_provider_config(
+        resolved_project_root / "configs" / "providers.yaml"
+    ).akshare
+    cache = FundCache(resolved_project_root / "data" / "cache" / "funds.sqlite")
+    provider = AkshareProvider(
+        cache=cache,
+        allow_stale_cache=True,
+        cache_ttl_days=1,
+        verbose=provider_config.verbose,
+        timeout_seconds=provider_config.timeout_seconds,
+        retry_count=provider_config.retry_count,
+        retry_backoff_seconds=provider_config.retry_backoff_seconds,
+    )
+    return MarketHistoryService(
         cache=cache,
         provider=provider,
         cache_ttl_days=1,
