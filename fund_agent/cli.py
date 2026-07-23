@@ -479,7 +479,15 @@ def _run_smoke_tiantian(args) -> int:
 
 def _run_diagnose_tiantian_cache(args) -> int:
     cache = FundCache(args.cache_file)
-    payload = build_tiantian_cache_diagnostics(cache, code=args.code, as_of=args.as_of or None)
+    reference_time = None
+    if args.as_of:
+        reference_time = datetime.fromisoformat(args.as_of).replace(tzinfo=timezone.utc)
+    payload = build_tiantian_cache_diagnostics(
+        cache,
+        code=args.code,
+        as_of=args.as_of or None,
+        now=reference_time,
+    )
     path = write_tiantian_cache_diagnostics(payload, args.output_dir)
     print(f"Tiantian cache diagnostics: {path}")
     print(
