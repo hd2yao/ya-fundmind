@@ -213,6 +213,42 @@ describe("FundsPage", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("clears the previous history while a new window is loading", async () => {
+    const fetchMock = stubApi();
+    const baseImplementation = fetchMock.getMockImplementation();
+    let resolveOneMonth: ((value: {
+      ok: boolean;
+      json: () => Promise<typeof historyResponse>;
+    }) => void) | undefined;
+    const oneMonthResponse = new Promise<{
+      ok: boolean;
+      json: () => Promise<typeof historyResponse>;
+    }>((resolve) => {
+      resolveOneMonth = resolve;
+    });
+    fetchMock.mockImplementation((input: string | URL) => {
+      const url = String(input);
+      if (url.endsWith("/history?range=1m")) {
+        return oneMonthResponse;
+      }
+      return baseImplementation?.(input);
+    });
+    render(<FundsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "查看510300详情" }));
+    await waitFor(() => expect(screen.getByText("3 个净值点")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "1 月" }));
+
+    expect(screen.getByText("正在读取历史净值")).toBeInTheDocument();
+    expect(screen.queryByText("3 个净值点")).not.toBeInTheDocument();
+    resolveOneMonth?.({
+      ok: true,
+      json: async () => ({ ...historyResponse, range: "1m" }),
+    });
+    await waitFor(() => expect(screen.getByText("3 个净值点")).toBeInTheDocument());
+  });
+
   it("changes result pages without loading all rows in the browser", async () => {
     const fetchMock = stubApi();
     render(<FundsPage />);

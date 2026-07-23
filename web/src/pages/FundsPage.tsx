@@ -132,7 +132,7 @@ export function FundsPage() {
       return undefined;
     }
     const controller = new AbortController();
-    setHistory((current) => ({ loading: true, data: current.data, error: null }));
+    setHistory({ loading: true, data: null, error: null });
     getFundHistory(selectedCode, historyWindow, controller.signal)
       .then((data) => setHistory({ loading: false, data, error: null }))
       .catch((error: unknown) => {

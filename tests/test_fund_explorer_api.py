@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from fund_agent.fund_history import FundHistoryUnavailable
-from fund_agent.web_api import create_web_app
+from fund_agent.web_api import _build_fund_history_service, create_web_app
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -262,3 +262,15 @@ def test_fund_history_api_returns_explainable_503(tmp_path: Path) -> None:
         "code": "fund_history_unavailable",
         "message": "history endpoint down",
     }
+
+
+def test_fund_history_service_resolves_cache_from_project_root(tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    output_dir = tmp_path / "external" / "nested" / "outputs"
+
+    service = _build_fund_history_service(
+        output_dir,
+        project_root=project_root,
+    )
+
+    assert service.cache.path == project_root / "data" / "cache" / "funds.sqlite"

@@ -38,6 +38,8 @@ REPORT_ALLOWLIST = {
     "review": ("人工审核", "dashboard/review.html"),
 }
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 FUND_DETAIL_ALLOWLIST = {
     "accumulated_nav",
     "data_coverage",
@@ -425,12 +427,17 @@ def create_web_app(
     return app
 
 
-def _build_fund_history_service(root: Path) -> FundHistoryService:
-    project_root = root.parent
+def _build_fund_history_service(
+    root: Path,
+    *,
+    project_root: Path | None = None,
+) -> FundHistoryService:
+    del root
+    resolved_project_root = (project_root or PROJECT_ROOT).expanduser().resolve()
     provider_config = load_provider_config(
-        project_root / "configs" / "providers.yaml"
+        resolved_project_root / "configs" / "providers.yaml"
     ).akshare
-    cache = FundCache(project_root / "data" / "cache" / "funds.sqlite")
+    cache = FundCache(resolved_project_root / "data" / "cache" / "funds.sqlite")
     provider = AkshareProvider(
         cache=cache,
         allow_stale_cache=True,
