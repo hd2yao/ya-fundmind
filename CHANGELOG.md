@@ -12,6 +12,9 @@
 - Add a cache-first AKShare industry-board catalog, BK-code/name search, paginated API and 1m/3m/6m/1y/all board history backed by independent market entity/series storage.
 - Add an interactive industry-board workspace with current metrics, history chart, freshness/quality states and a same-name search bridge from research themes without asserting that themes and boards are identical.
 - Harden industry history so `all` requests the complete available range, partial caches are labeled honestly, and missing AKShare endpoint capabilities still reach structured cache fallback/error paths.
+- Reframe the Product Web as a compact local fund data terminal with grouped workspaces, a market-first root route and reduced report-style card presentation.
+- Add a global fund code/name search that routes into the existing server-side fund terminal without introducing a second search API.
+- Add market section navigation, continuous metric strips, denser tables and responsive 375/768/1440 layouts with safe wrapping for long provider errors.
 - Keep bulk all-market historical backfill, multi-source reconciliation, main scoring, main risk, recommendations and trading out of this delivery slice.
 
 ## v2.1.0 - 2026-07-22

@@ -18,6 +18,7 @@
 | V2 Final | `v2.0.0` | 全部验收通过，已发布 |
 | Product Web RC | `v2.1.0rc1` | 本地产品化 Web、全市场 Fund Explorer 和独立 launchd，已发布 |
 | Product Web Final | `v2.1.0` | RC 本地常驻与真实数据浏览验收通过，已发布 |
+| Fund Data Terminal | `v2.2.0` | 基金历史、指数/行业曲线和数据终端界面，M1-M4 已完成，M5 发布收口中 |
 
 ## v2.1：Local Product Web + Fund Explorer
 
@@ -43,6 +44,30 @@
 
 - ChatGPT Sites、公网部署、局域网监听、账号系统和云端数据同步。
 - 自动交易、券商接入、买卖建议和收益承诺。
+
+## v2.2：Fund Data Terminal
+
+状态：M1-M4 已完成，M5 发布收口中。
+
+### 目标
+
+- 为全市场基金搜索结果提供按需历史净值，并保持 cache-first/stale fallback。
+- 在行情工作区提供主要指数和行业板块历史曲线。
+- 将本地 Product Web 从报告章节展示收敛为基金数据终端。
+
+### 已完成
+
+- M1：任意已索引基金的 `1m / 3m / 6m / 1y / all` 历史净值。
+- M2：上证指数、沪深 300、创业板指日线和独立 `market_series`。
+- M3：行业板块目录、BK 代码/名称搜索、板块历史和独立 `market_entities`。
+- M4：行情总览、基金终端、组合、研究证据四个一级工作区，全局基金搜索和三视口终端式界面。
+
+### M5 Gate
+
+- Python、React、contract、CLI dry-run、真实数据浏览和 scheduler 回归全部通过。
+- 行业 live smoke 若仍受网络阻断，必须保留真实失败证据，不得伪造成功。
+- PR/CI/merge 后在 clean `main` 部署 `127.0.0.1:8768` 并验证回滚路径。
+- 更新版本、发布报告和 tag；不修改主评分、主风险、provider default、watchlist、portfolio 或 scheduler。
 
 每个 Milestone 必须：
 
