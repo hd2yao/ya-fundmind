@@ -53,10 +53,10 @@ def test_market_history_uses_fresh_cache_and_applies_window(tmp_path):
 
 class LiveProvider:
     def __init__(self):
-        self.calls = 0
+        self.calls = []
 
     def fetch_index_history(self, symbol, **kwargs):
-        self.calls += 1
+        self.calls.append((symbol, kwargs))
         return _points(25)
 
 
@@ -68,7 +68,9 @@ def test_market_history_fetches_live_and_writes_cache(tmp_path):
 
     payload = service.get_index_history("000300", window="all", now=now)
 
-    assert provider.calls == 1
+    assert len(provider.calls) == 1
+    assert provider.calls[0][1]["start_date"] == "20210702"
+    assert provider.calls[0][1]["end_date"] == "20260701"
     assert payload["point_count"] == 25
     assert payload["source"] == "akshare"
     assert len(

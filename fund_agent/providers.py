@@ -67,6 +67,10 @@ def normalize_fund_category(value: object) -> str:
     return text or "基金"
 
 
+def _akshare_index_symbol(symbol: str) -> str:
+    return f"sz{symbol}" if symbol.startswith("399") else f"sh{symbol}"
+
+
 class FixtureProvider:
     def __init__(self, funds_path: Path | str = Path("data/fixtures/funds.json")):
         self.funds_path = Path(funds_path)
@@ -389,21 +393,100 @@ class AkshareProvider:
             )
             raise ProviderUnavailable(reason)
 
+        provider_symbol = _akshare_index_symbol(resolved_symbol)
+        endpoints: list[ProviderEndpointTrace] = []
+        warnings: list[ProviderWarning] = []
+        live_row_count = 0
+        skipped_row_count = 0
         result = self._call_akshare(
-            "index_zh_a_hist",
-            symbol=resolved_symbol,
-            period="daily",
+            "stock_zh_index_daily_em",
+            symbol=provider_symbol,
             start_date=start_date or "19700101",
             end_date=end_date or resolved_as_of.replace("-", ""),
         )
+        endpoints.append(result.trace)
+        selected_endpoint = "stock_zh_index_daily_em"
+        mapping = (
+            _index_points_from_akshare_rows(
+                result.data,
+                symbol=resolved_symbol,
+                name=name,
+                endpoint=selected_endpoint,
+            )
+            if result.success
+            else None
+        )
+        if mapping is not None:
+            live_row_count += mapping.live_row_count
+            skipped_row_count += mapping.skipped_row_count
+            warnings.extend(mapping.warnings)
+            endpoints[-1] = replace(
+                endpoints[-1],
+                live_row_count=mapping.live_row_count,
+                mapped_row_count=len(mapping.points),
+                skipped_row_count=mapping.skipped_row_count,
+            )
+
+        primary_unusable = not result.success or mapping is None or not mapping.points
+        if primary_unusable and hasattr(self._ak, "stock_zh_index_daily"):
+            primary_reason = (
+                result.error
+                if not result.success
+                else "no valid rows returned"
+            )
+            warnings.append(
+                ProviderWarning(
+                    code="endpoint_fallback",
+                    message=(
+                        "stock_zh_index_daily_em was unavailable; "
+                        "stock_zh_index_daily was used."
+                    ),
+                    severity="warning",
+                    details={
+                        "primary_endpoint": "stock_zh_index_daily_em",
+                        "fallback_endpoint": "stock_zh_index_daily",
+                        "reason": primary_reason,
+                    },
+                )
+            )
+            selected_endpoint = "stock_zh_index_daily"
+            result = self._call_akshare(
+                selected_endpoint,
+                symbol=provider_symbol,
+            )
+            endpoints.append(result.trace)
+            mapping = (
+                _index_points_from_akshare_rows(
+                    result.data,
+                    symbol=resolved_symbol,
+                    name=name,
+                    endpoint=selected_endpoint,
+                )
+                if result.success
+                else None
+            )
+            if mapping is not None:
+                live_row_count += mapping.live_row_count
+                skipped_row_count += mapping.skipped_row_count
+                warnings.extend(mapping.warnings)
+                endpoints[-1] = replace(
+                    endpoints[-1],
+                    live_row_count=mapping.live_row_count,
+                    mapped_row_count=len(mapping.points),
+                    skipped_row_count=mapping.skipped_row_count,
+                )
+
         if not result.success:
-            message = f"index_zh_a_hist: {result.error}"
+            message = f"{selected_endpoint}: {result.error}"
             self.last_health = _build_health(
                 provider="akshare",
                 provider_version=self.provider_version,
                 started_at=started_at,
-                endpoints=(result.trace,),
+                live_row_count=live_row_count,
+                skipped_row_count=skipped_row_count,
+                endpoints=tuple(endpoints),
                 warnings=(
+                    *warnings,
                     ProviderWarning(
                         code="live_fetch_error",
                         message=message,
@@ -413,19 +496,7 @@ class AkshareProvider:
             )
             raise ProviderUnavailable(f"AKShare index history fetch failed: {message}")
 
-        mapping = _index_points_from_akshare_rows(
-            result.data,
-            symbol=resolved_symbol,
-            name=name,
-            endpoint="index_zh_a_hist",
-        )
-        endpoint_trace = replace(
-            result.trace,
-            live_row_count=mapping.live_row_count,
-            mapped_row_count=len(mapping.points),
-            skipped_row_count=mapping.skipped_row_count,
-        )
-        if not mapping.points:
+        if mapping is None or not mapping.points:
             warning = ProviderWarning(
                 code="empty_live_response",
                 message=f"AKShare returned no valid index rows for {resolved_symbol}.",
@@ -435,14 +506,41 @@ class AkshareProvider:
                 provider="akshare",
                 provider_version=self.provider_version,
                 started_at=started_at,
-                live_row_count=mapping.live_row_count,
-                skipped_row_count=mapping.skipped_row_count,
-                endpoints=(endpoint_trace,),
-                warnings=(*mapping.warnings, warning),
+                live_row_count=live_row_count,
+                skipped_row_count=skipped_row_count,
+                endpoints=tuple(endpoints),
+                warnings=(*warnings, warning),
             )
             raise ProviderUnavailable(
                 f"AKShare returned no valid index rows for {resolved_symbol}."
             )
+
+        range_start = (start_date or "19700101").replace("-", "")
+        range_end = (end_date or resolved_as_of).replace("-", "")
+        selected_points = [
+            point
+            for point in mapping.points
+            if range_start <= point.date.replace("-", "") <= range_end
+        ]
+        if not selected_points:
+            warning = ProviderWarning(
+                code="empty_live_response",
+                message=(
+                    f"AKShare returned no index rows for {resolved_symbol} "
+                    f"between {range_start} and {range_end}."
+                ),
+                severity="critical",
+            )
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                live_row_count=live_row_count,
+                skipped_row_count=skipped_row_count,
+                endpoints=tuple(endpoints),
+                warnings=(*warnings, warning),
+            )
+            raise ProviderUnavailable(warning.message)
 
         updated_at = _utc_now()
         expires_at = updated_at + timedelta(days=self.cache_ttl_days)
@@ -460,7 +558,7 @@ class AkshareProvider:
                     "stale": False,
                 },
             )
-            for point in mapping.points
+            for point in selected_points
         ]
         cache_write_count = 0
         if self.cache is not None:
@@ -475,12 +573,12 @@ class AkshareProvider:
             provider="akshare",
             provider_version=self.provider_version,
             started_at=started_at,
-            live_row_count=mapping.live_row_count,
+            live_row_count=live_row_count,
             mapped_row_count=len(normalized_points),
-            skipped_row_count=mapping.skipped_row_count,
+            skipped_row_count=skipped_row_count,
             cache_write_count=cache_write_count,
-            endpoints=(endpoint_trace,),
-            warnings=mapping.warnings,
+            endpoints=tuple(endpoints),
+            warnings=tuple(warnings),
         )
         return normalized_points
 
@@ -1159,20 +1257,20 @@ def _index_points_from_akshare_rows(
     for row_index, row in iterrows():
         live_row_count += 1
         try:
-            series_date = _date_text(_first(row, "日期", "date"))
-            close = _to_float(_first(row, "收盘", "close"))
+            series_date = _date_text(_first(row, "date", "日期"))
+            close = _to_float(_first(row, "close", "收盘"))
             point = MarketSeriesPoint(
                 symbol=symbol,
                 name=name,
                 series_type="index",
                 date=series_date or "",
-                open=_to_float(_first(row, "开盘", "open")),
+                open=_to_float(_first(row, "open", "开盘")),
                 close=close,
-                high=_to_float(_first(row, "最高", "high")),
-                low=_to_float(_first(row, "最低", "low")),
-                volume=_to_float(_first(row, "成交量", "volume")),
-                turnover=_to_float(_first(row, "成交额", "turnover")),
-                change_pct=_to_float(_first(row, "涨跌幅", "change_pct")),
+                high=_to_float(_first(row, "high", "最高")),
+                low=_to_float(_first(row, "low", "最低")),
+                volume=_to_float(_first(row, "volume", "成交量")),
+                turnover=_to_float(_first(row, "amount", "成交额", "turnover")),
+                change_pct=_to_float(_first(row, "change_pct", "涨跌幅")),
                 source="akshare",
             )
         except Exception as exc:
@@ -1202,12 +1300,32 @@ def _index_points_from_akshare_rows(
             continue
         points.append(point)
     points.sort(key=lambda item: item.date)
+    points = _derive_market_change_pct(points)
     return _MarketSeriesMappingResult(
         live_row_count=live_row_count,
         points=tuple(points),
         skipped_row_count=skipped_row_count,
         warnings=tuple(warnings),
     )
+
+
+def _derive_market_change_pct(
+    points: list[MarketSeriesPoint],
+) -> list[MarketSeriesPoint]:
+    derived: list[MarketSeriesPoint] = []
+    previous_close: float | None = None
+    for point in points:
+        change_pct = point.change_pct
+        if (
+            change_pct is None
+            and previous_close not in {None, 0}
+            and point.close is not None
+        ):
+            change_pct = (point.close / previous_close - 1.0) * 100.0
+        derived.append(replace(point, change_pct=change_pct))
+        if point.close is not None:
+            previous_close = point.close
+    return derived
 
 
 def _dedupe_funds(funds: list[FundRecord]) -> list[FundRecord]:

@@ -86,9 +86,14 @@ class MarketHistoryService:
             )
 
         try:
+            history_start = (current_time - timedelta(days=365 * 5)).strftime(
+                "%Y%m%d"
+            )
             live_points = self.provider.fetch_index_history(
                 resolved_symbol,
                 name=INDEX_DEFINITIONS[resolved_symbol],
+                start_date=history_start,
+                end_date=current_time.strftime("%Y%m%d"),
                 as_of=current_time.date().isoformat(),
             )
         except ProviderUnavailable as exc:
@@ -139,6 +144,7 @@ class MarketHistoryService:
                         expires_at.isoformat(),
                     ),
                     "stale": False,
+                    "history_horizon": "5y",
                 },
             )
             for point in live_points
