@@ -187,6 +187,24 @@ class FundNavPoint:
 
 
 @dataclass(frozen=True)
+class MarketSeriesPoint:
+    symbol: str
+    name: str
+    series_type: str
+    date: str
+    open: float | None = None
+    close: float | None = None
+    high: float | None = None
+    low: float | None = None
+    volume: float | None = None
+    turnover: float | None = None
+    change_pct: float | None = None
+    source: str = "unknown"
+    updated_at: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class SignalCandidate:
     signal_id: str
     source: str
