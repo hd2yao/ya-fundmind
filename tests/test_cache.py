@@ -1,7 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
 from fund_agent.cache import FundCache
-from fund_agent.models import FundDetail, FundNavPoint, FundRecord, MarketSeriesPoint
+from fund_agent.models import (
+    FundDetail,
+    FundNavPoint,
+    FundRecord,
+    MarketEntity,
+    MarketSeriesPoint,
+)
 
 
 def test_cache_initializes_expected_tables(tmp_path):
@@ -14,6 +20,7 @@ def test_cache_initializes_expected_tables(tmp_path):
         "fund_navs",
         "fund_valuations",
         "fund_details",
+        "market_entities",
         "market_series",
     } <= table_names
 
@@ -201,6 +208,79 @@ def test_cache_round_trips_market_series_points(tmp_path):
     assert cached[0].source == "cache:akshare"
     assert cached[0].metadata["cache_as_of"] == "2026-07-22"
     assert cached[0].metadata["series_kind"] == "market_index_history"
+
+
+def test_cache_round_trips_market_entities(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    entity = MarketEntity(
+        symbol="BK1036",
+        name="半导体",
+        entity_type="industry",
+        latest=1823.4,
+        change_pct=2.31,
+        market_cap=345678901.0,
+        turnover_rate=3.25,
+        rise_count=41,
+        fall_count=6,
+        leader_name="示例股份",
+        leader_change_pct=9.98,
+        source="akshare",
+        as_of="2026-07-23",
+        metadata={"endpoint": "stock_board_industry_name_em"},
+    )
+
+    cache.upsert_market_entities(
+        [entity],
+        as_of="2026-07-23",
+        ttl_days=2,
+    )
+    cached = cache.load_market_entities(
+        entity_type="industry",
+        source="akshare",
+    )
+
+    assert len(cached) == 1
+    assert cached[0].symbol == "BK1036"
+    assert cached[0].name == "半导体"
+    assert cached[0].latest == 1823.4
+    assert cached[0].source == "cache:akshare"
+    assert cached[0].metadata["cache_as_of"] == "2026-07-23"
+    assert cached[0].metadata["stale"] is False
+
+
+def test_cache_filters_expired_market_entities_unless_stale_allowed(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    now = datetime(2026, 7, 23, tzinfo=timezone.utc)
+    cache.upsert_market_entities(
+        [
+            MarketEntity(
+                symbol="BK1036",
+                name="半导体",
+                entity_type="industry",
+                source="akshare",
+                as_of="2026-07-20",
+            )
+        ],
+        as_of="2026-07-20",
+        ttl_days=1,
+        now=now - timedelta(days=3),
+    )
+
+    assert cache.load_market_entities(
+        entity_type="industry",
+        source="akshare",
+        now=now,
+    ) == []
+
+    stale = cache.load_market_entities(
+        entity_type="industry",
+        source="akshare",
+        allow_stale=True,
+        now=now,
+    )
+
+    assert len(stale) == 1
+    assert stale[0].metadata["stale"] is True
 
 
 def test_tiantian_cache_stale_metadata_is_available_for_fallback(tmp_path):
