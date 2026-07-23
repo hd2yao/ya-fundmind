@@ -9,6 +9,8 @@
 - Add an independent SQLite market-series cache plus allowlisted index-history API for the Shanghai Composite, CSI 300 and ChiNext indices.
 - Add cache-first 1m/3m/6m/1y/all index charts and expandable OHLC tables to the Market workspace, including source, as-of, stale, fallback and quality states.
 - Harden real AKShare index access with an Eastmoney-to-Sina endpoint fallback inside the same provider while retaining endpoint traces and warnings.
+- Add a cache-first AKShare industry-board catalog, BK-code/name search, paginated API and 1m/3m/6m/1y/all board history backed by independent market entity/series storage.
+- Add an interactive industry-board workspace with current metrics, history chart, freshness/quality states and a same-name search bridge from research themes without asserting that themes and boards are identical.
 - Keep bulk all-market historical backfill, multi-source reconciliation, main scoring, main risk, recommendations and trading out of this delivery slice.
 
 ## v2.1.0 - 2026-07-22

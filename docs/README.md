@@ -58,6 +58,7 @@ These files are runtime or OS noise and should not be committed:
 
 - `releases/v2.0.0-rc.1-release-report.md`：RC 验收证据和 Final 剩余门禁。
 - `releases/v2.0.0-release-report.md`：Final 真实运行、验证和发布证据。
+- `releases/v2.2.0-m3-acceptance.md`：行业板块目录、历史走势、缓存、API 和三视口验收记录。
 - `migrations/v1-to-v2.md`：安装、兼容和回滚。
 - `ops/v2-troubleshooting.md`：查询、Evidence、MCP、Web、provider、scheduler 和 readiness 排障。
 - `contracts/v2-release-readiness-v1.md`：机器可读发布门契约。
