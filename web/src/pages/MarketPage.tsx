@@ -325,7 +325,7 @@ function IndexHistoryPanel({
               <span>样本</span>
               <strong>{state.data.point_count} 个交易点</strong>
             </div>
-            <div>
+            <div className="market-index-summary__provenance">
               <span>来源 / 截至</span>
               <strong>{state.data.source} · {state.data.as_of || "--"}</strong>
             </div>

@@ -790,6 +790,12 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.market-index-summary__provenance strong {
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .market-index-chart {
   width: 100%;
   height: 300px;
