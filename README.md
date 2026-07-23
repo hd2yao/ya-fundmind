@@ -6,9 +6,9 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 ## 当前状态
 
-- 当前版本：`v2.0.0`（Python package version：`2.0.0`）
-- 当前交付模式：V2 Research Copilot delivery mode
-- 当前发布状态：V2 M1-M6、Final 发布门、PR/CI/merge、`v2.0.0` tag 与 post-release check 全部完成。
+- 当前稳定版本：`v2.1.0`（Python package version：`2.1.0`）
+- 当前交付模式：`v2.2 Fund Data Terminal` delivery mode
+- 当前发布状态：`v2.1.0` 本地 Product Web 已发布；`v2.2` 正在按 M0-M5 推进基金历史、指数、板块和数据终端界面。
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
@@ -343,6 +343,16 @@ python -m fund_agent.cli product-web --output-dir outputs
 ```
 
 默认地址为 `http://127.0.0.1:8768`。`v2.1.0` 的“基金探索”支持在 Market Intelligence 全市场产物中按代码、名称、类型、主题、ETF 和数据质量进行服务端搜索、排序与分页；“我的自选”仍只展示 `configs/watchlist.yaml`，两者都不表示推荐。
+
+`v2.2` 的第一条数据终端链路允许点击任意搜索结果后按需读取历史净值：
+
+- 默认展示最近 6 个月，可切换 `1 月 / 3 月 / 6 月 / 1 年 / 全部`。
+- 新鲜 SQLite 历史缓存命中时不访问网络。
+- 缓存缺失时调用 AKShare `fund_open_fund_info_em`，规范化后写入 `fund_navs`。
+- live 失败时仅在本地存在历史缓存时回退，并明确展示 `stale / fallback / source / as_of`。
+- 全市场继续只保存基础索引，不会一次性回填约两万只基金的全部历史。
+
+该历史序列只用于浏览和研究观察，不进入主评分、主风险或推荐逻辑。完整设计和后续指数/板块里程碑见 [`docs/plans/2026-07-23-v2.2-fund-data-terminal-design.md`](docs/plans/2026-07-23-v2.2-fund-data-terminal-design.md)。
 
 可先离线检查依赖和构建：
 
