@@ -9,11 +9,11 @@
 
 ## 当前状态
 
-- 当前稳定版本：`v2.1.0` Local Product Web + Fund Explorer。
-- 当前开发轨道：`v2.2 Fund Data Terminal`。
-- 当前 Milestone：M4 数据终端信息架构已通过本地功能与三视口验收，下一步进入 M5 发布收口。
+- 当前稳定版本：`v2.2.0` Fund Data Terminal。
+- 当前开发轨道：`v2.2` 已完成，后续新增能力需要建立新的版本目标，不继续追加 M6。
+- 当前 Milestone：M5 发布门禁已通过。
 - 当前 P0：无。
-- 当前 P1：M5 全量回归、真实 smoke 复核、CI、版本文档、合并、`v2.2.0` tag 与回滚验证。
+- 当前 P1：无。
 
 ## P0 Blocking
 
@@ -81,6 +81,14 @@
 - 指标、表格、图表和内容区改为紧凑终端式布局；长 provider 错误不会造成页面级横向溢出。
 - 12 个前端测试文件共 36 个用例、typecheck、build 和 375/600/768/1440 浏览器验收通过。
 
+`v2.2 M5` 已完成：
+
+- Python package 与项目 metadata 统一为 `2.2.0`。
+- Python、React、compileall、contract、Product Web dry-run 和四视口发布回归通过。
+- 全市场 21,575 条、基金历史 120 点和沪深 300 历史 120 点真实本地产物可读。
+- Product Web、daily、weekly LaunchAgent 保持 installed/loaded，未修改调度。
+- 行业 live smoke 仍因东方财富代理连接中断失败；保留结构化 `503` 和页面降级，不伪造成功。
+
 以下边界不是 P1：多源自动核验、Sites、公网部署、账号、云同步、推荐和自动交易。
 
 ## v2.0 Final 记录
@@ -106,6 +114,7 @@ Final fresh verification、PR #33、Python 3.10/3.12 CI、merge commit、clean `
 - Product Web 的高级图表、主题个性化、收藏编辑和跨设备访问。
 - 行业板块目录增加翻页或“加载更多”，支持不修改关键词的失败重试。
 - 补充行业板块请求竞态和移动端实际溢出的自动化回归测试。
+- 本地 Node 运行时切换到项目声明支持的 Node 22 LTS，消除 Node 23 的 `EBADENGINE` 提示。
 - 在后续 Streamlit 升级前，把 `use_container_width` 调用迁移到 `width="stretch"/"content"`，消除 1.59 服务端弃用提示。
 
 ## 仍留在 Ideas 的事项

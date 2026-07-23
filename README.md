@@ -6,9 +6,9 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 ## 当前状态
 
-- 当前稳定版本：`v2.1.0`（Python package version：`2.1.0`）
+- 当前稳定版本：`v2.2.0`（Python package version：`2.2.0`）
 - 当前交付模式：`v2.2 Fund Data Terminal` delivery mode
-- 当前发布状态：`v2.1.0` 本地 Product Web 已发布；`v2.2` 的 M1-M4 已完成本地验收，下一步进入 M5 发布收口。
+- 当前发布状态：`v2.2.0` 已完成 M1-M5 发布门禁，提供基金历史、指数/行业走势和本地基金数据终端。
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
