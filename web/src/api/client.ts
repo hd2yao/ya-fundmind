@@ -6,7 +6,10 @@ import type {
   FundSearchParams,
   FundSearchResponse,
   MarketIndexHistoryResponse,
-  MarketIndexWindow
+  MarketIndexWindow,
+  MarketSectorHistoryResponse,
+  MarketSectorSearchParams,
+  MarketSectorSearchResponse
 } from "./types";
 
 export class ApiError extends Error {
@@ -124,6 +127,55 @@ export async function getMarketIndexHistory(
     typeof payload.point_count !== "number"
   ) {
     throw new ApiError("Local API returned an invalid market index history payload.", 502);
+  }
+  return payload;
+}
+
+export async function searchMarketSectors(
+  params: MarketSectorSearchParams = {},
+  signal?: AbortSignal
+): Promise<MarketSectorSearchResponse> {
+  const query = new URLSearchParams();
+  appendQuery(query, "q", params.q);
+  appendQuery(query, "page", params.page);
+  appendQuery(query, "page_size", params.pageSize);
+  const suffix = query.size ? `?${query.toString()}` : "";
+  const payload = await getJson<MarketSectorSearchResponse>(
+    `/api/market/sectors${suffix}`,
+    signal
+  );
+  if (
+    !Array.isArray(payload.items) ||
+    typeof payload.total !== "number" ||
+    payload.items.some(
+      (item) =>
+        !item ||
+        item.entity_type !== "industry" ||
+        typeof item.symbol !== "string" ||
+        typeof item.name !== "string"
+    )
+  ) {
+    throw new ApiError("Local API returned an invalid market sector catalog payload.", 502);
+  }
+  return payload;
+}
+
+export async function getMarketSectorHistory(
+  symbol: string,
+  window: MarketIndexWindow = "6m",
+  signal?: AbortSignal
+): Promise<MarketSectorHistoryResponse> {
+  const payload = await getJson<MarketSectorHistoryResponse>(
+    `/api/market/sectors/${encodeURIComponent(symbol)}/history?range=${encodeURIComponent(window)}`,
+    signal
+  );
+  if (
+    payload.symbol !== symbol ||
+    payload.series_type !== "industry" ||
+    !Array.isArray(payload.points) ||
+    typeof payload.point_count !== "number"
+  ) {
+    throw new ApiError("Local API returned an invalid market sector history payload.", 502);
   }
   return payload;
 }
