@@ -95,6 +95,8 @@ Final fresh verification、PR #33、Python 3.10/3.12 CI、merge commit、clean `
 - 多语言 renderer。
 - 更丰富的非交易型情景比较。
 - Product Web 的高级图表、主题个性化、收藏编辑和跨设备访问。
+- 行业板块目录增加翻页或“加载更多”，支持不修改关键词的失败重试。
+- 补充行业板块请求竞态和移动端实际溢出的自动化回归测试。
 - 在后续 Streamlit 升级前，把 `use_container_width` 调用迁移到 `width="stretch"/"content"`，消除 1.59 服务端弃用提示。
 
 ## 仍留在 Ideas 的事项
