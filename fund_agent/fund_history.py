@@ -67,6 +67,7 @@ class FundHistoryService:
             source="akshare",
             now=current_time,
         )
+        fresh = _history_cache_points(fresh)
         if fresh:
             return _build_history_payload(
                 normalized_code,
@@ -90,6 +91,7 @@ class FundHistoryService:
                     allow_stale=True,
                     now=current_time,
                 )
+                stale = _history_cache_points(stale)
             if not stale:
                 raise FundHistoryUnavailable(
                     f"Fund history is unavailable for {normalized_code}: {exc}"
@@ -116,6 +118,7 @@ class FundHistoryService:
                 metadata={
                     **point.metadata,
                     "provider": "akshare",
+                    "series_kind": "fund_nav_history",
                     "as_of": current_time.date().isoformat(),
                     "updated_at": point.updated_at or current_time.isoformat(),
                     "expires_at": point.metadata.get(
@@ -140,6 +143,14 @@ class FundHistoryService:
             fallback_used=False,
             fallback_reason=None,
         )
+
+
+def _history_cache_points(points: list[FundNavPoint]) -> list[FundNavPoint]:
+    return [
+        point
+        for point in points
+        if point.metadata.get("series_kind") == "fund_nav_history"
+    ]
 
 
 def _build_history_payload(

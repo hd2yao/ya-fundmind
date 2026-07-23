@@ -323,6 +323,7 @@ class AkshareProvider:
                 metadata={
                     **point.metadata,
                     "provider": "akshare",
+                    "series_kind": "fund_nav_history",
                     "as_of": resolved_as_of,
                     "updated_at": updated_at.isoformat(),
                     "expires_at": expires_at.isoformat(),

@@ -18,6 +18,11 @@ def _points(source: str = "akshare", count: int = 25) -> list[FundNavPoint]:
             unit_nav=1.0 + index / 100,
             daily_return=0.1,
             source=source,
+            metadata=(
+                {"series_kind": "fund_nav_history"}
+                if source == "akshare"
+                else {}
+            ),
         )
         for index in range(count)
     ]
@@ -83,6 +88,32 @@ def test_history_service_fetches_live_writes_cache_and_applies_window(tmp_path):
     assert payload["source"] == "akshare"
     assert payload["data_quality_grade"] == "normal"
     assert len(cache.load_nav_points(code="021511", source="akshare", now=now)) == 25
+
+
+def test_history_service_does_not_treat_latest_basic_nav_as_full_history(tmp_path):
+    now = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    cache = FundCache(tmp_path / "funds.sqlite")
+    cache.upsert_nav_points(
+        [
+            FundNavPoint(
+                code="021511",
+                date="2026-07-01",
+                unit_nav=1.25,
+                source="akshare",
+            )
+        ],
+        as_of="2026-07-01",
+        ttl_days=2,
+        now=now,
+    )
+    provider = LiveProvider()
+    service = FundHistoryService(cache=cache, provider=provider)
+
+    payload = service.get_history("021511", window="1m", now=now)
+
+    assert provider.calls == 1
+    assert payload["point_count"] == 20
+    assert payload["points"][0]["date"] == "2026-06-06"
 
 
 class FailingProvider:
