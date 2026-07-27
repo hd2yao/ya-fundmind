@@ -34,6 +34,7 @@ from .fund_detail import (
 )
 from .historical_backfill import run_historical_backfill
 from .long_horizon import evaluate_long_horizon_stability, write_long_horizon_stability
+from .market_history import MarketHistoryService
 from .market_intelligence import (
     build_market_intelligence_report,
     build_market_trend_report,
@@ -634,6 +635,66 @@ def _run_market_scan(args) -> int:
     print(f"Market snapshot: {outputs.snapshot_path}")
     print(f"Run bundle market report: {outputs.run_report_path}")
     return 0
+
+
+def _build_cli_market_history_service(args) -> MarketHistoryService:
+    cache = FundCache(args.cache_file)
+    provider_config = load_provider_config(args.provider_config).akshare
+    provider = AkshareProvider(
+        cache=cache,
+        allow_stale_cache=True,
+        verbose=bool(getattr(args, "provider_verbose", False) or provider_config.verbose),
+        timeout_seconds=provider_config.timeout_seconds,
+        retry_count=provider_config.retry_count,
+        retry_backoff_seconds=provider_config.retry_backoff_seconds,
+    )
+    return MarketHistoryService(
+        cache=cache,
+        provider=provider,
+        cache_ttl_days=1,
+        allow_stale_fallback=True,
+    )
+
+
+def _refresh_now(as_of: str) -> datetime:
+    if not as_of:
+        return datetime.now(timezone.utc)
+    try:
+        return datetime.fromisoformat(as_of).replace(tzinfo=timezone.utc)
+    except ValueError as exc:
+        raise ValueError("--as-of must be an ISO date, for example 2026-07-27.") from exc
+
+
+def _run_refresh_market_history(args) -> int:
+    if args.provider != "akshare":
+        print("refresh-market-history requires --provider akshare; fixture data is not refreshed.")
+        return 2
+    try:
+        payload = _build_cli_market_history_service(args).refresh_index_histories(
+            now=_refresh_now(args.as_of),
+        )
+    except ValueError as exc:
+        print(str(exc))
+        return 2
+    except Exception as exc:
+        print(f"Market history refresh failed: {exc}")
+        return 2
+
+    output_path = args.output_dir / "market" / "index_refresh_report.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Market index refresh report: {output_path}")
+    print(
+        "Market index refresh: success={success} fallback={fallback} unavailable={unavailable}".format(
+            success=payload["success_count"],
+            fallback=payload["fallback_count"],
+            unavailable=payload["unavailable_count"],
+        )
+    )
+    return 0 if payload["success_count"] or payload["fallback_count"] else 2
 
 
 def _run_historical_backfill(args) -> int:
@@ -1582,6 +1643,18 @@ def build_parser() -> argparse.ArgumentParser:
     market_scan.add_argument("--min-theme-sample-size", type=int, default=5)
     market_scan.add_argument("--provider-verbose", action="store_true")
     market_scan.set_defaults(func=_run_market_scan)
+
+    refresh_market_history = subparsers.add_parser(
+        "refresh-market-history",
+        help="刷新允许的主要指数历史缓存；仅支持 akshare，不修改主评分/风险",
+    )
+    refresh_market_history.add_argument("--provider", choices=["fixture", "akshare"], default="akshare")
+    refresh_market_history.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
+    refresh_market_history.add_argument("--provider-config", type=Path, default=DEFAULT_PROVIDER_CONFIG)
+    refresh_market_history.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    refresh_market_history.add_argument("--as-of", default="")
+    refresh_market_history.add_argument("--provider-verbose", action="store_true")
+    refresh_market_history.set_defaults(func=_run_refresh_market_history)
 
     historical = subparsers.add_parser("historical-backfill", help="生成历史回填观察数据，不修改主评分/风险")
     historical.add_argument("--provider", choices=["fixture", "cache"], default="fixture")
