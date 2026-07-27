@@ -162,6 +162,22 @@ def test_market_history_refreshes_allowlisted_indices_without_stopping_on_one_fa
     ]
 
 
+def test_market_history_uses_requested_as_of_without_rewriting_sync_time(tmp_path):
+    now = datetime(2026, 7, 2, 13, 45, tzinfo=timezone.utc)
+    provider = PartialRefreshProvider()
+    service = MarketHistoryService(
+        cache=FundCache(tmp_path / "funds.sqlite"),
+        provider=provider,
+    )
+
+    payload = service.refresh_index_histories(now=now, as_of="2026-07-01")
+
+    assert payload["generated_at"] == now.isoformat()
+    assert provider.calls[0][1]["end_date"] == "20260701"
+    assert provider.calls[0][1]["as_of"] == "2026-07-01"
+    assert payload["indices"][0]["updated_at"] == now.isoformat()
+
+
 class FailingProvider:
     def fetch_index_history(self, symbol, **kwargs):
         raise ProviderUnavailable("network down")

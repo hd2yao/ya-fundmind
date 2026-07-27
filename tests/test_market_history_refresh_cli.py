@@ -6,7 +6,11 @@ from fund_agent import cli
 
 
 class StubMarketHistoryService:
-    def refresh_index_histories(self, *, now):
+    def __init__(self):
+        self.calls = []
+
+    def refresh_index_histories(self, *, now, as_of):
+        self.calls.append((now, as_of))
         return {
             "generated_at": now.isoformat(),
             "indices": [
@@ -31,10 +35,11 @@ class StubMarketHistoryService:
 
 
 def test_refresh_market_history_cli_writes_structured_summary(monkeypatch, tmp_path, capsys):
+    service = StubMarketHistoryService()
     monkeypatch.setattr(
         cli,
         "_build_cli_market_history_service",
-        lambda _args: StubMarketHistoryService(),
+        lambda _args: service,
     )
 
     result = cli.main(
@@ -53,6 +58,7 @@ def test_refresh_market_history_cli_writes_structured_summary(monkeypatch, tmp_p
     assert result == 0
     assert payload_path.is_file()
     assert json.loads(payload_path.read_text(encoding="utf-8"))["success_count"] == 1
+    assert service.calls[0][1] == "2026-07-01"
     assert "Market index refresh report:" in capsys.readouterr().out
 
 

@@ -656,11 +656,11 @@ def _build_cli_market_history_service(args) -> MarketHistoryService:
     )
 
 
-def _refresh_now(as_of: str) -> datetime:
+def _parse_refresh_as_of(as_of: str) -> str | None:
     if not as_of:
-        return datetime.now(timezone.utc)
+        return None
     try:
-        return datetime.fromisoformat(as_of).replace(tzinfo=timezone.utc)
+        return date.fromisoformat(as_of).isoformat()
     except ValueError as exc:
         raise ValueError("--as-of must be an ISO date, for example 2026-07-27.") from exc
 
@@ -671,7 +671,8 @@ def _run_refresh_market_history(args) -> int:
         return 2
     try:
         payload = _build_cli_market_history_service(args).refresh_index_histories(
-            now=_refresh_now(args.as_of),
+            now=datetime.now(timezone.utc),
+            as_of=_parse_refresh_as_of(args.as_of),
         )
     except ValueError as exc:
         print(str(exc))
