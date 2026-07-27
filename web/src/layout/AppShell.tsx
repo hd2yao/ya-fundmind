@@ -1,4 +1,4 @@
-import { Menu, Search, ShieldCheck, X } from "lucide-react";
+import { CircleDot, Menu, Search, ShieldCheck, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -110,11 +110,19 @@ export function AppShell() {
           </div>
           <div className="brand-copy">
             <strong>FundMind OS</strong>
-            <span>本地基金数据终端</span>
+            <span>本地基金研究台</span>
           </div>
           <button ref={closeButtonRef} className="icon-button sidebar-close" type="button" aria-label="关闭导航" onClick={closeMobileNavigation}>
             <X size={20} aria-hidden />
           </button>
+        </div>
+
+        <div className="sidebar-session" aria-label="本地研究工作区">
+          <CircleDot size={15} aria-hidden />
+          <div>
+            <strong>本地研究工作区</strong>
+            <span>SQLite · JSON · 本机运行</span>
+          </div>
         </div>
 
         <nav className="primary-nav" aria-label="主要导航" data-mobile-open={String(mobileOpen)}>
@@ -159,7 +167,7 @@ export function AppShell() {
             <Menu size={21} aria-hidden />
           </button>
           <div className="topbar-title">
-            <span>当前工作区 · {currentWorkspace.label}</span>
+            <span>研究工作区 · {currentWorkspace.label}</span>
             <small>{currentWorkspace.description}</small>
           </div>
           <form className="global-fund-search" role="search" onSubmit={submitGlobalSearch}>
@@ -176,8 +184,8 @@ export function AppShell() {
             </button>
           </form>
           <div className="topbar-status" aria-label="应用状态">
-            <StatusBadge tone="success">本地运行</StatusBadge>
-            <StatusBadge tone="info">只读研究</StatusBadge>
+            <StatusBadge tone="success">本地数据</StatusBadge>
+            <StatusBadge tone="info">研究模式</StatusBadge>
           </div>
         </header>
         <main id="main-content" className="main-content" tabIndex={-1}>

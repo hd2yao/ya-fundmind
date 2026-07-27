@@ -35,7 +35,8 @@ describe("AppShell", () => {
     expect(screen.getByText("研究工具")).toBeInTheDocument();
     expect(screen.getByText("系统")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "行情总览" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByText("当前工作区 · 行情总览")).toBeInTheDocument();
+    expect(screen.getByText("研究工作区 · 行情总览")).toBeInTheDocument();
+    expect(screen.getByText("本地研究工作区")).toBeInTheDocument();
   });
 
   it("sends the global fund search to the fund terminal", () => {

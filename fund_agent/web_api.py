@@ -245,7 +245,10 @@ def create_web_app(
                 status_code=503,
                 detail={
                     "code": "market_sector_unavailable",
-                    "message": str(exc),
+                    "message": (
+                        "行业板块目录暂不可用：本地缓存缺失，"
+                        "且 AKShare 暂未返回可用结果。请稍后重新读取本地数据。"
+                    ),
                 },
             ) from exc
 
@@ -286,7 +289,10 @@ def create_web_app(
                 status_code=503,
                 detail={
                     "code": "market_sector_unavailable",
-                    "message": str(exc),
+                    "message": (
+                        "行业板块历史暂不可用：本地缓存缺失，"
+                        "且 AKShare 暂未返回可用结果。请稍后重新读取本地数据。"
+                    ),
                 },
             ) from exc
 

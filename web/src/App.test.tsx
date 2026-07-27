@@ -19,9 +19,9 @@ describe("App", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("当前工作区 · 行情总览")).toBeInTheDocument();
+    expect(screen.getByText("研究工作区 · 行情总览")).toBeInTheDocument();
     expect(screen.getByText("正在读取市场情报")).toBeInTheDocument();
-    expect(screen.getByText(/本地基金数据终端/)).toBeInTheDocument();
+    expect(screen.getByText(/本地基金研究台/)).toBeInTheDocument();
     expect(screen.getByText(/不构成买卖建议/)).toBeInTheDocument();
   });
 

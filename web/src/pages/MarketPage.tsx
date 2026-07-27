@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowUpRight, History, Search, Sparkles } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, History, RefreshCw, Search, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -16,6 +16,7 @@ import type {
   ThemeSummary
 } from "../api/types";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
+import { DataFreshnessStrip } from "../components/DataFreshnessStrip";
 import { MarketIndexChart } from "../components/MarketIndexChart";
 import { Metric } from "../components/Metric";
 import { PageHeader } from "../components/PageHeader";
@@ -73,7 +74,7 @@ function qualityTone(grade?: string | null): StatusTone {
 }
 
 export function MarketPage() {
-  const { loading, resource, error } = useApiResource<MarketData>("/api/market");
+  const { loading, resource, error, refresh, refreshVersion } = useApiResource<MarketData>("/api/market");
   const [selectedTheme, setSelectedTheme] = useState<ThemeSummary | null>(null);
   const [selectedIndex, setSelectedIndex] = useState("000300");
   const [indexWindow, setIndexWindow] = useState<MarketIndexWindow>("6m");
@@ -115,7 +116,7 @@ export function MarketPage() {
         });
       });
     return () => controller.abort();
-  }, [selectedIndex, indexWindow]);
+  }, [selectedIndex, indexWindow, refreshVersion]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -149,7 +150,7 @@ export function MarketPage() {
         setSelectedSector(null);
       });
     return () => controller.abort();
-  }, [appliedSectorQuery]);
+  }, [appliedSectorQuery, refreshVersion]);
 
   useEffect(() => {
     if (!selectedSector) {
@@ -175,7 +176,7 @@ export function MarketPage() {
         });
       });
     return () => controller.abort();
-  }, [selectedSector, sectorWindow]);
+  }, [selectedSector, sectorWindow, refreshVersion]);
 
   const sectorPanel = (
     <SectorMarketPanel
@@ -191,7 +192,7 @@ export function MarketPage() {
     />
   );
 
-  if (loading) {
+  if (loading && !resource) {
     return <StatePanel kind="loading" title="正在读取市场情报" description="加载全市场分类、主题窗口和历史趋势。" />;
   }
   if (error) {
@@ -239,12 +240,20 @@ export function MarketPage() {
   }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack market-workbench">
       <PageHeader
-        eyebrow="Market terminal"
+        eyebrow="Market research desk"
         title="行情总览"
-        description="全市场观察与历史趋势验证，不等同于自选池，也不构成板块推荐。"
-        actions={<StatusBadge tone={qualityTone(quality)}>{quality}</StatusBadge>}
+        description="先核对数据新鲜度，再浏览指数、板块和主题观察；全市场结果不等同于自选池。"
+        actions={
+          <div className="market-page-actions">
+            <button className="workspace-refresh-button" type="button" onClick={refresh} disabled={loading}>
+              <RefreshCw className={loading ? "is-spinning" : undefined} size={15} aria-hidden />
+              重新读取本地数据
+            </button>
+            <StatusBadge tone={qualityTone(quality)}>{quality}</StatusBadge>
+          </div>
+        }
       />
 
       <nav className="terminal-section-nav" aria-label="行情数据区域">
@@ -254,9 +263,29 @@ export function MarketPage() {
         <a href="#trend-title">趋势验证</a>
       </nav>
 
-      <section className="metric-grid" aria-label="市场覆盖指标">
-        <Metric label="基金覆盖" value={number.format(intelligence.total_funds || 0)} detail={`as_of ${intelligence.as_of || "--"}`} />
-        <Metric label="ETF 覆盖" value={number.format(intelligence.total_etfs || 0)} detail={`source ${intelligence.source || "--"}`} />
+      <section className="market-pulse" aria-label="市场数据脉冲">
+        <div className="market-pulse__intro">
+          <span>市场快照</span>
+          <strong>交易数据日期</strong>
+          <b>{intelligence.as_of || "--"}</b>
+        </div>
+        <div className="market-pulse__fact">
+          <span>本次同步</span>
+          <strong>{formatDateTime(resource.generated_at)}</strong>
+        </div>
+        <div className="market-pulse__fact">
+          <span>来源</span>
+          <strong>{intelligence.source || "--"}</strong>
+        </div>
+        <div className="market-pulse__fact">
+          <span>研究边界</span>
+          <strong>仅观察 · 不构成建议</strong>
+        </div>
+      </section>
+
+      <section className="metric-grid market-coverage-rail" aria-label="市场覆盖指标">
+        <Metric label="基金覆盖" value={number.format(intelligence.total_funds || 0)} detail="全市场基础索引" />
+        <Metric label="ETF 覆盖" value={number.format(intelligence.total_etfs || 0)} detail="可进入基金终端搜索" />
         <Metric label="趋势快照" value={trend.snapshots_processed || 0} detail={trend.enough_market_history ? "历史样本已满足" : "历史样本不足"} />
         <Metric label="持续热点" value={persistent.length} detail={`新出现 ${newThemes.length}`} />
       </section>
@@ -706,41 +735,59 @@ function IndexHistoryPanel({
         <StatePanel kind="error" title="指数日线暂不可用" description={state.error} />
       ) : null}
       {state.data && state.data.points.length ? (
-        <>
-          <div className="market-index-summary">
-            <div>
-              <span>{state.data.name}</span>
-              <strong>{indexNumber.format(latest?.close || 0)}</strong>
+        <div className="market-index-workspace">
+          <div className="market-index-main">
+            <div className="market-index-summary">
+              <div>
+                <span>{state.data.name}</span>
+                <strong>{indexNumber.format(latest?.close || 0)}</strong>
+              </div>
+              <div>
+                <span>日涨跌</span>
+                <strong className={Number(latest?.change_pct) >= 0 ? "number-positive" : "number-negative"}>
+                  {formatReturn(latest?.change_pct)}
+                </strong>
+              </div>
+              <div>
+                <span>样本</span>
+                <strong>{state.data.point_count} 个交易点</strong>
+              </div>
             </div>
-            <div>
-              <span>日涨跌</span>
-              <strong className={Number(latest?.change_pct) >= 0 ? "number-positive" : "number-negative"}>
-                {formatReturn(latest?.change_pct)}
-              </strong>
-            </div>
-            <div>
-              <span>样本</span>
-              <strong>{state.data.point_count} 个交易点</strong>
-            </div>
-            <div className="market-index-summary__provenance">
-              <span>来源 / 截至</span>
-              <strong>{state.data.source} · {state.data.as_of || "--"}</strong>
-            </div>
+            <MarketIndexChart name={state.data.name} points={state.data.points} />
           </div>
-          <MarketIndexChart name={state.data.name} points={state.data.points} />
-          <div className="status-row">
-            <StatusBadge tone={qualityTone(state.data.data_quality_grade)}>
-              {state.data.stale ? "stale" : state.data.data_quality_grade}
-            </StatusBadge>
-            {state.data.fallback_used ? <StatusBadge tone="warning">cache fallback</StatusBadge> : null}
-          </div>
-          {state.data.warnings.length ? (
-            <p className="history-warning">
-              {state.data.warnings.map((warning) => warning.message).join(" · ")}
-            </p>
-          ) : null}
-        </>
+          <aside className="market-index-provenance">
+            <DataFreshnessStrip
+              label="当前指数数据"
+              asOf={state.data.as_of}
+              updatedAt={state.data.updated_at}
+              expiresAt={state.data.expires_at}
+              source={state.data.source}
+              stale={state.data.stale}
+              fallbackUsed={state.data.fallback_used}
+              dataQualityGrade={state.data.data_quality_grade}
+              compact
+            />
+            {state.data.warnings.length ? (
+              <p className="history-warning">
+                {state.data.warnings.map((warning) => warning.message).join(" · ")}
+              </p>
+            ) : null}
+          </aside>
+        </div>
       ) : null}
     </section>
   );
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "--";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(parsed);
 }

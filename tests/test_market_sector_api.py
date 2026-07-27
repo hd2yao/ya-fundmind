@@ -173,7 +173,7 @@ class UnavailableMarketSectorService:
         raise MarketSectorUnavailable("history endpoint down")
 
 
-def test_market_sector_endpoints_return_explainable_503(
+def test_market_sector_endpoints_return_safe_explainable_503(
     tmp_path: Path,
 ) -> None:
     client = TestClient(
@@ -188,5 +188,8 @@ def test_market_sector_endpoints_return_explainable_503(
 
     assert catalog.status_code == 503
     assert catalog.json()["detail"]["code"] == "market_sector_unavailable"
+    assert "本地缓存缺失" in catalog.json()["detail"]["message"]
+    assert "catalog endpoint down" not in catalog.json()["detail"]["message"]
     assert history.status_code == 503
-    assert history.json()["detail"]["message"] == "history endpoint down"
+    assert "本地缓存缺失" in history.json()["detail"]["message"]
+    assert "history endpoint down" not in history.json()["detail"]["message"]

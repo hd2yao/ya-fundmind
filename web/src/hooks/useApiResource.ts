@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { getResource } from "../api/client";
 import type { ApiResource } from "../api/types";
@@ -9,12 +9,19 @@ type ResourceState<T> = {
   error: string | null;
 };
 
-export function useApiResource<T>(path: string): ResourceState<T> {
+type RefreshableResourceState<T> = ResourceState<T> & {
+  refresh: () => void;
+  refreshVersion: number;
+};
+
+export function useApiResource<T>(path: string): RefreshableResourceState<T> {
   const [state, setState] = useState<ResourceState<T>>({ loading: true, resource: null, error: null });
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const refresh = useCallback(() => setRefreshVersion((current) => current + 1), []);
 
   useEffect(() => {
     const controller = new AbortController();
-    setState({ loading: true, resource: null, error: null });
+    setState((current) => ({ loading: true, resource: current.resource, error: null }));
     getResource<T>(path, controller.signal)
       .then((resource) => setState({ loading: false, resource, error: null }))
       .catch((error: unknown) => {
@@ -26,7 +33,7 @@ export function useApiResource<T>(path: string): ResourceState<T> {
         });
       });
     return () => controller.abort();
-  }, [path]);
+  }, [path, refreshVersion]);
 
-  return state;
+  return { ...state, refresh, refreshVersion };
 }
