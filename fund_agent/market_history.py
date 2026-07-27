@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Protocol
 
 from .cache import FundCache
@@ -61,6 +61,7 @@ class MarketHistoryService:
         *,
         window: str = "6m",
         now: datetime | None = None,
+        as_of: str | None = None,
         force_refresh: bool = False,
     ) -> dict[str, object]:
         resolved_symbol = str(symbol).strip()
@@ -70,6 +71,7 @@ class MarketHistoryService:
             raise ValueError(f"Unsupported history window: {window}")
 
         current_time = _utc_now(now)
+        requested_as_of = _resolve_as_of_date(as_of, current_time)
         fresh = self.cache.load_market_series(
             symbol=resolved_symbol,
             series_type="index",
@@ -87,15 +89,15 @@ class MarketHistoryService:
             )
 
         try:
-            history_start = (current_time - timedelta(days=365 * 5)).strftime(
+            history_start = (requested_as_of - timedelta(days=365 * 5)).strftime(
                 "%Y%m%d"
             )
             live_points = self.provider.fetch_index_history(
                 resolved_symbol,
                 name=INDEX_DEFINITIONS[resolved_symbol],
                 start_date=history_start,
-                end_date=current_time.strftime("%Y%m%d"),
-                as_of=current_time.date().isoformat(),
+                end_date=requested_as_of.strftime("%Y%m%d"),
+                as_of=requested_as_of.isoformat(),
             )
         except ProviderUnavailable as exc:
             stale: list[MarketSeriesPoint] = []
@@ -138,7 +140,7 @@ class MarketHistoryService:
                     **point.metadata,
                     "provider": "akshare",
                     "series_kind": "market_index_history",
-                    "as_of": current_time.date().isoformat(),
+                    "as_of": requested_as_of.isoformat(),
                     "updated_at": point.updated_at or current_time.isoformat(),
                     "expires_at": point.metadata.get(
                         "expires_at",
@@ -152,7 +154,7 @@ class MarketHistoryService:
         ]
         self.cache.upsert_market_series(
             normalized_points,
-            as_of=current_time.date().isoformat(),
+            as_of=requested_as_of.isoformat(),
             ttl_days=self.cache_ttl_days,
             now=current_time,
         )
@@ -168,6 +170,7 @@ class MarketHistoryService:
         self,
         *,
         now: datetime | None = None,
+        as_of: str | None = None,
     ) -> dict[str, object]:
         """Refresh every allowlisted index without letting one endpoint stop the batch."""
         current_time = _utc_now(now)
@@ -180,6 +183,7 @@ class MarketHistoryService:
                     symbol,
                     window="all",
                     now=current_time,
+                    as_of=as_of,
                     force_refresh=True,
                 )
             except MarketHistoryUnavailable as exc:
@@ -347,3 +351,12 @@ def _utc_now(value: datetime | None = None) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _resolve_as_of_date(value: str | None, current_time: datetime) -> date:
+    if not value:
+        return current_time.date()
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError("--as-of must be an ISO date, for example 2026-07-27.") from exc
