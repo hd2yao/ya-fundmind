@@ -83,6 +83,85 @@ def test_market_history_fetches_live_and_writes_cache(tmp_path):
     ) == 25
 
 
+def test_market_history_force_refreshes_fresh_cache_and_keeps_sync_metadata(tmp_path):
+    now = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    cache = FundCache(tmp_path / "funds.sqlite")
+    cache.upsert_market_series(
+        _points(25),
+        as_of="2026-06-30",
+        ttl_days=2,
+        now=now - timedelta(hours=1),
+    )
+    provider = LiveProvider()
+    service = MarketHistoryService(cache=cache, provider=provider)
+
+    payload = service.get_index_history(
+        "000300",
+        window="all",
+        now=now,
+        force_refresh=True,
+    )
+
+    assert len(provider.calls) == 1
+    assert payload["source"] == "akshare"
+    assert payload["as_of"] == "2026-06-25"
+    assert payload["updated_at"] == now.isoformat()
+    assert payload["expires_at"] == (now + timedelta(days=1)).isoformat()
+
+
+class PartialRefreshProvider:
+    def __init__(self):
+        self.calls = []
+
+    def fetch_index_history(self, symbol, **kwargs):
+        self.calls.append((symbol, kwargs))
+        if symbol == "399006":
+            raise ProviderUnavailable("index endpoint unavailable")
+        return [
+            MarketSeriesPoint(
+                symbol=symbol,
+                name=kwargs["name"],
+                series_type="index",
+                date="2026-07-01",
+                close=4000.0,
+                change_pct=0.2,
+                source="akshare",
+                metadata={"series_kind": "market_index_history"},
+            )
+        ]
+
+
+def test_market_history_refreshes_allowlisted_indices_without_stopping_on_one_failure(tmp_path):
+    now = datetime(2026, 7, 1, tzinfo=timezone.utc)
+    provider = PartialRefreshProvider()
+    service = MarketHistoryService(
+        cache=FundCache(tmp_path / "funds.sqlite"),
+        provider=provider,
+    )
+
+    payload = service.refresh_index_histories(now=now)
+
+    assert [item["symbol"] for item in payload["indices"]] == [
+        "000001",
+        "000300",
+        "399006",
+    ]
+    assert [item["status"] for item in payload["indices"]] == [
+        "success",
+        "success",
+        "unavailable",
+    ]
+    assert payload["success_count"] == 2
+    assert payload["unavailable_count"] == 1
+    assert payload["generated_at"] == now.isoformat()
+    assert any(item["symbol"] == "399006" for item in payload["warnings"])
+    assert [symbol for symbol, _kwargs in provider.calls] == [
+        "000001",
+        "000300",
+        "399006",
+    ]
+
+
 class FailingProvider:
     def fetch_index_history(self, symbol, **kwargs):
         raise ProviderUnavailable("network down")

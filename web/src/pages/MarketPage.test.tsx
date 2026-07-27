@@ -214,6 +214,9 @@ describe("MarketPage", () => {
     expect(screen.getByText("QDII")).toBeInTheDocument();
     expect(screen.getByText("低波")).toBeInTheDocument();
     expect(screen.getByText("全市场观察，不是自选或持仓建议")).toBeInTheDocument();
+    expect(screen.getByText("交易数据日期")).toBeInTheDocument();
+    expect(screen.getByText("本次同步")).toBeInTheDocument();
+    expect(screen.getByText("缓存有效至")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "查看医药详情" }));
     expect(screen.getByRole("dialog", { name: "医药观察详情" })).toBeInTheDocument();
@@ -233,6 +236,24 @@ describe("MarketPage", () => {
         )
       ).toBe(true);
     });
+  });
+
+  it("re-reads local market resources without treating the trading date as the sync time", async () => {
+    const fetchMock = stubMarketApi();
+
+    render(<MarketPage />);
+
+    await screen.findByRole("img", { name: "沪深300 指数日线图" });
+    fireEvent.click(screen.getByRole("button", { name: "重新读取本地数据" }));
+
+    await waitFor(() => {
+      const marketCalls = fetchMock.mock.calls
+        .map((call) => String(call[0]))
+        .filter((url) => url === "/api/market");
+      expect(marketCalls).toHaveLength(2);
+    });
+    expect(screen.getByText("交易日")).toBeInTheDocument();
+    expect(screen.getByText("同步于")).toBeInTheDocument();
   });
 
   it("shows real index history and switches symbol and range", async () => {

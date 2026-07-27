@@ -61,6 +61,7 @@ class MarketHistoryService:
         *,
         window: str = "6m",
         now: datetime | None = None,
+        force_refresh: bool = False,
     ) -> dict[str, object]:
         resolved_symbol = str(symbol).strip()
         if resolved_symbol not in INDEX_DEFINITIONS:
@@ -76,7 +77,7 @@ class MarketHistoryService:
             now=current_time,
         )
         fresh = _index_cache_points(fresh)
-        if fresh:
+        if fresh and not force_refresh:
             return _build_payload(
                 resolved_symbol,
                 fresh,
@@ -162,6 +163,93 @@ class MarketHistoryService:
             fallback_used=False,
             fallback_reason=None,
         )
+
+    def refresh_index_histories(
+        self,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, object]:
+        """Refresh every allowlisted index without letting one endpoint stop the batch."""
+        current_time = _utc_now(now)
+        indices: list[dict[str, object]] = []
+        warnings: list[dict[str, str]] = []
+
+        for symbol, name in INDEX_DEFINITIONS.items():
+            try:
+                payload = self.get_index_history(
+                    symbol,
+                    window="all",
+                    now=current_time,
+                    force_refresh=True,
+                )
+            except MarketHistoryUnavailable as exc:
+                message = str(exc)
+                indices.append(
+                    {
+                        "symbol": symbol,
+                        "name": name,
+                        "status": "unavailable",
+                        "source": None,
+                        "as_of": None,
+                        "updated_at": None,
+                        "expires_at": None,
+                        "stale": False,
+                        "fallback_used": False,
+                        "warnings": [
+                            {
+                                "code": "index_refresh_unavailable",
+                                "severity": "warning",
+                                "message": message,
+                            }
+                        ],
+                    }
+                )
+                warnings.append(
+                    {
+                        "code": "index_refresh_unavailable",
+                        "severity": "warning",
+                        "symbol": symbol,
+                        "message": f"{symbol} {name}: {message}",
+                    }
+                )
+                continue
+
+            fallback_used = bool(payload["fallback_used"])
+            indices.append(
+                {
+                    "symbol": symbol,
+                    "name": name,
+                    "status": "fallback" if fallback_used else "success",
+                    "source": payload["source"],
+                    "as_of": payload["as_of"],
+                    "updated_at": payload["updated_at"],
+                    "expires_at": payload["expires_at"],
+                    "stale": payload["stale"],
+                    "fallback_used": fallback_used,
+                    "warnings": payload["warnings"],
+                }
+            )
+            if fallback_used:
+                warnings.append(
+                    {
+                        "code": "index_refresh_fallback",
+                        "severity": "warning",
+                        "symbol": symbol,
+                        "message": f"{symbol} {name}: live refresh failed; cache fallback used.",
+                    }
+                )
+
+        return {
+            "generated_at": current_time.isoformat(),
+            "indices": indices,
+            "success_count": sum(item["status"] == "success" for item in indices),
+            "fallback_count": sum(item["status"] == "fallback" for item in indices),
+            "unavailable_count": sum(item["status"] == "unavailable" for item in indices),
+            "warnings": warnings,
+            "not_production_model": True,
+            "main_score_changed": False,
+            "main_risk_changed": False,
+        }
 
 
 def _index_cache_points(

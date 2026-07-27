@@ -11,6 +11,9 @@ def test_daily_ops_script_keeps_market_intelligence_disabled_by_default():
     assert "portfolio-analysis" in text
     assert "collect-news-evidence" in text
     assert "market intelligence warning" in text
+    assert "market history refresh warning" in text
+    assert "refresh-market-history" in text
+    assert 'if [[ "${PROVIDER}" == "akshare" ]]' in text
     assert "market trend warning" in text
     assert "watchlist detail warning" in text
     assert "portfolio analysis warning" in text

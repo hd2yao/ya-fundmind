@@ -49,6 +49,16 @@ if ! "${PYTHON_BIN}" -m fund_agent.cli collect-news-evidence \
 fi
 
 if [[ "${ENABLE_MARKET_INTELLIGENCE}" == "true" ]]; then
+  if [[ "${PROVIDER}" == "akshare" ]]; then
+    if ! "${PYTHON_BIN}" -m fund_agent.cli refresh-market-history \
+      --provider "${PROVIDER}" \
+      --output-dir "${OUTPUT_DIR}" \
+      --as-of "${AS_OF}"; then
+      echo "market history refresh warning: index refresh failed; daily ops will continue"
+    fi
+  else
+    echo "market history refresh skipped: provider=${PROVIDER}"
+  fi
   if ! "${PYTHON_BIN}" -m fund_agent.cli market-scan \
     --provider "${PROVIDER}" \
     --output-dir "${OUTPUT_DIR}" \
