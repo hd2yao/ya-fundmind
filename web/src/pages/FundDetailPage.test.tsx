@@ -98,7 +98,7 @@ describe("FundDetailPage", () => {
     expect(screen.getByRole("img", { name: "510300 历史净值曲线" })).toBeInTheDocument();
     expect(screen.getByText("3 个净值点")).toBeInTheDocument();
     expect(screen.getByText(/不修改主评分或主风险/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "返回基金终端" })).toHaveAttribute("href", "/funds?q=510300");
+    expect(screen.getByRole("link", { name: "返回上一页" })).toHaveAttribute("href", "/funds?q=510300");
 
     fireEvent.click(screen.getByRole("button", { name: "1 月" }));
     await waitFor(() => {
@@ -110,5 +110,13 @@ describe("FundDetailPage", () => {
   it("keeps invalid direct URLs recoverable", () => {
     renderDetail("/funds/not-a-code");
     expect(screen.getByText("基金代码无效")).toBeInTheDocument();
+  });
+
+  it("preserves a safe portfolio return path", async () => {
+    stubApi();
+    renderDetail("/funds/510300?return_to=%2Fportfolio");
+
+    expect(await screen.findByRole("heading", { name: "沪深300ETF华泰柏瑞" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "返回上一页" })).toHaveAttribute("href", "/portfolio");
   });
 });

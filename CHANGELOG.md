@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v2.5.0 - 2026-07-28
+
+- Add a Portfolio Workbench that links configured holding codes and names to the existing local fund-detail route with a safe return path.
+- Present theme and fund-type exposure side by side, using accessible proportional bars only when reliable valuations are available.
+- Treat unavailable valuations as a data gap: suppress placeholder-derived value, return and weight claims, and surface the configured holding count and observation issues instead.
+- Keep the workspace read-only: no portfolio configuration write, rebalancing action, main score/risk update, recommendation, provider change or output-contract change.
+
 ## v2.4.0 - 2026-07-28
 
 - Promote an indexed fund from a transient drawer to a standalone `/funds/:code` local research route.

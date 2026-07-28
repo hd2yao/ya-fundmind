@@ -1390,8 +1390,8 @@ textarea:focus-visible {
 
 .exposure-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 0.8fr);
+  gap: 14px;
   align-items: center;
   padding: 10px;
   background: var(--color-surface-muted);
@@ -1401,6 +1401,56 @@ textarea:focus-visible {
 
 .exposure-item span {
   color: var(--color-text-muted);
+}
+
+.exposure-item__label,
+.exposure-item__weight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.exposure-item__label strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exposure-item__weight {
+  justify-content: flex-end;
+}
+
+.exposure-item__weight > strong {
+  min-width: 42px;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: right;
+}
+
+.exposure-item__pending {
+  flex: 1;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.exposure-bar {
+  position: relative;
+  flex: 1;
+  height: 7px;
+  overflow: hidden;
+  background: var(--color-border);
+  border-radius: 999px;
+}
+
+.exposure-bar > span {
+  display: block;
+  width: var(--exposure-width);
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: inherit;
 }
 
 .issue-item {
@@ -2935,6 +2985,15 @@ body {
 
   .market-pulse__fact:last-child {
     border-bottom: 0;
+  }
+
+  .exposure-item {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .exposure-item__weight {
+    width: 100%;
   }
 
   .market-index-panel,
