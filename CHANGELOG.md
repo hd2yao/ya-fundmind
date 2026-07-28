@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v2.3.0 - 2026-07-28
+
+- Add an AKShare-only daily index-history prewarm that refreshes the three existing allowlisted primary indices while preserving isolated failure, cache fallback and endpoint trace behavior.
+- Preserve the distinct semantics of market trade date (`as_of`) and local successful refresh time (`updated_at` / `expires_at`) so non-trading days are not displayed as stale data.
+- Rework the local Product Web into the Fund Research Desk: a denser market-first workspace with explicit data freshness, local reload, global search, responsive navigation and evidence-oriented states.
+- Keep the existing fund, portfolio, evidence, review and report routes compatible while applying the shared workspace shell and data-first visual system.
+- Keep provider defaults, main scoring, main risk, watchlist, portfolio, scheduler schedules, trading and broker boundaries unchanged.
+
 ## v2.2.0 - 2026-07-23
 
 - Start the v2.2 Fund Data Terminal delivery track with a cache-first, on-demand historical NAV path for any fund present in the full-market index.
