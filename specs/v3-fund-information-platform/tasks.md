@@ -14,9 +14,9 @@
 - [ ] `T101` 为 V3 optional observation / product `null` 添加失败测试。
   映射：`AC-001`、`AC-004`
 - [ ] `T102` 新增 V3 product mapper 和 legacy `FundRecord` adapter，并锁定 v2.6 score/risk snapshot。
-- [ ] `T103` 为组合 unknown valuation 添加失败测试。
+- [x] `T103` 为组合 unknown valuation 添加失败测试。
   映射：`AC-002`
-- [ ] `T104` 修复组合汇总和页面 unknown 语义。
+- [x] `T104` 修复组合汇总和页面 unknown 语义。
 - [ ] `T105` 新增产品 view model 与 diagnostics 分层。
   映射：`AC-003`、`AC-008`、`AC-009`
 - [ ] `T106` 重组导航和首页。

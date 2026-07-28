@@ -12,7 +12,7 @@ import { useApiResource } from "../hooks/useApiResource";
 
 const currency = new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 2 });
 
-type Exposure = { holding_count?: number; current_value?: number; weight?: number };
+type Exposure = { holding_count?: number; current_value?: number | null; weight?: number | null };
 
 function isFundCode(value?: string | null): value is string {
   return Boolean(value && /^\d{6}$/.test(value));

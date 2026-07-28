@@ -164,3 +164,144 @@ holdings:
     assert "宽基" in markdown
     assert "买入" not in markdown
     assert "卖出" not in markdown
+
+
+def test_portfolio_analysis_keeps_missing_valuations_unknown_instead_of_zero(tmp_path):
+    portfolio = tmp_path / "portfolio.yaml"
+    portfolio.write_text(
+        """
+name: Missing valuation
+cash_available: 0
+holdings:
+  - code: 510300
+    name: 沪深300ETF
+    shares: 100
+    cost_nav: 3.7
+    target_weight: 0.5
+""",
+        encoding="utf-8",
+    )
+    _write_json(tmp_path / "fund_agent_report.json", {"as_of": "2026-06-23", "portfolio": {"positions": []}})
+    _write_json(
+        tmp_path / "market" / "market_intelligence_report.json",
+        {"records": [{"code": "510300", "fund_type": "ETF"}]},
+    )
+
+    exit_code = main(
+        [
+            "portfolio-analysis",
+            "--portfolio-config",
+            str(portfolio),
+            "--output-dir",
+            str(tmp_path),
+            "--as-of",
+            "2026-06-23",
+        ]
+    )
+
+    payload = json.loads((tmp_path / "portfolio" / "portfolio_report.json").read_text(encoding="utf-8"))
+    position = payload["positions"][0]
+
+    assert exit_code == 0
+    assert payload["valuation_status"] == "unavailable"
+    assert payload["total_value"] is None
+    assert payload["total_unrealized_return_pct"] is None
+    assert position["current_value"] is None
+    assert position["weight"] is None
+    assert position["target_drift"] is None
+    assert payload["theme_exposure"]["unknown"]["weight"] is None
+    assert payload["concentration"]["top_holding_weight"] is None
+    assert any(issue["issue_type"] == "missing_position_valuation" for issue in payload["observation_issues"])
+
+
+def test_portfolio_analysis_marks_mixed_valuations_partial_without_partial_total(tmp_path):
+    portfolio = tmp_path / "portfolio.yaml"
+    portfolio.write_text(
+        """
+name: Partial valuation
+cash_available: 0
+holdings:
+  - code: 510300
+    name: 沪深300ETF
+    shares: 100
+    cost_nav: 3.7
+  - code: 000311
+    name: 沪深300ETF联接
+    shares: 100
+    cost_nav: 1.2
+""",
+        encoding="utf-8",
+    )
+    _write_json(
+        tmp_path / "fund_agent_report.json",
+        {
+            "as_of": "2026-06-23",
+            "portfolio": {"positions": [{"code": "510300", "current_value": 405.0}]},
+        },
+    )
+
+    exit_code = main(
+        [
+            "portfolio-analysis",
+            "--portfolio-config",
+            str(portfolio),
+            "--output-dir",
+            str(tmp_path),
+            "--as-of",
+            "2026-06-23",
+        ]
+    )
+
+    payload = json.loads((tmp_path / "portfolio" / "portfolio_report.json").read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert payload["valuation_status"] == "partial"
+    assert payload["valued_position_count"] == 1
+    assert payload["unvalued_position_count"] == 1
+    assert payload["valued_total_value"] == 405.0
+    assert payload["total_value"] is None
+    assert payload["total_unrealized_return_pct"] is None
+    assert all(position["weight"] is None for position in payload["positions"])
+
+
+def test_portfolio_analysis_does_not_derive_weights_from_a_zero_total(tmp_path):
+    portfolio = tmp_path / "portfolio.yaml"
+    portfolio.write_text(
+        """
+name: Explicit zero valuation
+cash_available: 0
+holdings:
+  - code: 510300
+    name: 沪深300ETF
+    shares: 100
+    cost_nav: 3.7
+""",
+        encoding="utf-8",
+    )
+    _write_json(
+        tmp_path / "fund_agent_report.json",
+        {
+            "as_of": "2026-06-23",
+            "portfolio": {"positions": [{"code": "510300", "current_value": 0.0}]},
+        },
+    )
+
+    exit_code = main(
+        [
+            "portfolio-analysis",
+            "--portfolio-config",
+            str(portfolio),
+            "--output-dir",
+            str(tmp_path),
+            "--as-of",
+            "2026-06-23",
+        ]
+    )
+
+    payload = json.loads((tmp_path / "portfolio" / "portfolio_report.json").read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert payload["valuation_status"] == "complete"
+    assert payload["total_value"] == 0.0
+    assert payload["positions"][0]["weight"] is None
+    assert payload["concentration"] == {"top_holding_code": None, "top_holding_weight": None, "hhi": None}
