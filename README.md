@@ -6,9 +6,9 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 ## 当前状态
 
-- 当前稳定版本：`v2.2.0`（Python package version：`2.2.0`）
-- 当前交付模式：`v2.2 Fund Data Terminal` delivery mode
-- 当前发布状态：`v2.2.0` 已完成 M1-M5 发布门禁，提供基金历史、指数/行业走势和本地基金数据终端。
+- 当前稳定版本：`v2.3.0`（Python package version：`2.3.0`）
+- 当前交付模式：`v2.3 Fund Research Desk` delivery mode
+- 当前发布状态：`v2.3.0` 已完成市场新鲜度与研究工作台发布门禁；后续按 `v2.4` 基金详情、`v2.5` 组合工作台、`v2.6` 证据浏览器的有限版本计划推进。
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
@@ -383,6 +383,14 @@ python -m fund_agent.cli product-web --output-dir outputs
 - 375 / 768 / 1440 三视口无页面级横向溢出；provider 长错误会安全换行，不会破坏布局。
 
 实现与验收见 [`docs/plans/2026-07-23-v2.2-m4-data-terminal-ui.md`](docs/plans/2026-07-23-v2.2-m4-data-terminal-ui.md) 和 [`docs/releases/v2.2.0-m4-acceptance.md`](docs/releases/v2.2.0-m4-acceptance.md)。
+
+`v2.3` 在不改变数据 provider 和日常运行边界的情况下，将页面收敛为 Fund Research Desk：
+
+- `daily ops` 在 `PROVIDER=akshare` 时预热三条既有允许指数；失败隔离，不妨碍其余研究产物。
+- 页面同时展示行情交易日 `as_of`、本地同步 `updated_at`、缓存有效期 `expires_at`、来源与 stale/fallback，非交易日不再被误读为未刷新。
+- 顶栏搜索、市场主图区、数据带和各工作区共享一套本地研究台布局；刷新只重新读取本地结构化 API，不触发浏览器中的隐式 provider 请求。
+
+后续 `v2.4`–`v2.6` 的范围、验收与回滚边界见 [`docs/plans/2026-07-28-v2.3-to-v2.6-product-delivery.md`](docs/plans/2026-07-28-v2.3-to-v2.6-product-delivery.md)。
 
 可先离线检查依赖和构建：
 

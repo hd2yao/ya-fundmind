@@ -19,6 +19,8 @@
 | Product Web RC | `v2.1.0rc1` | 本地产品化 Web、全市场 Fund Explorer 和独立 launchd，已发布 |
 | Product Web Final | `v2.1.0` | RC 本地常驻与真实数据浏览验收通过，已发布 |
 | Fund Data Terminal | `v2.2.0` | 基金历史、指数/行业曲线和数据终端界面，M1-M5 已完成 |
+| Fund Research Desk | `v2.3.0` | 市场新鲜度、指数 daily prewarm 与数据优先本地工作台，已发布 |
+| Product Data Browse | `v2.4.0`–`v2.6.0` | 基金独立详情、组合工作台和新闻/公告证据浏览器，按有限版本计划交付 |
 
 ## v2.1：Local Product Web + Fund Explorer
 
