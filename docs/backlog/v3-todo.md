@@ -10,8 +10,8 @@
 ## 当前状态
 
 - 当前稳定版本：`v2.6.0`
-- 当前开发状态：V3 规划完成前，不新增业务代码
-- 当前 Milestone：M1 前
+- 当前开发状态：M1 执行中；行情页产品化已合并，组合未知估值收口待合并。
+- 当前 Milestone：M1 Product Truth & Information Architecture
 - 当前 P0：无
 - 当前 P1：M1 Product Truth & Information Architecture
 
@@ -32,7 +32,7 @@
 ### M1
 
 - [ ] 新增 V3 optional observation/product mapper，并以 legacy adapter 保持 `FundRecord` 和主 score/risk 不变。
-- [ ] 修复组合估值 missing 时的 `current_value=0` 和 `-100%`。
+- [x] 修复组合估值 missing 时的 `current_value=0` 和 `-100%`。
 - [ ] 建立产品 view model 和 diagnostics 分层。
 - [ ] 重组一级导航：市场、基金、自选、组合。
 - [ ] Research、Reports、System 降为二级。

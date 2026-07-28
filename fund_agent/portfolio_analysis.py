@@ -30,17 +30,29 @@ def build_portfolio_analysis_report(
         _build_position_row(holding, report_positions, valuation_rows, market_context)
         for holding in holdings
     ]
-    total_value = _round(sum(float(item["current_value"] or 0) for item in positions))
+    valued_positions = [item for item in positions if item.get("current_value") is not None]
+    unvalued_position_count = len(positions) - len(valued_positions)
+    valuation_status = _valuation_status(len(positions), unvalued_position_count)
+    valuations_complete = valuation_status in {"complete", "not_configured"}
+    valued_total_value = _round(sum(float(item["current_value"]) for item in valued_positions))
+    total_value = valued_total_value if valuations_complete else None
+    weights_available = total_value is not None and total_value > 0
     total_cost = _round(sum(float(item["cost_value"] or 0) for item in positions))
-    if total_value <= 0 and total_cost > 0:
+    if unvalued_position_count:
         warnings.append("portfolio_current_value_unavailable")
     for item in positions:
-        item["weight"] = _round_ratio((item["current_value"] or 0) / total_value) if total_value else 0.0
-        if item.get("target_weight") is not None:
+        item["weight"] = (
+            _round_ratio(float(item["current_value"]) / total_value)
+            if weights_available and item.get("current_value") is not None
+            else None
+        )
+        if item.get("target_weight") is not None and item["weight"] is not None:
             item["target_drift"] = _round_ratio(item["weight"] - item["target_weight"])
+        else:
+            item["target_drift"] = None
     theme_exposure = _build_exposure(positions, key="primary_theme", total_value=total_value)
     fund_type_exposure = _build_exposure(positions, key="fund_type_bucket", total_value=total_value)
-    concentration = _build_concentration(positions)
+    concentration = _build_concentration(positions, weights_available=weights_available)
     observation_issues = _build_observation_issues(positions, theme_exposure, concentration)
     status = "empty" if not holdings else "ok"
     if warnings and status != "empty":
@@ -55,8 +67,12 @@ def build_portfolio_analysis_report(
         "holding_count": len(holdings),
         "cash_available": float(config.cash_available or 0),
         "total_value": total_value,
+        "valued_total_value": valued_total_value,
+        "valuation_status": valuation_status,
+        "valued_position_count": len(valued_positions),
+        "unvalued_position_count": unvalued_position_count,
         "total_cost": total_cost,
-        "total_unrealized_return_pct": _round_ratio((total_value / total_cost - 1) * 100) if total_cost else 0.0,
+        "total_unrealized_return_pct": _round_ratio((total_value / total_cost - 1) * 100) if total_value is not None and total_cost else None,
         "positions": positions,
         "theme_exposure": theme_exposure,
         "fund_type_exposure": fund_type_exposure,
@@ -95,6 +111,7 @@ def render_portfolio_analysis_markdown(report: dict[str, Any]) -> str:
         f"- status: {report.get('status')}",
         f"- holding_count: {report.get('holding_count')}",
         f"- total_value: {report.get('total_value')}",
+        f"- valuation_status: {report.get('valuation_status')}",
         f"- total_cost: {report.get('total_cost')}",
         f"- cash_available: {report.get('cash_available')}",
         "- Portfolio Analysis 是组合观察层，不修改主评分/主风险，不构成投资建议。",
@@ -139,18 +156,18 @@ def _build_position_row(
     current_value = _safe_float(report_row.get("current_value"))
     if current_value is None:
         estimated = _safe_float(valuation.get("estimated_value"))
-        current_value = 0.0 if estimated is None else float(holding.shares) * estimated
+        current_value = None if estimated is None else float(holding.shares) * estimated
     return {
         "code": code,
         "name": holding.name,
         "shares": float(holding.shares),
         "cost_nav": float(holding.cost_nav),
         "cost_value": _round(cost_value),
-        "current_value": _round(current_value),
+        "current_value": _round(current_value) if current_value is not None else None,
         "unrealized_return_pct": _safe_float(report_row.get("unrealized_return_pct")),
-        "weight": _safe_float(report_row.get("weight")) or 0.0,
+        "weight": None,
         "target_weight": holding.target_weight,
-        "target_drift": _safe_float(report_row.get("target_drift")),
+        "target_drift": None,
         "buy_date": holding.buy_date,
         "notes": holding.notes,
         "primary_theme": market.get("primary_theme") or "unknown",
@@ -207,23 +224,50 @@ def _report_valuations(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
-def _build_exposure(positions: list[dict[str, Any]], *, key: str, total_value: float) -> dict[str, dict[str, Any]]:
+def _build_exposure(
+    positions: list[dict[str, Any]],
+    *,
+    key: str,
+    total_value: float | None,
+) -> dict[str, dict[str, Any]]:
     exposure: dict[str, dict[str, Any]] = {}
     for position in positions:
         label = str(position.get(key) or "unknown")
-        row = exposure.setdefault(label, {"holding_count": 0, "current_value": 0.0, "weight": 0.0, "codes": []})
+        row = exposure.setdefault(
+            label,
+            {
+                "holding_count": 0,
+                "current_value": 0.0,
+                "weight": None,
+                "codes": [],
+                "has_unvalued_position": False,
+            },
+        )
         row["holding_count"] += 1
-        row["current_value"] = _round(row["current_value"] + float(position.get("current_value") or 0))
+        current_value = position.get("current_value")
+        if current_value is None:
+            row["has_unvalued_position"] = True
+        else:
+            row["current_value"] = _round(float(row["current_value"]) + float(current_value))
         row["codes"].append(position.get("code"))
     for row in exposure.values():
-        row["weight"] = _round_ratio(row["current_value"] / total_value) if total_value else 0.0
+        has_unvalued_position = bool(row.pop("has_unvalued_position", False))
+        if has_unvalued_position:
+            row["current_value"] = None
+        row["weight"] = (
+            _round_ratio(float(row["current_value"]) / total_value)
+            if total_value and row["current_value"] is not None
+            else None
+        )
     return exposure
 
 
-def _build_concentration(positions: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_concentration(positions: list[dict[str, Any]], *, weights_available: bool) -> dict[str, Any]:
     if not positions:
         return {"top_holding_code": None, "top_holding_weight": 0.0, "hhi": 0.0}
-    sorted_positions = sorted(positions, key=lambda item: float(item.get("weight") or 0), reverse=True)
+    if not weights_available:
+        return {"top_holding_code": None, "top_holding_weight": None, "hhi": None}
+    sorted_positions = sorted(positions, key=lambda item: float(item["weight"]), reverse=True)
     return {
         "top_holding_code": sorted_positions[0].get("code"),
         "top_holding_weight": _round_ratio(float(sorted_positions[0].get("weight") or 0)),
@@ -247,8 +291,8 @@ def _build_observation_issues(
                     "metadata": {"theme": theme, "codes": row.get("codes", [])},
                 }
             )
-    top_weight = float(concentration.get("top_holding_weight") or 0)
-    if top_weight > 0.35:
+    top_weight = _safe_float(concentration.get("top_holding_weight"))
+    if top_weight is not None and top_weight > 0.35:
         issues.append(
             {
                 "issue_type": "single_holding_concentration",
@@ -258,7 +302,7 @@ def _build_observation_issues(
             }
         )
     for position in positions:
-        if float(position.get("current_value") or 0) <= 0:
+        if position.get("current_value") is None:
             issues.append(
                 {
                     "issue_type": "missing_position_valuation",
@@ -286,6 +330,16 @@ def _fund_type_bucket(fund_type: str) -> str:
     if "股票" in text or "混合" in text:
         return "主动权益"
     return "unknown"
+
+
+def _valuation_status(holding_count: int, unvalued_position_count: int) -> str:
+    if not holding_count:
+        return "not_configured"
+    if unvalued_position_count == holding_count:
+        return "unavailable"
+    if unvalued_position_count:
+        return "partial"
+    return "complete"
 
 
 def _load_json(path: Path) -> dict[str, Any]:

@@ -11,25 +11,29 @@ const response = {
     status: "warning",
     portfolio_name: "示例基金 ETF 组合",
     holding_count: 1,
-    total_value: 0,
+    total_value: null,
+    valued_total_value: 0,
+    valuation_status: "unavailable",
+    valued_position_count: 0,
+    unvalued_position_count: 1,
     cash_available: 2000,
-    total_unrealized_return_pct: -100,
+    total_unrealized_return_pct: null,
     positions: [
       {
         code: "510300",
         name: "沪深300ETF",
         shares: 800,
         cost_value: 2960,
-        current_value: 0,
-        weight: 0,
+        current_value: null,
+        weight: null,
         source: "akshare",
         primary_theme: "沪深300",
-        unrealized_return_pct: -100,
+        unrealized_return_pct: null,
         valuation_confidence: null
       }
     ],
-    theme_exposure: { "沪深300": { holding_count: 1, current_value: 0, weight: 0 } },
-    fund_type_exposure: { ETF: { holding_count: 1, current_value: 0, weight: 0 } },
+    theme_exposure: { "沪深300": { holding_count: 1, current_value: null, weight: null } },
+    fund_type_exposure: { ETF: { holding_count: 1, current_value: null, weight: null } },
     observation_issues: [
       { issue_type: "missing_position_valuation", severity: "warning", message: "510300 has no usable current valuation." }
     ],

@@ -359,11 +359,15 @@ export type PortfolioData = {
   portfolio_name?: string | null;
   holding_count?: number;
   total_value?: number | null;
+  valued_total_value?: number | null;
+  valuation_status?: "complete" | "partial" | "unavailable" | "not_configured" | string | null;
+  valued_position_count?: number;
+  unvalued_position_count?: number;
   cash_available?: number | null;
   total_unrealized_return_pct?: number | null;
   positions?: PortfolioPosition[];
-  theme_exposure?: Record<string, { holding_count?: number; current_value?: number; weight?: number }>;
-  fund_type_exposure?: Record<string, { holding_count?: number; current_value?: number; weight?: number }>;
+  theme_exposure?: Record<string, { holding_count?: number; current_value?: number | null; weight?: number | null }>;
+  fund_type_exposure?: Record<string, { holding_count?: number; current_value?: number | null; weight?: number | null }>;
   observation_issues?: Array<{ issue_type?: string; severity?: string; message?: string; metadata?: Record<string, unknown> }>;
   warnings?: string[];
 };
