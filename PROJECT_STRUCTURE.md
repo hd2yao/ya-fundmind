@@ -1,6 +1,6 @@
 # Project Structure
 
-This document is the quick map for YA FundMind OS. V1 remains the stable runtime baseline; V2 Research Copilot completed the post-RC observation gate and was released as `v2.0.0`.
+This document is the quick map for YA FundMind OS. `v2.6.0` is the stable runtime and product baseline. V3 Fund Information Platform is planned but has not changed the runtime package yet.
 
 ## Top-Level Directories
 
@@ -13,8 +13,8 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `data/cache/` | Local SQLite cache created at runtime. | No |
 | `scripts/` | Daily/weekly ops runners and launchd install/status/uninstall helpers. | Yes |
 | `ops/` | Scheduler templates for launchd and cron. | Yes |
-| `docs/` | Active V1/V2 architecture, roadmap, contracts, plans, ops and archived history. | Yes |
-| `specs/` | V2 acceptance criteria, task mapping and execution contract. | Yes |
+| `docs/` | Active V1/V2/V3 architecture, design, roadmap, contracts, plans, ops and archived history. | Yes |
+| `specs/` | V2/V3 acceptance criteria, task mapping and execution contracts. | Yes |
 | `skills/` | Repository-local, manually invoked project Skills; not globally installed. | Yes |
 | `outputs/` | Generated reports, dashboards, logs, snapshots, traces, and run bundles. | No |
 | `.venv/` | Local Python environment. | No |
@@ -73,13 +73,18 @@ This document is the quick map for YA FundMind OS. V1 remains the stable runtime
 | `docs/README.md` | Documentation index and retention policy. |
 | `docs/architecture/v1-system-architecture.md` | V1 architecture and boundaries. |
 | `docs/architecture/v2-system-architecture.md` | V2 target architecture and read-only boundaries. |
+| `docs/architecture/v3-fund-information-platform.md` | V3 fund information platform target architecture and data boundaries. |
+| `docs/design/v3-fund-information-platform-design-lock.md` | V3 product information hierarchy, layout, visual and responsive constraints. |
 | `docs/roadmap/v1-delivery-roadmap.md` | V1 milestone roadmap and completion status. |
 | `docs/roadmap/v2-delivery-roadmap.md` | V2 M1-M6 goals, gates, versions and release rules. |
+| `docs/roadmap/v3-delivery-roadmap.md` | V3 M1-M6 goals, pre-release versions and release gates. |
 | `docs/backlog/v1-todo.md` | V1 maintenance backlog rules. |
 | `docs/backlog/v2-todo.md` | V2 P0/P1/P2 execution backlog. |
+| `docs/backlog/v3-todo.md` | V3 P0/P1/P2 execution backlog. |
 | `docs/backlog/v2-ideas.md` | Ideas not selected for the active V2 mainline. |
 | `docs/plans/2026-07-13-v2-research-copilot-*.md` | V2 design and implementation master plan. |
 | `specs/v2-research-copilot/` | V2 spec, plan, tasks and execution contract. |
+| `specs/v3-fund-information-platform/` | V3 spec, technical plan, tasks and execution contract. |
 | `docs/contracts/*.md` | Machine-readable output contracts and versioning rules. |
 | `docs/ops/*.md` | Scheduler and readiness semantics. |
 | `docs/migrations/v1-to-v2.md` | Non-destructive V1-to-V2 upgrade and rollback guide. |

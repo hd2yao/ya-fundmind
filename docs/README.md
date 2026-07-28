@@ -1,20 +1,23 @@
 # Documentation Index
 
-当前文档同时维护稳定运行的 V1 基线、`v2.0.0` Research Copilot、`v2.1.0` Local Product Web、`v2.2.0` Fund Data Terminal、`v2.3.0` Fund Research Desk 和 `v2.4.0` Fund Data Terminal & Detail。各版本均使用有限 Milestone 和明确发布门，不再使用无限 Phase 追加方式。
+当前文档同时维护稳定运行的 V1/V2 基线和正在规划的 V3 Fund Information Platform。稳定产品版本为 `v2.6.0`；V3 规划已完成对抗式评审，规划 PR 合并后生效，当前处于 M1 开始前。各大版本使用有限 Milestone 和明确发布门，不使用无限 Phase 追加方式。
 
 ## Active Delivery Docs
 
 | Directory | Use |
 | --- | --- |
-| `architecture/` | V1 稳定架构和 V2 目标架构。 |
-| `roadmap/` | V1 完成记录和 V2 M1-M6 交付门槛。 |
-| `backlog/` | V1 维护项、V2 当前 Todo 和剩余 ideas。 |
+| `architecture/` | V1/V2 稳定架构和 V3 目标架构。 |
+| `design/` | 当前产品 UI Design Lock。 |
+| `roadmap/` | V1/V2 完成记录和 V3 M1-M6 交付门槛。 |
+| `backlog/` | 稳定版本维护项和 V3 当前 Todo。 |
+| `reviews/` | 当前版本的证据化产品审计。 |
+| `research/` | 当前有效的开源项目与数据源研究。 |
 | `plans/` | 当前大版本设计和实现主计划；完成后可归档。 |
 | `contracts/` | 机器可读输出契约和 schema versioning。 |
 | `ops/` | Scheduler automation 和 readiness semantics。 |
 | `migrations/` | V1 到 V2 的非破坏性升级与回滚说明。 |
 | `releases/` | 版本发布报告和验证证据。 |
-| `../specs/` | V2 验收标准、任务映射和执行契约。 |
+| `../specs/` | V2/V3 验收标准、任务映射和执行契约。 |
 
 ## Archive
 
@@ -53,6 +56,17 @@ These files are runtime or OS noise and should not be committed:
 ## Rule For Future Docs
 
 新 active docs 应回答当前架构、契约、运行或交付问题。已完成且只用于追溯的历史实现计划和研究记录应移入 `docs/archive/`。
+
+## V3 Delivery Entry Points
+
+- `reviews/2026-07-28-v2.6-product-reassessment.md`：v2.6 能力、页面和数据真实性审计。
+- `research/2026-07-28-fund-platform-open-source-refresh.md`：AKShare 和参考项目模块映射。
+- `architecture/v3-fund-information-platform.md`：V3 产品与技术架构。
+- `design/v3-fund-information-platform-design-lock.md`：V3 任务、信息、布局和视觉约束。
+- `roadmap/v3-delivery-roadmap.md`：V3 M1-M6、版本和发布门。
+- `backlog/v3-todo.md`：V3 P0/P1/P2。
+- `plans/2026-07-28-v3-fund-information-platform.md`：TDD 实现主计划。
+- `../specs/v3-fund-information-platform/`：Spec、技术方案、任务和执行契约。
 
 ## V2 Release Entry Points
 
