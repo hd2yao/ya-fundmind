@@ -198,7 +198,7 @@ describe("MarketPage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows market coverage, theme trend and observation details", async () => {
+  it("shows a product-facing market surface without engineering diagnostics", async () => {
     const fetchMock = stubMarketApi();
 
     render(<MarketPage />);
@@ -208,19 +208,19 @@ describe("MarketPage", () => {
     expect(screen.getByRole("link", { name: "主要指数" })).toHaveAttribute("href", "#market-index");
     expect(screen.getByRole("link", { name: "行业板块" })).toHaveAttribute("href", "#market-sector-title");
     expect(screen.getByRole("link", { name: "主题窗口" })).toHaveAttribute("href", "#top-theme-title");
-    expect(screen.getByRole("link", { name: "趋势验证" })).toHaveAttribute("href", "#trend-title");
     expect(screen.getByText("3,529")).toBeInTheDocument();
     expect(screen.getAllByText("医药").length).toBeGreaterThan(0);
     expect(screen.getByText("QDII")).toBeInTheDocument();
     expect(screen.getByText("低波")).toBeInTheDocument();
     expect(screen.getByText("全市场观察，不是自选或持仓建议")).toBeInTheDocument();
     expect(screen.getByText("交易数据日期")).toBeInTheDocument();
-    expect(screen.getByText("本次同步")).toBeInTheDocument();
-    expect(screen.getByText("缓存有效至")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "查看医药详情" }));
-    expect(screen.getByRole("dialog", { name: "医药观察详情" })).toBeInTheDocument();
-    expect(screen.getByText("样本 527")).toBeInTheDocument();
+    expect(screen.getByText("更新于")).toBeInTheDocument();
+    expect(screen.getByText("数据更新正常")).toBeInTheDocument();
+    expect(screen.queryByText("质量趋势")).not.toBeInTheDocument();
+    expect(screen.queryByText("akshare")).not.toBeInTheDocument();
+    expect(screen.queryByText("cache:akshare")).not.toBeInTheDocument();
+    expect(screen.queryByText("normal")).not.toBeInTheDocument();
+    expect(screen.queryByText("warning")).not.toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", { name: "搜索医药同名行业板块" })
@@ -238,13 +238,13 @@ describe("MarketPage", () => {
     });
   });
 
-  it("re-reads local market resources without treating the trading date as the sync time", async () => {
+  it("refreshes market resources without exposing local implementation details", async () => {
     const fetchMock = stubMarketApi();
 
     render(<MarketPage />);
 
     await screen.findByRole("img", { name: "沪深300 指数日线图" });
-    fireEvent.click(screen.getByRole("button", { name: "重新读取本地数据" }));
+    fireEvent.click(screen.getByRole("button", { name: "刷新行情" }));
 
     await waitFor(() => {
       const marketCalls = fetchMock.mock.calls
@@ -252,8 +252,8 @@ describe("MarketPage", () => {
         .filter((url) => url === "/api/market");
       expect(marketCalls).toHaveLength(2);
     });
-    expect(screen.getByText("交易日")).toBeInTheDocument();
-    expect(screen.getByText("同步于")).toBeInTheDocument();
+    expect(screen.getByText("交易数据日期")).toBeInTheDocument();
+    expect(screen.getByText("更新于")).toBeInTheDocument();
   });
 
   it("shows real index history and switches symbol and range", async () => {
@@ -263,7 +263,7 @@ describe("MarketPage", () => {
 
     expect(await screen.findByRole("img", { name: "沪深300 指数日线图" })).toBeInTheDocument();
     expect(screen.getAllByText("4,652.80").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/cache:akshare/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/cache:akshare/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "创业板指" }));
     fireEvent.click(screen.getByRole("button", { name: "1 月" }));
@@ -278,16 +278,14 @@ describe("MarketPage", () => {
     });
   });
 
-  it("searches industry sectors and opens a sector history curve", async () => {
+  it("selects an industry row directly and opens its history curve", async () => {
     const fetchMock = stubMarketApi();
 
     render(<MarketPage />);
 
     expect(await screen.findByText("行业板块行情")).toBeInTheDocument();
     expect(screen.getByText("BK1036")).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: "查看半导体走势" })
-    );
+    fireEvent.click(screen.getByRole("row", { name: /半导体.*BK1036/ }));
 
     expect(
       await screen.findByRole("img", { name: "半导体 行业板块日线图" })
@@ -311,6 +309,20 @@ describe("MarketPage", () => {
     });
   });
 
+  it("supports keyboard selection for an industry history", async () => {
+    stubMarketApi();
+
+    render(<MarketPage />);
+
+    const row = await screen.findByRole("row", { name: /半导体.*BK1036/ });
+    row.focus();
+    fireEvent.keyDown(row, { key: "Enter" });
+
+    expect(
+      await screen.findByRole("img", { name: "半导体 行业板块日线图" })
+    ).toBeInTheDocument();
+  });
+
   it("does not invent themes when market data is missing", async () => {
     stubMarketApi(
       {
@@ -327,7 +339,7 @@ describe("MarketPage", () => {
     expect(screen.queryByText("热门板块")).not.toBeInTheDocument();
   });
 
-  it("renders degraded market quality as critical", async () => {
+  it("translates degraded market quality into a user-facing attention prompt", async () => {
     stubMarketApi({
       ...response,
       data: {
@@ -344,10 +356,10 @@ describe("MarketPage", () => {
 
     render(<MarketPage />);
 
-    expect(await screen.findByText("degraded")).toHaveClass("status-badge--critical");
+    expect(await screen.findByText("数据需核对")).toHaveClass("status-badge--critical");
   });
 
-  it("shows stale sector catalog fallback without hiding market data", async () => {
+  it("explains stale sector data without leaking cache terminology", async () => {
     stubMarketApi(response, {
       ...sectorCatalog,
       stale: true,
@@ -366,7 +378,11 @@ describe("MarketPage", () => {
 
     expect(await screen.findByText("行业板块行情")).toBeInTheDocument();
     expect(screen.getByText("BK1036")).toBeInTheDocument();
-    expect(screen.getAllByText("cache fallback").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("stale").length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(document.querySelector(".market-data-note"))
+        .toHaveTextContent("当前数据不是最新，请以更新时间为准。");
+    });
+    expect(screen.queryByText("cache fallback")).not.toBeInTheDocument();
+    expect(screen.queryByText("stale")).not.toBeInTheDocument();
   });
 });

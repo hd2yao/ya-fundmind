@@ -18,8 +18,9 @@
   --color-amber-soft: #fff1d9;
   --color-red: #bd3a34;
   --color-red-soft: #ffe9e6;
-  --color-positive: #087f73;
-  --color-negative: #bd3a34;
+  --color-positive: #c43d3b;
+  --color-negative: #168b63;
+  --color-neutral-number: #53655c;
   --color-sidebar: #102b28;
   --color-sidebar-raised: #163a35;
   --shadow-low: 0 1px 2px rgb(13 43 35 / 6%);

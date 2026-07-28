@@ -1,4 +1,4 @@
-import { CalendarDays, Clock3, Database, ShieldAlert } from "lucide-react";
+import { CalendarDays, Clock3, ShieldAlert } from "lucide-react";
 
 import { StatusBadge, type StatusTone } from "./StatusBadge";
 
@@ -15,23 +15,40 @@ function formatTimestamp(value?: string | null) {
   }).format(parsed);
 }
 
-function freshnessTone(stale: boolean, fallbackUsed: boolean, grade?: string | null): StatusTone {
-  if (stale || fallbackUsed || grade === "warning") return "warning";
-  if (grade === "degraded" || grade === "critical") return "critical";
-  return "success";
-}
-
-export function DataFreshnessStrip({
-  label = "数据新鲜度",
-  asOf,
-  updatedAt,
-  expiresAt,
-  source,
+export function getDataCondition({
   stale = false,
   fallbackUsed = false,
-  dataQualityGrade,
-  compact = false
+  dataQualityGrade
 }: {
+  stale?: boolean;
+  fallbackUsed?: boolean;
+  dataQualityGrade?: string | null;
+}): { label: string; tone: StatusTone; message?: string } {
+  if (stale) {
+    return {
+      label: "数据需核对",
+      tone: "warning",
+      message: "当前数据不是最新，请以更新时间为准。"
+    };
+  }
+  if (fallbackUsed) {
+    return {
+      label: "数据需核对",
+      tone: "warning",
+      message: "暂未取得新数据，当前展示最近一次可用记录。"
+    };
+  }
+  if (dataQualityGrade === "degraded" || dataQualityGrade === "critical") {
+    return {
+      label: "数据需核对",
+      tone: "critical",
+      message: "部分数据暂不完整，请结合更新时间和详情判断。"
+    };
+  }
+  return { label: "数据更新正常", tone: "success" };
+}
+
+type DataFreshnessStripProps = {
   label?: string;
   asOf?: string | null;
   updatedAt?: string | null;
@@ -41,41 +58,50 @@ export function DataFreshnessStrip({
   fallbackUsed?: boolean;
   dataQualityGrade?: string | null;
   compact?: boolean;
-}) {
-  const status = stale ? "缓存已过期" : fallbackUsed ? "缓存回退" : "本地数据可用";
+  showDiagnostics?: boolean;
+};
+
+export function DataFreshnessStrip({
+  label = "数据新鲜度",
+  asOf,
+  updatedAt,
+  expiresAt,
+  stale = false,
+  fallbackUsed = false,
+  dataQualityGrade,
+  compact = false,
+  showDiagnostics = false
+}: DataFreshnessStripProps) {
+  const condition = getDataCondition({ stale, fallbackUsed, dataQualityGrade });
   return (
     <section className={`data-freshness${compact ? " data-freshness--compact" : ""}`} aria-label={label}>
       <div className="data-freshness__heading">
         <div>
           <span>{label}</span>
-          <strong>{status}</strong>
+          <strong>{condition.label}</strong>
         </div>
-        <StatusBadge tone={freshnessTone(stale, fallbackUsed, dataQualityGrade)}>
-          {stale || fallbackUsed ? "需要留意" : dataQualityGrade || "normal"}
-        </StatusBadge>
+        <StatusBadge tone={condition.tone}>{condition.label}</StatusBadge>
       </div>
       <dl className="data-freshness__facts">
         <div>
-          <dt><CalendarDays size={14} aria-hidden />交易日</dt>
+          <dt><CalendarDays size={14} aria-hidden />数据日期</dt>
           <dd>{asOf || "--"}</dd>
         </div>
         <div>
-          <dt><Clock3 size={14} aria-hidden />同步于</dt>
+          <dt><Clock3 size={14} aria-hidden />更新于</dt>
           <dd>{formatTimestamp(updatedAt)}</dd>
         </div>
-        <div>
-          <dt><Clock3 size={14} aria-hidden />缓存有效至</dt>
-          <dd>{formatTimestamp(expiresAt)}</dd>
-        </div>
-        <div>
-          <dt><Database size={14} aria-hidden />数据源</dt>
-          <dd>{source || "--"}</dd>
-        </div>
+        {showDiagnostics ? (
+          <div>
+            <dt><Clock3 size={14} aria-hidden />诊断有效期</dt>
+            <dd>{formatTimestamp(expiresAt)}</dd>
+          </div>
+        ) : null}
       </dl>
-      {stale || fallbackUsed ? (
+      {condition.message ? (
         <p className="data-freshness__warning">
           <ShieldAlert size={15} aria-hidden />
-          {stale ? "当前展示的是过期缓存。" : "本次未取得 live 数据，展示缓存回退。"}
+          {condition.message}
         </p>
       ) : null}
     </section>
