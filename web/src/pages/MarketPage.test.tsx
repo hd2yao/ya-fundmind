@@ -101,7 +101,8 @@ const sectorHistory = {
 
 function stubMarketApi(
   marketResponse: unknown = response,
-  sectorResponse: unknown = sectorCatalog
+  sectorResponse: unknown = sectorCatalog,
+  sectorHistoryResponse: unknown = sectorHistory
 ) {
   const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
     const url = String(input);
@@ -130,7 +131,7 @@ function stubMarketApi(
       const range = new URL(url, "http://localhost").searchParams.get("range") || "6m";
       return Promise.resolve({
         ok: true,
-        json: async () => ({ ...sectorHistory, range })
+        json: async () => ({ ...(sectorHistoryResponse as object), range })
       });
     }
     if (url.startsWith("/api/product/market/sectors")) {
@@ -323,5 +324,37 @@ describe("MarketPage", () => {
     });
     expect(screen.queryByText("cache fallback")).not.toBeInTheDocument();
     expect(screen.queryByText("stale")).not.toBeInTheDocument();
+  });
+
+  it("keeps the selected sector visible when its continuous history is unavailable", async () => {
+    stubMarketApi(
+      response,
+      sectorCatalog,
+      {
+        availability: "missing",
+        symbol: "BK1036",
+        name: "半导体",
+        range: "6m",
+        point_count: 0,
+        required_points: null,
+        points: [],
+        data_date: null,
+        data_status: {
+          state: "unavailable",
+          label: "历史日线暂未取得",
+          description: "当前板块暂未取得可连续展示的历史行情。可查看当日行情，或选择其他板块。",
+          as_of: null
+        }
+      }
+    );
+
+    render(<MarketPage />);
+
+    expect((await screen.findAllByText("半导体")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("历史日线暂未取得")).toBeInTheDocument();
+    expect(screen.getByText("当前板块暂未取得可连续展示的历史行情。可查看当日行情，或选择其他板块。")).toBeInTheDocument();
+    expect(screen.queryByText(/AKShare/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/cache/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/endpoint/i)).not.toBeInTheDocument();
   });
 });
