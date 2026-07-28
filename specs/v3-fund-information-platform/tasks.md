@@ -11,19 +11,19 @@
 
 ## Batch 1：M1 Product Truth & IA
 
-- [ ] `T101` 为 V3 optional observation / product `null` 添加失败测试。
+- [x] `T101` 为 V3 optional observation / product `null` 添加失败测试。
   映射：`AC-001`、`AC-004`
-- [ ] `T102` 新增 V3 product mapper 和 legacy `FundRecord` adapter，并锁定 v2.6 score/risk snapshot。
+- [x] `T102` 新增 V3 product mapper 和 legacy `FundRecord` adapter，并锁定 v2.6 score/risk snapshot。
 - [x] `T103` 为组合 unknown valuation 添加失败测试。
   映射：`AC-002`
 - [x] `T104` 修复组合汇总和页面 unknown 语义。
-- [ ] `T105` 新增产品 view model 与 diagnostics 分层。
+- [x] `T105` 新增产品 view model 与 diagnostics 分层。
   映射：`AC-003`、`AC-008`、`AC-009`
 - [ ] `T106` 重组导航和首页。
   映射：`AC-005` 至 `AC-007`
 - [ ] `T107` 新增只读自选页。
   映射：`AC-023`
-- [ ] `T108` 隐藏正式 fixture 新闻入口。
+- [x] `T108` 隐藏正式 fixture 新闻入口。
   映射：`AC-026`
 - [ ] `T109` 完成 Web 三视口、a11y、全量回归、PR 和 `alpha.1`。
 - [ ] `T110` 增加 fixture 新闻、Research/Evidence、daily/weekly 和 `main_score_changed=false/main_risk_changed=false` 回归。

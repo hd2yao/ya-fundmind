@@ -11,22 +11,6 @@ import { PortfolioPage } from "./pages/PortfolioPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { ReviewPage } from "./pages/ReviewPage";
 
-function PageIntro({ title, description }: { title: string; description: string }) {
-  return (
-    <section className="page-section" aria-labelledby="page-title">
-      <div className="page-heading">
-        <p className="eyebrow">Research workspace</p>
-        <h1 id="page-title">{title}</h1>
-        <p>{description}</p>
-      </div>
-    </section>
-  );
-}
-
-function Placeholder({ title, description }: { title: string; description: string }) {
-  return <PageIntro title={title} description={description} />;
-}
-
 function NotFound() {
   return (
     <section className="page-section not-found" aria-labelledby="not-found-title">

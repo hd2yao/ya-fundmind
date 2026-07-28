@@ -22,7 +22,6 @@ describe("AppShell", () => {
       "行情总览",
       "基金终端",
       "组合",
-      "研究证据",
       "研究助手",
       "人工审核",
       "系统状态",
@@ -37,6 +36,7 @@ describe("AppShell", () => {
     expect(screen.getByRole("link", { name: "行情总览" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("FundMind OS · 行情总览")).toBeInTheDocument();
     expect(screen.getByText("基金与市场信息平台")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "研究证据" })).not.toBeInTheDocument();
     expect(screen.queryByText("本地研究工作区")).not.toBeInTheDocument();
     expect(screen.queryByText(/SQLite/)).not.toBeInTheDocument();
   });
@@ -55,6 +55,17 @@ describe("AppShell", () => {
     fireEvent.submit(screen.getByRole("searchbox", { name: "全局搜索基金" }).closest("form")!);
 
     expect(screen.getByLabelText("当前测试地址")).toHaveTextContent("/funds?q=510300");
+  });
+
+  it("keeps a directly addressed secondary page titled correctly without restoring it to navigation", () => {
+    render(
+      <MemoryRouter initialEntries={["/news"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("FundMind OS · 研究证据")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "研究证据" })).not.toBeInTheDocument();
   });
 
   it("reflects a fund terminal URL query in the global search", () => {

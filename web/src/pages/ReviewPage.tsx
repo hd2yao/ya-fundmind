@@ -9,7 +9,23 @@ import { StatePanel } from "../components/StatePanel";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 
-const REVIEW_STATUSES = ["open", "needs_more_data", "approved_for_more_experiment", "rejected", "approved_for_main_candidate"];
+const REVIEW_STATUSES = [
+  { value: "open", label: "待审核" },
+  { value: "needs_more_data", label: "需要更多资料" },
+  { value: "approved_for_more_experiment", label: "可继续观察" },
+  { value: "rejected", label: "不纳入观察" },
+  { value: "approved_for_main_candidate", label: "可进入后续评估" }
+];
+
+function reviewStatusLabel(status?: string | null): string {
+  return REVIEW_STATUSES.find((item) => item.value === status)?.label || "状态待确认";
+}
+
+function reviewReasonLabel(reason?: string | null): string {
+  if (reason === "insufficient_history") return "历史样本仍在积累";
+  if (reason === "manual_review_required") return "需要人工核对";
+  return reason ? "存在一项待人工核对的观察条件" : "未提供复核原因";
+}
 
 export function ReviewPage() {
   const { loading, resource, error } = useApiResource<ReviewsData>("/api/reviews");
@@ -17,8 +33,8 @@ export function ReviewPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  if (loading) return <StatePanel kind="loading" title="正在读取人工审核队列" description="加载候选项和已保存的本地 review state。" />;
-  if (error) return <StatePanel kind="error" title="人工审核读取失败" description={error} />;
+  if (loading) return <StatePanel kind="loading" title="正在读取人工审核队列" description="加载候选项和已保存的审核记录。" />;
+  if (error) return <StatePanel kind="error" title="人工审核暂不可读取" description="请稍后刷新页面。" />;
   if (!resource || resource.availability === "missing") {
     return <StatePanel kind="empty" title="当前没有待审核事项" description="生成 review queue 后可在这里记录人工判断。" />;
   }
@@ -40,9 +56,9 @@ export function ReviewPage() {
         note: draft.note,
         signal_id: item.signal_id
       });
-      setMessage(`${reviewId} 已更新为 ${result.data.status}`);
+      setMessage(`审核记录已更新为“${reviewStatusLabel(result.data.status)}”。`);
     } catch (saveError) {
-      setMessage(saveError instanceof Error ? saveError.message : "Review update failed.");
+      setMessage("审核记录暂未保存，请稍后再试。");
     } finally {
       setSaving(null);
     }
@@ -50,7 +66,7 @@ export function ReviewPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="Human review gate" title="人工审核" description="复核候选信号、证据质量和数据缺口，所有决策保留本地记录。" actions={<StatusBadge tone="info">Manual gate</StatusBadge>} />
+      <PageHeader eyebrow="人工复核" title="人工审核" description="复核候选观察、资料状态和待补充事项，所有判断均保留审核记录。" actions={<StatusBadge tone="info">人工复核</StatusBadge>} />
       <section className="metric-grid" aria-label="审核指标">
         <Metric label="队列项目" value={queue.length} detail="当前候选事项" />
         <Metric label="审核记录" value={data.summary?.total_review_items || 0} detail="已保存状态" />
@@ -59,19 +75,19 @@ export function ReviewPage() {
       </section>
 
       <section className="content-band" aria-labelledby="review-queue-title">
-        <div className="section-heading"><div><p className="eyebrow">Review queue</p><h2 id="review-queue-title">待审核事项</h2></div><ClipboardCheck size={19} aria-hidden /></div>
+        <div className="section-heading"><div><p className="eyebrow">待处理事项</p><h2 id="review-queue-title">待审核事项</h2></div><ClipboardCheck size={19} aria-hidden /></div>
         <div className="review-list">
           {queue.map((item) => {
-            const reviewId = item.review_id || "unknown";
+            const reviewId = item.review_id || "review-item";
             const existing = stateById.get(reviewId);
             const draft = drafts[reviewId] || { status: existing?.status || item.status || "open", note: existing?.note || "" };
             return (
               <article className="review-item" key={reviewId}>
-                <div className="review-item__summary"><div><span>{reviewId}</span><h3>{item.signal_id || "未关联 signal"}</h3><p>{item.reason || item.excluded_reason || "未提供复核原因"}</p></div><StatusBadge tone={draft.status === "rejected" ? "critical" : draft.status === "open" ? "warning" : "info"}>{draft.status}</StatusBadge></div>
+                <div className="review-item__summary"><div><span>研究候选项</span><h3>待人工复核</h3><p>{reviewReasonLabel(item.reason || item.excluded_reason)}</p></div><StatusBadge tone={draft.status === "rejected" ? "critical" : draft.status === "open" ? "warning" : "info"}>{reviewStatusLabel(draft.status)}</StatusBadge></div>
                 <div className="review-controls">
-                  <label><span>审核状态</span><select aria-label={`审核状态 ${reviewId}`} value={draft.status} onChange={(event) => setDrafts((current) => ({ ...current, [reviewId]: { ...draft, status: event.target.value } }))}>{REVIEW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
-                  <label className="review-note"><span>审核备注</span><textarea aria-label={`审核备注 ${reviewId}`} rows={2} maxLength={2000} value={draft.note} onChange={(event) => setDrafts((current) => ({ ...current, [reviewId]: { ...draft, note: event.target.value } }))} /></label>
-                  <button className="secondary-button" type="button" aria-label={`保存 ${reviewId}`} disabled={saving === reviewId} onClick={() => save(item)}><Save size={15} aria-hidden />{saving === reviewId ? "保存中" : "保存"}</button>
+                  <label><span>审核状态</span><select aria-label="审核状态" value={draft.status} onChange={(event) => setDrafts((current) => ({ ...current, [reviewId]: { ...draft, status: event.target.value } }))}>{REVIEW_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></label>
+                  <label className="review-note"><span>审核备注</span><textarea aria-label="审核备注" rows={2} maxLength={2000} value={draft.note} onChange={(event) => setDrafts((current) => ({ ...current, [reviewId]: { ...draft, note: event.target.value } }))} /></label>
+                  <button className="secondary-button" type="button" aria-label="保存审核记录" disabled={saving === reviewId} onClick={() => save(item)}><Save size={15} aria-hidden />{saving === reviewId ? "保存中" : "保存"}</button>
                 </div>
               </article>
             );
@@ -80,7 +96,7 @@ export function ReviewPage() {
         {message ? <p className="form-message" role="status">{message}</p> : null}
       </section>
 
-      <div className="boundary-band"><strong>审核只更新本地 review state</strong><p>不会覆盖主评分、主 risk_issues 或已生成研究结论，也不会触发交易。</p></div>
+      <div className="boundary-band"><strong>审核只记录人工判断</strong><p>不会覆盖主评分、主风险或已生成研究结论，也不会触发交易。</p></div>
     </div>
   );
 }

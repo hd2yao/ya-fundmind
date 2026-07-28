@@ -25,12 +25,13 @@ describe("ReviewPage", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<ReviewPage />);
 
-    await waitFor(() => expect(screen.getByText("insufficient_history")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("审核状态 r1"), { target: { value: "needs_more_data" } });
-    fireEvent.change(screen.getByLabelText("审核备注 r1"), { target: { value: "等待更多有效运行日" } });
-    fireEvent.click(screen.getByRole("button", { name: "保存 r1" }));
+    await waitFor(() => expect(screen.getByText("历史样本仍在积累")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("审核状态"), { target: { value: "needs_more_data" } });
+    fireEvent.change(screen.getByLabelText("审核备注"), { target: { value: "等待更多有效运行日" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存审核记录" }));
 
-    await waitFor(() => expect(screen.getByText("r1 已更新为 needs_more_data")).toBeInTheDocument());
-    expect(screen.getByText(/只更新本地 review state/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("审核记录已更新为“需要更多资料”。")).toBeInTheDocument());
+    expect(screen.getByText(/审核只记录人工判断/)).toBeInTheDocument();
+    expect(screen.queryByText("insufficient_history")).not.toBeInTheDocument();
   });
 });

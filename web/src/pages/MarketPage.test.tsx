@@ -6,81 +6,55 @@ const response = {
   availability: "available",
   generated_at: "2026-07-16T10:00:00Z",
   data: {
-    intelligence: {
-      as_of: "2026-07-15",
-      total_funds: 21530,
-      total_etfs: 3529,
-      source: "akshare",
-      data_quality_summary: { grade: "warning", stale_record_count: 0 },
-      top_themes: [
+    as_of: "2026-07-15",
+    coverage: { fund_count: 21530, etf_count: 3529 },
+    data_status: { state: "attention", label: "请留意数据日期", description: "当前展示截至 2026-07-15 的数据，最新更新仍待确认。", as_of: "2026-07-15" },
+    themes: [
         {
-          theme: "医药",
-          avg_return_1w: 7.43,
-          avg_return_1m: 16.72,
-          avg_return_3m: 0.17,
+          name: "医药",
+          returns: { "1w": 7.43, "1m": 16.72, "3m": 0.17 },
           positive_ratio_1m: 0.852,
           sample_size: 527,
-          data_quality_grade: "normal",
-          warnings: []
+          data_status: { state: "updated", label: "数据已更新", description: "当前展示截至 2026-07-15 的结构化数据。", as_of: "2026-07-15" }
         }
-      ],
-      warnings: ["insufficient_sample_themes:1"]
-    },
+    ],
     trend: {
-      latest_as_of: "2026-07-15",
-      snapshots_processed: 16,
-      enough_market_history: true,
-      persistent_hot_themes: [{ theme: "医药", hot_ratio: 0.94, latest_rank: 1, rank_change: 2 }],
-      new_hot_themes: [{ theme: "低波", latest_rank: 14 }],
-      rising_themes: [{ theme: "QDII", rank_change: 11 }],
-      data_quality_trend: [
-        { as_of: "2026-07-14", warning_count: 1, insufficient_sample_theme_count: 1 },
-        { as_of: "2026-07-15", warning_count: 1, insufficient_sample_theme_count: 1 }
-      ]
+      persistent: [{ name: "医药", rank: 1, rank_change: 2 }],
+      new: [{ name: "低波", rank: 14, rank_change: null }],
+      rising: [{ name: "QDII", rank: null, rank_change: 11 }],
+      falling: []
     }
   }
 };
 
 const indexHistory = {
+  availability: "available",
   symbol: "000300",
   name: "沪深300",
-  series_type: "index",
   range: "6m",
   point_count: 3,
   required_points: 120,
   points: [
-    { date: "2026-07-18", open: 4580, close: 4600, high: 4610, low: 4570, volume: 100000, turnover: 800000000, change_pct: -0.2, source: "cache:akshare" },
-    { date: "2026-07-21", open: 4600, close: 4620, high: 4630, low: 4590, volume: 120000, turnover: 900000000, change_pct: 0.52, source: "cache:akshare" },
-    { date: "2026-07-22", open: 4620, close: 4652.8, high: 4660, low: 4612, volume: 130000, turnover: 1000000000, change_pct: 0.71, source: "cache:akshare" }
+    { date: "2026-07-18", open: 4580, close: 4600, high: 4610, low: 4570, volume: 100000, turnover: 800000000, change_pct: -0.2 },
+    { date: "2026-07-21", open: 4600, close: 4620, high: 4630, low: 4590, volume: 120000, turnover: 900000000, change_pct: 0.52 },
+    { date: "2026-07-22", open: 4620, close: 4652.8, high: 4660, low: 4612, volume: 130000, turnover: 1000000000, change_pct: 0.71 }
   ],
-  source: "cache:akshare",
-  as_of: "2026-07-22",
-  updated_at: "2026-07-22T10:00:00Z",
-  expires_at: "2026-07-23T10:00:00Z",
-  stale: false,
-  fallback_used: false,
-  data_quality_grade: "warning",
-  warnings: [{ code: "insufficient_history", severity: "warning", message: "Only 3 points are available." }],
-  not_production_model: true,
-  main_score_changed: false,
-  main_risk_changed: false
+  data_date: "2026-07-22",
+  data_status: { state: "attention", label: "请留意数据日期", description: "当前展示截至 2026-07-22 的数据，最新更新仍待确认。", as_of: "2026-07-22" }
 };
 
 const sectorCatalog = {
+  availability: "available",
   items: [
     {
       symbol: "BK1036",
       name: "半导体",
-      entity_type: "industry",
       latest: 1823.4,
       change_pct: 2.31,
       turnover_rate: 3.25,
       rise_count: 41,
       fall_count: 6,
-      leader_name: "示例股份",
-      source: "cache:akshare",
-      as_of: "2026-07-22",
-      stale: false
+      leader_name: "示例股份"
     }
   ],
   page: 1,
@@ -88,22 +62,14 @@ const sectorCatalog = {
   total: 1,
   total_pages: 1,
   query: "",
-  sort: "change_pct_desc",
-  source: "cache:akshare",
-  as_of: "2026-07-22",
-  stale: false,
-  fallback_used: false,
-  data_quality_grade: "normal",
-  warnings: [],
-  not_production_model: true,
-  main_score_changed: false,
-  main_risk_changed: false
+  data_date: "2026-07-22",
+  data_status: { state: "updated", label: "数据已更新", description: "当前展示截至 2026-07-22 的结构化数据。", as_of: "2026-07-22" }
 };
 
 const sectorHistory = {
+  availability: "available",
   symbol: "BK1036",
   name: "半导体",
-  series_type: "industry",
   range: "6m",
   point_count: 2,
   required_points: 120,
@@ -116,9 +82,7 @@ const sectorHistory = {
       low: 1795,
       volume: 123456,
       turnover: 987654321,
-      turnover_rate: 2.1,
-      change_pct: 0.56,
-      source: "cache:akshare"
+      change_pct: 0.56
     },
     {
       date: "2026-07-22",
@@ -128,22 +92,11 @@ const sectorHistory = {
       low: 1802,
       volume: 130000,
       turnover: 1000000000,
-      turnover_rate: 2.3,
-      change_pct: 0.74,
-      source: "cache:akshare"
+      change_pct: 0.74
     }
   ],
-  source: "cache:akshare",
-  as_of: "2026-07-22",
-  updated_at: "2026-07-22T10:00:00Z",
-  expires_at: "2026-07-23T10:00:00Z",
-  stale: false,
-  fallback_used: false,
-  data_quality_grade: "warning",
-  warnings: [{ code: "insufficient_history", severity: "warning", message: "Only 2 points are available." }],
-  not_production_model: true,
-  main_score_changed: false,
-  main_risk_changed: false
+  data_date: "2026-07-22",
+  data_status: { state: "attention", label: "请留意数据日期", description: "当前展示截至 2026-07-22 的数据，最新更新仍待确认。", as_of: "2026-07-22" }
 };
 
 function stubMarketApi(
@@ -152,12 +105,12 @@ function stubMarketApi(
 ) {
   const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
     const url = String(input);
-    if (url === "/api/market") {
+    if (url === "/api/product/market") {
       return Promise.resolve({ ok: true, json: async () => marketResponse });
     }
-    if (url.startsWith("/api/market/indices/")) {
+    if (url.startsWith("/api/product/market/indices/")) {
       const range = new URL(url, "http://localhost").searchParams.get("range") || "6m";
-      const symbol = url.split("/")[4];
+      const symbol = url.split("/")[5];
       const names: Record<string, string> = {
         "000001": "上证指数",
         "000300": "沪深300",
@@ -173,14 +126,14 @@ function stubMarketApi(
         })
       });
     }
-    if (url.startsWith("/api/market/sectors/") && url.includes("/history")) {
+    if (url.startsWith("/api/product/market/sectors/") && url.includes("/history")) {
       const range = new URL(url, "http://localhost").searchParams.get("range") || "6m";
       return Promise.resolve({
         ok: true,
         json: async () => ({ ...sectorHistory, range })
       });
     }
-    if (url.startsWith("/api/market/sectors")) {
+    if (url.startsWith("/api/product/market/sectors")) {
       const query = new URL(url, "http://localhost").searchParams.get("q") || "";
       return Promise.resolve({
         ok: true,
@@ -214,8 +167,8 @@ describe("MarketPage", () => {
     expect(screen.getByText("低波")).toBeInTheDocument();
     expect(screen.getByText("全市场观察，不是自选或持仓建议")).toBeInTheDocument();
     expect(screen.getByText("交易数据日期")).toBeInTheDocument();
-    expect(screen.getByText("更新于")).toBeInTheDocument();
-    expect(screen.getByText("数据更新正常")).toBeInTheDocument();
+    expect(screen.getByText("资料状态")).toBeInTheDocument();
+    expect(screen.getAllByText("请留意数据日期").length).toBeGreaterThan(0);
     expect(screen.queryByText("质量趋势")).not.toBeInTheDocument();
     expect(screen.queryByText("akshare")).not.toBeInTheDocument();
     expect(screen.queryByText("cache:akshare")).not.toBeInTheDocument();
@@ -231,7 +184,7 @@ describe("MarketPage", () => {
       expect(
         urls.some((url) =>
           url.includes(
-            "/api/market/sectors?q=%E5%8C%BB%E8%8D%AF"
+            "/api/product/market/sectors?q=%E5%8C%BB%E8%8D%AF"
           )
         )
       ).toBe(true);
@@ -249,11 +202,11 @@ describe("MarketPage", () => {
     await waitFor(() => {
       const marketCalls = fetchMock.mock.calls
         .map((call) => String(call[0]))
-        .filter((url) => url === "/api/market");
+        .filter((url) => url === "/api/product/market");
       expect(marketCalls).toHaveLength(2);
     });
     expect(screen.getByText("交易数据日期")).toBeInTheDocument();
-    expect(screen.getByText("更新于")).toBeInTheDocument();
+    expect(screen.getByText("资料状态")).toBeInTheDocument();
   });
 
   it("shows real index history and switches symbol and range", async () => {
@@ -272,7 +225,7 @@ describe("MarketPage", () => {
       const urls = fetchMock.mock.calls.map((call) => String(call[0]));
       expect(
         urls.some((url) =>
-          url.endsWith("/api/market/indices/399006/history?range=1m")
+          url.endsWith("/api/product/market/indices/399006/history?range=1m")
         )
       ).toBe(true);
     });
@@ -302,7 +255,7 @@ describe("MarketPage", () => {
       expect(
         urls.some((url) =>
           url.includes(
-            "/api/market/sectors?q=%E5%8D%8A%E5%AF%BC%E4%BD%93"
+            "/api/product/market/sectors?q=%E5%8D%8A%E5%AF%BC%E4%BD%93"
           )
         )
       ).toBe(true);
@@ -328,7 +281,7 @@ describe("MarketPage", () => {
       {
         availability: "missing",
         generated_at: null,
-        data: { intelligence: {}, trend: {} }
+        data: { as_of: null, coverage: { fund_count: null, etf_count: null }, data_status: { state: "unavailable", label: "暂未获取到数据", description: "暂无数据", as_of: null }, themes: [], trend: { persistent: [], new: [], rising: [], falling: [] } }
       }
     );
 
@@ -344,34 +297,20 @@ describe("MarketPage", () => {
       ...response,
       data: {
         ...response.data,
-        intelligence: {
-          ...response.data.intelligence,
-          data_quality_summary: {
-            grade: "degraded",
-            stale_record_count: 4
-          }
-        }
+        data_status: { state: "limited", label: "资料暂不完整", description: "当前展示截至 2026-07-15 的数据，部分资料尚待补充。", as_of: "2026-07-15" }
       }
     });
 
     render(<MarketPage />);
 
-    expect(await screen.findByText("数据需核对")).toHaveClass("status-badge--critical");
+    const labels = await screen.findAllByText("资料暂不完整");
+    expect(labels.some((element) => element.classList.contains("status-badge--critical"))).toBe(true);
   });
 
-  it("explains stale sector data without leaking cache terminology", async () => {
+  it("explains sector data that needs attention without leaking cache terminology", async () => {
     stubMarketApi(response, {
       ...sectorCatalog,
-      stale: true,
-      fallback_used: true,
-      data_quality_grade: "warning",
-      warnings: [
-        {
-          code: "stale_cache",
-          severity: "warning",
-          message: "Industry catalog is served from expired cache."
-        }
-      ]
+      data_status: { state: "attention", label: "请留意数据日期", description: "当前展示截至 2026-07-22 的数据，最新更新仍待确认。", as_of: "2026-07-22" }
     });
 
     render(<MarketPage />);
@@ -380,7 +319,7 @@ describe("MarketPage", () => {
     expect(screen.getByText("BK1036")).toBeInTheDocument();
     await waitFor(() => {
       expect(document.querySelector(".market-data-note"))
-        .toHaveTextContent("当前数据不是最新，请以更新时间为准。");
+        .toHaveTextContent("当前展示截至 2026-07-22 的数据，最新更新仍待确认。");
     });
     expect(screen.queryByText("cache fallback")).not.toBeInTheDocument();
     expect(screen.queryByText("stale")).not.toBeInTheDocument();

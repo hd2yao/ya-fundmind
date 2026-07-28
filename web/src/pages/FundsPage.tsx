@@ -2,7 +2,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
-  Database,
   Search,
   SearchCheck,
   SlidersHorizontal
@@ -12,11 +11,12 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { searchFunds } from "../api/client";
 import type {
-  FundDetailItem,
-  FundSearchItem,
   FundSearchParams,
-  FundSearchResponse,
-  FundsData
+  ProductDataStatus,
+  ProductFundSearchResponse,
+  ProductFundSummary,
+  ProductWatchlistData,
+  ProductWatchlistFund
 } from "../api/types";
 import { DataTable } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
@@ -29,7 +29,7 @@ import { useApiResource } from "../hooks/useApiResource";
 type FundView = "market" | "watchlist";
 type MarketState = {
   loading: boolean;
-  data: FundSearchResponse | null;
+  data: ProductFundSearchResponse | null;
   error: string | null;
 };
 
@@ -51,10 +51,10 @@ function formatNumber(value?: number | null, digits = 2) {
   return value.toLocaleString("zh-CN", { maximumFractionDigits: digits });
 }
 
-function qualityTone(quality?: string | null): StatusTone {
-  if (quality === "normal" || quality === "complete") return "success";
-  if (quality === "degraded" || quality === "critical") return "critical";
-  if (quality === "warning" || quality === "partial") return "warning";
+function dataStatusTone(status?: ProductDataStatus | null): StatusTone {
+  if (status?.state === "updated") return "success";
+  if (status?.state === "attention") return "warning";
+  if (status?.state === "limited" || status?.state === "unavailable") return "critical";
   return "neutral";
 }
 
@@ -68,7 +68,7 @@ export function FundsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const searchKey = urlSearchParams.toString();
-  const watchlist = useApiResource<FundsData>("/api/funds");
+  const watchlist = useApiResource<ProductWatchlistData>("/api/product/watchlist");
   const [view, setView] = useState<FundView>("market");
   const [search, setSearch] = useState<FundSearchParams>(() => readSearchParams(urlSearchParams));
   const [market, setMarket] = useState<MarketState>({ loading: true, data: null, error: null });
@@ -108,20 +108,14 @@ export function FundsPage() {
   };
 
   const marketData = market.data;
-  const watchlistDetails = watchlist.resource?.data.details || {};
-  const watchlistFunds = watchlistDetails.fund_details || watchlistDetails.funds || [];
+  const watchlistFunds = watchlist.resource?.data.funds || [];
 
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Fund terminal"
+        eyebrow="基金资料"
         title="基金终端"
         description="浏览全市场结构化数据，并与配置中的自选池分开核验。结果仅用于研究观察，不构成推荐。"
-        actions={
-          <StatusBadge tone={qualityTone(marketData?.data_quality_grade)}>
-            {marketData?.source || "数据待加载"} · {marketData?.as_of || "--"}
-          </StatusBadge>
-        }
       />
 
       <div className="view-tabs" role="tablist" aria-label="基金数据范围">
@@ -224,7 +218,7 @@ function MarketExplorer({
     return <StatePanel kind="error" title="全市场数据读取失败" description={state.error} />;
   }
   if (!data || data.availability === "missing") {
-    return <StatePanel kind="empty" title="尚无全市场基金数据" description="运行启用 Market Intelligence 的 daily ops 后再查看。" />;
+    return <StatePanel kind="empty" title="尚无全市场基金数据" description="完成每日数据更新后再查看。" />;
   }
 
   const etfCount = data.facets.exchange_traded.true || 0;
@@ -233,16 +227,16 @@ function MarketExplorer({
       <section className="metric-grid" aria-label="全市场基金指标">
         <Metric label="匹配基金" value={data.total.toLocaleString("zh-CN")} detail={`每页 ${data.page_size} 条`} />
         <Metric label="ETF" value={etfCount.toLocaleString("zh-CN")} detail="当前筛选范围" />
-        <Metric label="数据日期" value={data.as_of || "--"} detail={data.source || "unknown"} />
-        <Metric label="数据质量" value={data.data_quality_grade} detail={data.index_stale ? "索引使用上次成功数据" : "索引已同步"} />
+        <Metric label="数据日期" value={data.data_date || "--"} detail="全市场结构化索引" />
+        <Metric label="资料状态" value={data.data_status.label} detail={data.data_status.description} />
       </section>
 
-      {(data.index_stale || data.warnings.length > 0) && (
+      {data.data_status.state !== "updated" && (
         <div className="notice">
           <CircleAlert size={18} aria-hidden />
           <div>
-            <strong>当前数据存在质量提示</strong>
-            <p>{data.warnings.join(" · ") || "索引使用上次成功数据，请核对 daily 产物。"}</p>
+            <strong>{data.data_status.label}</strong>
+            <p>{data.data_status.description}</p>
           </div>
         </div>
       )}
@@ -250,7 +244,7 @@ function MarketExplorer({
       <section className="content-band" aria-labelledby="market-funds-title">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Server-side search</p>
+            <p className="eyebrow">基金检索</p>
             <h2 id="market-funds-title">全市场基金与 ETF</h2>
           </div>
           <SlidersHorizontal size={19} aria-hidden />
@@ -286,7 +280,8 @@ function MarketExplorer({
             label="数据质量"
             value={search.quality || ""}
             options={["normal", "warning", "degraded", "unknown"]}
-            allLabel="全部质量"
+            allLabel="全部状态"
+            labels={{ normal: "数据已更新", warning: "请留意数据日期", degraded: "资料暂不完整", unknown: "暂无法判断" }}
             onChange={(value) => onSearchChange("quality", (value || undefined) as FundSearchParams["quality"])}
           />
           <FilterSelect
@@ -350,39 +345,41 @@ function MarketExplorer({
       </section>
 
       <div className="notice notice--info">
-        <Database size={18} aria-hidden />
+        <SearchCheck size={18} aria-hidden />
         <div>
-          <strong>全市场搜索来自结构化 Market Intelligence 产物</strong>
-          <p>搜索结果不是推荐榜单；来源、日期、stale 和缺失字段必须与研究结论一起核对。</p>
+          <strong>全市场搜索不是推荐榜单</strong>
+          <p>请结合基金资料、数据日期和个人研究目标进行人工核对。</p>
         </div>
       </div>
     </>
   );
 }
 
-function MarketFundTable({ items, onSelect }: { items: FundSearchItem[]; onSelect: (code: string) => void }) {
+function MarketFundTable({ items, onSelect }: { items: ProductFundSummary[]; onSelect: (code: string) => void }) {
   return (
     <DataTable label="全市场基金数据表" minWidth={1120}>
       <thead>
         <tr>
-          <th>代码</th><th>名称</th><th>类型</th><th>主题</th><th>净值</th><th>1 月</th><th>3 月</th><th>质量</th><th>来源 / 日期</th><th aria-label="操作" />
+          <th>代码</th><th>名称</th><th>类型</th><th>主题</th><th>净值</th><th>1 月</th><th>3 月</th><th>资料状态</th><th aria-label="操作" />
         </tr>
       </thead>
       <tbody>
-        {items.map((fund) => (
-          <tr key={fund.code}>
-            <td><strong>{fund.code}</strong></td>
+        {items.map((fund, index) => {
+          const code = fund.code || "";
+          return (
+          <tr key={code || `${fund.name || "fund"}-${index}`}>
+            <td><strong>{code || "--"}</strong></td>
             <td className="fund-name-cell">{fund.name || "名称缺失"}</td>
-            <td>{fund.fund_type || "unknown"}</td>
-            <td>{fund.primary_theme && fund.primary_theme !== "unknown" ? fund.primary_theme : "未分类"}</td>
+            <td>{fund.fund_type || "类型待补充"}</td>
+            <td>{fund.primary_theme || "未分类"}</td>
             <td>{formatNumber(fund.nav, 4)}</td>
             <td className={returnClass(fund.returns["1m"])}>{formatReturn(fund.returns["1m"])}</td>
             <td className={returnClass(fund.returns["3m"])}>{formatReturn(fund.returns["3m"])}</td>
-            <td><StatusBadge tone={qualityTone(fund.data_quality_grade)}>{fund.stale ? "stale" : fund.data_quality_grade}</StatusBadge></td>
-            <td><span className="source-cell">{fund.source}<small>{fund.as_of || "--"}</small></span></td>
-            <td><button className="table-action" type="button" aria-label={`查看${fund.code}详情`} onClick={() => onSelect(fund.code)}>查看</button></td>
+            <td><StatusBadge tone={dataStatusTone(fund.data_status)}>{fund.data_status.label}</StatusBadge></td>
+            <td><button className="table-action" type="button" aria-label={`查看${code || "基金"}详情`} disabled={!code} onClick={() => code && onSelect(code)}>查看</button></td>
           </tr>
-        ))}
+          );
+        })}
       </tbody>
     </DataTable>
   );
@@ -395,48 +392,47 @@ function WatchlistView({
   onSelect
 }: {
   loading: boolean;
-  resource: ReturnType<typeof useApiResource<FundsData>>["resource"];
+  resource: ReturnType<typeof useApiResource<ProductWatchlistData>>["resource"];
   error: string | null;
   onSelect: (code: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const details = resource?.data.details || {};
-  const funds = details.fund_details || details.funds || [];
+  const details = resource?.data;
+  const funds = details?.funds || [];
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return funds;
     return funds.filter((fund) => `${fund.code || ""} ${fund.name || ""}`.toLowerCase().includes(normalized));
   }, [funds, query]);
 
-  if (loading) return <StatePanel kind="loading" title="正在读取自选研究" description="加载 watchlist 对应的基金详情和候选信号摘要。" />;
+  if (loading) return <StatePanel kind="loading" title="正在读取自选研究" description="加载自选基金详情和候选信号摘要。" />;
   if (error) return <StatePanel kind="error" title="自选研究读取失败" description={error} />;
   if (!resource || resource.availability === "missing") {
-    return <StatePanel kind="empty" title="尚无自选基金详情" description="运行 daily ops 生成 watchlist_fund_details.json 后再查看。" />;
+    return <StatePanel kind="empty" title="尚无自选基金详情" description="完成每日数据更新后再查看。" />;
   }
 
-  const signalSummary = resource.data.signal_candidates?.summary || {};
-  const coverage = details.coverage_summary?.average_coverage_ratio;
+  const coverage = details?.coverage_ratio;
   return (
     <>
       <section className="metric-grid" aria-label="自选研究指标">
-        <Metric label="自选详情" value={details.detail_count ?? funds.length} detail={`as_of ${details.as_of || "--"}`} />
-        <Metric label="平均覆盖" value={coverage == null ? "--" : `${(coverage * 100).toFixed(0)}%`} detail={`缺失 ${details.missing_count ?? 0}`} />
-        <Metric label="质量警告" value={details.warning_count ?? 0} detail="缺字段保留 warning" />
-        <Metric label="候选信号" value={signalSummary.eligible_count ?? 0} detail={`排除 ${signalSummary.excluded_count ?? 0} · 展示 ${signalSummary.display_only_count ?? 0}`} />
+        <Metric label="自选基金" value={details?.detail_count ?? funds.length} detail={`数据日期 ${details?.as_of || "--"}`} />
+        <Metric label="资料覆盖" value={coverage == null ? "--" : `${(coverage * 100).toFixed(0)}%`} detail="按已获取资料计算" />
+        <Metric label="资料状态" value={details?.data_status.label || "--"} detail={details?.data_status.description || "--"} />
+        <Metric label="可查看详情" value={funds.length} detail="点击基金进入资料页" />
       </section>
 
       <section className="content-band" aria-labelledby="watchlist-table-title">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Configured watchlist</p>
+            <p className="eyebrow">我的自选</p>
             <h2 id="watchlist-table-title">配置中的观察基金</h2>
           </div>
-          <StatusBadge tone="info">仅来自 configs/watchlist.yaml</StatusBadge>
+          <StatusBadge tone="info">已配置自选</StatusBadge>
         </div>
         <FilterBar searchLabel="搜索自选基金" searchValue={query} onSearchChange={setQuery} />
         {filtered.length ? (
-          <DataTable label="自选基金数据表" minWidth={920}>
-            <thead><tr><th>代码</th><th>名称</th><th>主题</th><th>净值</th><th>1 月</th><th>3 月</th><th>覆盖</th><th>来源</th><th aria-label="操作" /></tr></thead>
+          <DataTable label="自选基金数据表" minWidth={820}>
+            <thead><tr><th>代码</th><th>名称</th><th>主题</th><th>净值</th><th>1 月</th><th>3 月</th><th>资料状态</th><th aria-label="操作" /></tr></thead>
             <tbody>
               {filtered.map((fund) => (
                 <WatchlistRow key={fund.code} fund={fund} onSelect={onSelect} />
@@ -448,25 +444,24 @@ function WatchlistView({
 
       <div className="notice notice--info">
         <SearchCheck size={18} aria-hidden />
-        <div><strong>自选池与全市场搜索是两个范围</strong><p>自选池只反映本地配置，不代表系统推荐；缺失字段不会转成正向信号。</p></div>
+        <div><strong>自选池与全市场搜索是两个范围</strong><p>自选池只反映当前设置，不代表系统推荐；缺失字段不会转成正向信号。</p></div>
       </div>
     </>
   );
 }
 
-function WatchlistRow({ fund, onSelect }: { fund: FundDetailItem; onSelect: (code: string) => void }) {
+function WatchlistRow({ fund, onSelect }: { fund: ProductWatchlistFund; onSelect: (code: string) => void }) {
   const oneMonth = fund.return_windows?.["1m"]?.total_return;
   const threeMonth = fund.return_windows?.["3m"]?.total_return;
   return (
     <tr>
       <td><strong>{fund.code || "--"}</strong></td>
       <td className="fund-name-cell">{fund.name || "名称缺失"}</td>
-      <td>{fund.primary_theme && fund.primary_theme !== "unknown" ? fund.primary_theme : "未分类"}</td>
+      <td>{fund.primary_theme || "未分类"}</td>
       <td>{fund.nav == null ? "--" : fund.nav.toFixed(4)}</td>
       <td className={returnClass(oneMonth)}>{formatReturn(oneMonth)}</td>
       <td className={returnClass(threeMonth)}>{formatReturn(threeMonth)}</td>
-      <td><StatusBadge tone={qualityTone(fund.data_coverage?.status || fund.data_quality_grade)}>{fund.data_coverage?.status || fund.data_quality_grade || "unknown"}</StatusBadge></td>
-      <td>{fund.source || "--"}</td>
+      <td><StatusBadge tone={dataStatusTone(fund.data_status)}>{fund.data_status.label}</StatusBadge></td>
       <td><button className="table-action" type="button" aria-label={`查看${fund.code || "基金"}详情`} onClick={() => fund.code && onSelect(fund.code)}>查看</button></td>
     </tr>
   );

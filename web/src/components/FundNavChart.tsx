@@ -8,7 +8,7 @@ import {
   YAxis
 } from "recharts";
 
-import type { FundHistoryPoint } from "../api/types";
+import type { ProductFundHistoryPoint } from "../api/types";
 
 function formatNav(value: unknown) {
   return typeof value === "number" ? value.toFixed(4) : "--";
@@ -19,7 +19,7 @@ export function FundNavChart({
   points
 }: {
   code: string;
-  points: FundHistoryPoint[];
+  points: ProductFundHistoryPoint[];
 }) {
   return (
     <>

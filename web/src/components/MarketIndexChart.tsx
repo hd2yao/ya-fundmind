@@ -8,7 +8,14 @@ import {
   YAxis
 } from "recharts";
 
-import type { MarketIndexHistoryPoint } from "../api/types";
+type MarketChartPoint = {
+  date: string | null;
+  open: number | null;
+  close: number | null;
+  high: number | null;
+  low: number | null;
+  change_pct: number | null;
+};
 
 function formatValue(value: unknown) {
   return typeof value === "number"
@@ -35,7 +42,7 @@ function MarketChartTooltip({
   seriesLabel
 }: {
   active?: boolean;
-  payload?: ReadonlyArray<{ payload?: MarketIndexHistoryPoint }>;
+  payload?: ReadonlyArray<{ payload?: MarketChartPoint }>;
   label?: string | number;
   seriesLabel: string;
 }) {
@@ -56,7 +63,7 @@ export function MarketIndexChart({
   seriesLabel = "指数"
 }: {
   name: string;
-  points: MarketIndexHistoryPoint[];
+  points: MarketChartPoint[];
   seriesLabel?: string;
 }) {
   return (

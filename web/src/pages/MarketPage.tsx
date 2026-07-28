@@ -2,20 +2,19 @@ import { ArrowDownRight, ArrowUpRight, History, RefreshCw, Search, Sparkles } fr
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  getMarketIndexHistory,
-  getMarketSectorHistory,
-  searchMarketSectors
+  getProductMarketIndexHistory,
+  getProductMarketSectorHistory,
+  searchProductMarketSectors
 } from "../api/client";
 import type {
-  MarketData,
-  MarketIndexHistoryResponse,
   MarketIndexWindow,
-  MarketSectorHistoryResponse,
-  MarketSectorItem,
-  MarketSectorSearchResponse,
-  ThemeSummary
+  ProductDataStatus,
+  ProductMarketHistoryResponse,
+  ProductMarketData,
+  ProductMarketSectorItem,
+  ProductMarketSectorSearchResponse,
+  ProductThemeSummary
 } from "../api/types";
-import { getDataCondition } from "../components/DataFreshnessStrip";
 import { MarketIndexChart } from "../components/MarketIndexChart";
 import { Metric } from "../components/Metric";
 import { PageHeader } from "../components/PageHeader";
@@ -43,19 +42,19 @@ const INDEX_WINDOWS: Array<{ value: MarketIndexWindow; label: string }> = [
 
 type IndexHistoryState = {
   loading: boolean;
-  data: MarketIndexHistoryResponse | null;
+  data: ProductMarketHistoryResponse | null;
   error: string | null;
 };
 
 type SectorCatalogState = {
   loading: boolean;
-  data: MarketSectorSearchResponse | null;
+  data: ProductMarketSectorSearchResponse | null;
   error: string | null;
 };
 
 type SectorHistoryState = {
   loading: boolean;
-  data: MarketSectorHistoryResponse | null;
+  data: ProductMarketHistoryResponse | null;
   error: string | null;
 };
 
@@ -69,21 +68,22 @@ function returnClass(value?: number | null) {
   return value > 0 ? "number-positive" : "number-negative";
 }
 
-function themeReadiness(theme: ThemeSummary): { label: string; tone: StatusTone } {
-  if (theme.data_quality_grade === "critical" || theme.data_quality_grade === "degraded") {
-    return { label: "样本不足", tone: "critical" };
-  }
-  if (theme.data_quality_grade === "warning") {
-    return { label: "样本较少", tone: "warning" };
-  }
+function dataStatusTone(status?: ProductDataStatus | null): StatusTone {
+  if (status?.state === "updated") return "success";
+  if (status?.state === "attention") return "warning";
+  if (status?.state === "limited" || status?.state === "unavailable") return "critical";
+  return "neutral";
+}
+
+function themeReadiness(theme: ProductThemeSummary): { label: string; tone: StatusTone } {
   if (theme.sample_size === null || theme.sample_size === undefined) {
     return { label: "待补充", tone: "neutral" };
   }
-  return { label: "数据充分", tone: "success" };
+  return { label: theme.data_status.label, tone: dataStatusTone(theme.data_status) };
 }
 
 export function MarketPage() {
-  const { loading, resource, error, refresh, refreshVersion } = useApiResource<MarketData>("/api/market");
+  const { loading, resource, error, refresh, refreshVersion } = useApiResource<ProductMarketData>("/api/product/market");
   const [selectedIndex, setSelectedIndex] = useState("000300");
   const [indexWindow, setIndexWindow] = useState<MarketIndexWindow>("6m");
   const [indexHistory, setIndexHistory] = useState<IndexHistoryState>({
@@ -98,7 +98,7 @@ export function MarketPage() {
     data: null,
     error: null
   });
-  const [selectedSector, setSelectedSector] = useState<MarketSectorItem | null>(null);
+  const [selectedSector, setSelectedSector] = useState<ProductMarketSectorItem | null>(null);
   const [sectorWindow, setSectorWindow] = useState<MarketIndexWindow>("6m");
   const [sectorHistory, setSectorHistory] = useState<SectorHistoryState>({
     loading: false,
@@ -106,12 +106,12 @@ export function MarketPage() {
     error: null
   });
 
-  const topThemes = useMemo(() => resource?.data.intelligence?.top_themes || [], [resource]);
+  const topThemes = useMemo(() => resource?.data.themes || [], [resource]);
 
   useEffect(() => {
     const controller = new AbortController();
     setIndexHistory({ loading: true, data: null, error: null });
-    getMarketIndexHistory(selectedIndex, indexWindow, controller.signal)
+    getProductMarketIndexHistory(selectedIndex, indexWindow, controller.signal)
       .then((data) => setIndexHistory({ loading: false, data, error: null }))
       .catch((historyError: unknown) => {
         if (controller.signal.aborted) return;
@@ -129,7 +129,7 @@ export function MarketPage() {
   useEffect(() => {
     const controller = new AbortController();
     setSectorCatalog({ loading: true, data: null, error: null });
-    searchMarketSectors(
+    searchProductMarketSectors(
       {
         q: appliedSectorQuery,
         page: 1,
@@ -167,7 +167,7 @@ export function MarketPage() {
     }
     const controller = new AbortController();
     setSectorHistory({ loading: true, data: null, error: null });
-    getMarketSectorHistory(
+    getProductMarketSectorHistory(
       selectedSector.symbol,
       sectorWindow,
       controller.signal
@@ -210,10 +210,10 @@ export function MarketPage() {
     return (
       <div className="page-stack">
         <PageHeader
-          eyebrow="Market terminal"
+          eyebrow="市场行情"
           title="行情总览"
           description="主要指数可独立按需读取；主题与趋势仍依赖每日 Market Intelligence 产物。"
-          actions={<StatusBadge tone="neutral">index only</StatusBadge>}
+          actions={<StatusBadge tone="neutral">仅指数可浏览</StatusBadge>}
         />
         <IndexHistoryPanel
           state={indexHistory}
@@ -226,20 +226,18 @@ export function MarketPage() {
         <StatePanel
           kind="empty"
           title="尚无市场情报产物"
-          description="指数浏览仍可使用；运行 daily ops 并开启 ENABLE_MARKET_INTELLIGENCE=true 后生成主题与趋势。"
+          description="指数浏览仍可使用；完成一次日常更新后，主题与趋势信息会显示在这里。"
         />
       </div>
     );
   }
 
-  const intelligence = resource.data.intelligence || {};
-  const trend = resource.data.trend || {};
-  const marketCondition = getDataCondition({
-    dataQualityGrade: intelligence.data_quality_summary?.grade
-  });
-  const persistent = trend.persistent_hot_themes || [];
-  const newThemes = trend.new_hot_themes || [];
-  const rising = trend.rising_themes || [];
+  const market = resource.data;
+  const trend = market.trend;
+  const marketCondition = market.data_status;
+  const persistent = trend.persistent || [];
+  const newThemes = trend.new || [];
+  const rising = trend.rising || [];
 
   function searchMatchingSector(themeName: string) {
     setSectorQuery(themeName);
@@ -275,25 +273,21 @@ export function MarketPage() {
         <div className="market-pulse__intro">
           <span>市场快照</span>
           <strong>交易数据日期</strong>
-          <b>{intelligence.as_of || "--"}</b>
-        </div>
-        <div className="market-pulse__fact">
-          <span>更新于</span>
-          <strong>{formatDateTime(resource.generated_at)}</strong>
+          <b>{market.as_of || "--"}</b>
         </div>
         <div className="market-pulse__fact">
           <span>覆盖范围</span>
           <strong>全市场基金与 ETF</strong>
         </div>
         <div className="market-pulse__fact">
-          <span>数据状态</span>
-          <StatusBadge tone={marketCondition.tone}>{marketCondition.label}</StatusBadge>
+          <span>资料状态</span>
+          <StatusBadge tone={dataStatusTone(marketCondition)}>{marketCondition.label}</StatusBadge>
         </div>
       </section>
 
       <section className="metric-grid market-coverage-rail" aria-label="市场覆盖指标">
-        <Metric label="基金覆盖" value={number.format(intelligence.total_funds || 0)} detail="全市场基础索引" />
-        <Metric label="ETF 覆盖" value={number.format(intelligence.total_etfs || 0)} detail="可进入基金终端搜索" />
+        <Metric label="基金覆盖" value={number.format(market.coverage.fund_count || 0)} detail="全市场基础索引" />
+        <Metric label="ETF 覆盖" value={number.format(market.coverage.etf_count || 0)} detail="可进入基金终端搜索" />
         <Metric label="主题观察" value={topThemes.length} detail="按基金主题汇总" />
         <Metric label="近期变化" value={persistent.length + newThemes.length} detail={`持续关注 ${persistent.length}`} />
       </section>
@@ -314,10 +308,10 @@ export function MarketPage() {
             <p className="eyebrow">主题观察</p>
             <h2 id="top-theme-title">主题窗口对比</h2>
           </div>
-          <span className="section-meta">截至 {intelligence.as_of || "--"}</span>
+          <span className="section-meta">截至 {market.as_of || "--"}</span>
         </div>
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table theme-window-table">
             <thead>
               <tr>
                 <th>主题</th>
@@ -327,37 +321,34 @@ export function MarketPage() {
                 <th>正收益占比</th>
                 <th>样本</th>
                 <th>解读提示</th>
-                <th aria-label="操作" />
               </tr>
             </thead>
             <tbody>
               {topThemes.slice(0, 12).map((theme) => {
                 const readiness = themeReadiness(theme);
                 return (
-                <tr key={theme.theme}>
-                  <td><strong>{theme.theme || "未分类"}</strong></td>
-                  <td className={returnClass(theme.avg_return_1w)}>{formatReturn(theme.avg_return_1w)}</td>
-                  <td className={returnClass(theme.avg_return_1m)}>{formatReturn(theme.avg_return_1m)}</td>
-                  <td className={returnClass(theme.avg_return_3m)}>{formatReturn(theme.avg_return_3m)}</td>
+                <tr key={theme.name}>
+                  <td>
+                    {theme.name ? (
+                      <button
+                        className="theme-table-select"
+                        type="button"
+                        aria-label={`搜索${theme.name}同名行业板块`}
+                        title="查看同名行业板块"
+                        onClick={() => searchMatchingSector(theme.name || "")}
+                      >
+                        {theme.name}
+                      </button>
+                    ) : (
+                      <strong>未分类</strong>
+                    )}
+                  </td>
+                  <td className={returnClass(theme.returns["1w"])}>{formatReturn(theme.returns["1w"])}</td>
+                  <td className={returnClass(theme.returns["1m"])}>{formatReturn(theme.returns["1m"])}</td>
+                  <td className={returnClass(theme.returns["3m"])}>{formatReturn(theme.returns["3m"])}</td>
                   <td>{theme.positive_ratio_1m == null ? "--" : `${(theme.positive_ratio_1m * 100).toFixed(1)}%`}</td>
                   <td>{number.format(theme.sample_size || 0)}</td>
                   <td><StatusBadge tone={readiness.tone}>{readiness.label}</StatusBadge></td>
-                  <td>
-                    <div className="table-action-group">
-                      {theme.theme ? (
-                        <button
-                          className="table-action table-action--search"
-                          type="button"
-                          aria-label={`搜索${theme.theme}同名行业板块`}
-                          title="查看同名行业板块"
-                          onClick={() => searchMatchingSector(theme.theme || "")}
-                        >
-                          <Search size={13} aria-hidden />
-                          查看板块
-                        </button>
-                      ) : null}
-                    </div>
-                  </td>
                 </tr>
                 );
               })}
@@ -376,23 +367,23 @@ export function MarketPage() {
           </div>
           <div className="movement-list">
             {rising.slice(0, 4).map((item) => (
-              <button className="movement-item movement-item--interactive" type="button" key={`rise-${item.theme}`} onClick={() => searchMatchingSector(item.theme || "")}>
+              <button className="movement-item movement-item--interactive" type="button" key={`rise-${item.name}`} onClick={() => searchMatchingSector(item.name || "")}>
                 <ArrowUpRight className="number-positive" size={18} aria-hidden />
-                <strong>{item.theme || "未分类"}</strong>
+                <strong>{item.name || "未分类"}</strong>
                 <span>排名 +{item.rank_change ?? 0}</span>
               </button>
             ))}
             {newThemes.slice(0, 4).map((item) => (
-              <button className="movement-item movement-item--interactive" type="button" key={`new-${item.theme}`} onClick={() => searchMatchingSector(item.theme || "")}>
+              <button className="movement-item movement-item--interactive" type="button" key={`new-${item.name}`} onClick={() => searchMatchingSector(item.name || "")}>
                 <Sparkles className="number-positive" size={18} aria-hidden />
-                <strong>{item.theme || "未分类"}</strong>
+                <strong>{item.name || "未分类"}</strong>
                 <span>新进入观察</span>
               </button>
             ))}
-            {(trend.falling_themes || []).slice(0, 2).map((item) => (
-              <button className="movement-item movement-item--interactive" type="button" key={`fall-${item.theme}`} onClick={() => searchMatchingSector(item.theme || "")}>
+            {(trend.falling || []).slice(0, 2).map((item) => (
+              <button className="movement-item movement-item--interactive" type="button" key={`fall-${item.name}`} onClick={() => searchMatchingSector(item.name || "")}>
                 <ArrowDownRight className="number-negative" size={18} aria-hidden />
-                <strong>{item.theme || "未分类"}</strong>
+                <strong>{item.name || "未分类"}</strong>
                 <span>排名 {item.rank_change ?? 0}</span>
               </button>
             ))}
@@ -424,28 +415,16 @@ function SectorMarketPanel({
   catalog: SectorCatalogState;
   history: SectorHistoryState;
   query: string;
-  selectedSector: MarketSectorItem | null;
+  selectedSector: ProductMarketSectorItem | null;
   window: MarketIndexWindow;
   onQueryChange: (query: string) => void;
   onSearch: () => void;
-  onSectorChange: (sector: MarketSectorItem) => void;
+  onSectorChange: (sector: ProductMarketSectorItem) => void;
   onWindowChange: (window: MarketIndexWindow) => void;
 }) {
   const latest = history.data?.points.at(-1);
-  const catalogCondition = catalog.data
-    ? getDataCondition({
-        stale: catalog.data.stale,
-        fallbackUsed: catalog.data.fallback_used,
-        dataQualityGrade: catalog.data.data_quality_grade
-      })
-    : null;
-  const historyCondition = history.data
-    ? getDataCondition({
-        stale: history.data.stale,
-        fallbackUsed: history.data.fallback_used,
-        dataQualityGrade: history.data.data_quality_grade
-      })
-    : null;
+  const catalogStatus = catalog.data?.data_status;
+  const historyStatus = history.data?.data_status;
   return (
     <section className="content-band market-sector-panel" aria-labelledby="market-sector-title">
       <div className="market-sector-toolbar">
@@ -498,7 +477,14 @@ function SectorMarketPanel({
           description="暂时无法读取板块列表，请稍后刷新页面。"
         />
       ) : null}
-      {catalog.data && !catalog.data.items.length ? (
+      {catalog.data?.availability === "missing" ? (
+        <StatePanel
+          kind="empty"
+          title="行业板块暂不可用"
+          description={catalogStatus?.description || "当前没有可展示的行业板块数据。"}
+        />
+      ) : null}
+      {catalog.data?.availability === "available" && !catalog.data.items.length ? (
         <StatePanel
           kind="empty"
           title="没有匹配的行业板块"
@@ -567,7 +553,7 @@ function SectorMarketPanel({
                 </tbody>
               </table>
             </div>
-            {catalogCondition?.message ? <p className="market-data-note">{catalogCondition.message}</p> : null}
+            {catalogStatus && catalogStatus.state !== "updated" ? <p className="market-data-note">{catalogStatus.description}</p> : null}
           </div>
 
           <div className="market-sector-history">
@@ -607,6 +593,13 @@ function SectorMarketPanel({
                 description="该板块暂未形成可展示的历史走势，请选择其他板块或稍后再查看。"
               />
             ) : null}
+            {history.data?.availability === "missing" ? (
+              <StatePanel
+                kind="empty"
+                title="板块日线暂不可用"
+                description={historyStatus?.description || "当前没有可展示的板块历史数据。"}
+              />
+            ) : null}
             {history.data && history.data.points.length ? (
               <>
                 <div className="market-index-summary market-index-summary--compact">
@@ -626,7 +619,7 @@ function SectorMarketPanel({
                   </div>
                   <div>
                     <span>数据日期</span>
-                    <strong>{history.data.as_of || "--"}</strong>
+                    <strong>{history.data.data_date || "--"}</strong>
                   </div>
                 </div>
                 <MarketIndexChart
@@ -634,7 +627,7 @@ function SectorMarketPanel({
                   points={history.data.points}
                   seriesLabel="行业板块"
                 />
-                {historyCondition?.message ? <p className="market-data-note">{historyCondition.message}</p> : null}
+                {historyStatus && historyStatus.state !== "updated" ? <p className="market-data-note">{historyStatus.description}</p> : null}
               </>
             ) : null}
           </div>
@@ -662,13 +655,7 @@ function IndexHistoryPanel({
   onWindowChange: (window: MarketIndexWindow) => void;
 }) {
   const latest = state.data?.points.at(-1);
-  const dataCondition = state.data
-    ? getDataCondition({
-        stale: state.data.stale,
-        fallbackUsed: state.data.fallback_used,
-        dataQualityGrade: state.data.data_quality_grade
-      })
-    : null;
+  const dataStatus = state.data?.data_status;
   return (
     <section id="market-index" className="content-band market-index-panel" aria-labelledby="market-index-title">
       <div className="market-index-toolbar">
@@ -713,6 +700,13 @@ function IndexHistoryPanel({
       {state.error ? (
         <StatePanel kind="error" title="指数日线暂不可用" description="暂时无法读取该指数的历史走势，请稍后刷新页面。" />
       ) : null}
+      {state.data?.availability === "missing" ? (
+        <StatePanel
+          kind="empty"
+          title="指数日线暂不可用"
+          description={dataStatus?.description || "当前没有可展示的指数历史数据。"}
+        />
+      ) : null}
       {state.data && state.data.points.length ? (
         <div className="market-index-workspace">
           <div className="market-index-main">
@@ -733,27 +727,14 @@ function IndexHistoryPanel({
               </div>
               <div>
                 <span>数据日期</span>
-                <strong>{state.data.as_of || "--"}</strong>
+                <strong>{state.data.data_date || "--"}</strong>
               </div>
             </div>
             <MarketIndexChart name={state.data.name} points={state.data.points} />
           </div>
-          {dataCondition?.message ? <p className="market-data-note">{dataCondition.message}</p> : null}
+        {dataStatus && dataStatus.state !== "updated" ? <p className="market-data-note">{dataStatus.description}</p> : null}
         </div>
       ) : null}
     </section>
   );
-}
-
-function formatDateTime(value?: string | null) {
-  if (!value) return "--";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).format(parsed);
 }

@@ -52,9 +52,11 @@ describe("CopilotPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "生成证据化回答" }));
 
     await waitFor(() => expect(screen.getByText("半导体主题有观察性变化，但新闻证据仍不足。")).toBeInTheDocument());
-    expect(screen.getByText("market_intelligence")).toBeInTheDocument();
-    expect(screen.getByText("news_evidence_insufficient")).toBeInTheDocument();
+    expect(screen.getByText("参考资料")).toBeInTheDocument();
+    expect(screen.getAllByText("资料待补充")).toHaveLength(2);
     expect(screen.getByText(/当前回答不改变主评分或主风险/)).toBeInTheDocument();
+    expect(screen.queryByText("market_intelligence")).not.toBeInTheDocument();
+    expect(screen.queryByText("news_evidence_insufficient")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/copilot/ask",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ question: "半导体近期有什么变化？" }) })
