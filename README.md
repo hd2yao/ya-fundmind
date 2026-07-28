@@ -6,9 +6,9 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 ## 当前状态
 
-- 当前稳定版本：`v2.4.0`（Python package version：`2.4.0`）
-- 当前交付模式：`v2.4 Fund Data Terminal & Detail` delivery mode
-- 当前发布状态：`v2.4.0` 已完成可链接基金详情与历史净值浏览；后续按 `v2.5` 组合工作台、`v2.6` 证据浏览器的有限版本计划推进。
+- 当前稳定版本：`v2.5.0`（Python package version：`2.5.0`）
+- 当前交付模式：`v2.5 Portfolio Workbench` delivery mode
+- 当前发布状态：`v2.5.0` 已完成配置持仓、主题/类型暴露与数据缺口的可浏览组合工作台；后续按 `v2.6` 证据浏览器的有限版本计划推进。
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
@@ -399,6 +399,14 @@ python -m fund_agent.cli product-web --output-dir outputs
 - 历史净值继续支持 `1 月 / 3 月 / 6 月 / 1 年 / 全部`，只读取已有本地结构化 API，不增加页面隐式 provider 请求。
 
 该详情仅供研究核对，不接入主评分、主风险或推荐逻辑。发布证据见 [`docs/releases/v2.4.0-release-report.md`](docs/releases/v2.4.0-release-report.md)。
+
+`v2.5` 将已有 `portfolio` 结构化产物组织为配置持仓工作台：
+
+- 持仓代码和名称可进入已有 `/funds/:code` 详情，并安全返回组合页。
+- 主题和基金类型暴露并列呈现；仅在可靠估值可用时显示可比较权重，否则明确显示“权重待估值”。
+- 当前估值缺失时，页面不展示由占位 `0` 推导出的市值、收益率或权重；观察性问题单独固定展示。
+
+该组合工作台只读现有本地 JSON，不写入 portfolio 配置，不计算调仓，也不改变主评分或主风险。发布证据见 [`docs/releases/v2.5.0-release-report.md`](docs/releases/v2.5.0-release-report.md)。
 
 可先离线检查依赖和构建：
 

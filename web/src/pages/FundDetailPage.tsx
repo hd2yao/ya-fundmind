@@ -40,8 +40,9 @@ function qualityTone(quality?: string | null): StatusTone {
 }
 
 function safeReturnTo(value: string | null): string {
-  if (!value || !value.startsWith("/funds") || value.startsWith("//")) return "/funds";
-  return value;
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/funds";
+  const pathname = value.split("?", 1)[0];
+  return ["/funds", "/portfolio", "/news"].includes(pathname) ? value : "/funds";
 }
 
 export function FundDetailPage() {
@@ -104,8 +105,8 @@ export function FundDetailPage() {
         title={fund.name || `${code} 基金详情`}
         description={`${fund.code} · ${fund.fund_type || "类型未知"} · ${fund.primary_theme || "主题未知"}。浏览结构化字段与本地历史净值，不构成推荐。`}
         actions={
-          <Link className="back-link" to={returnTo} aria-label="返回基金终端">
-            <ArrowLeft size={17} aria-hidden /> 返回基金终端
+          <Link className="back-link" to={returnTo} aria-label="返回上一页">
+            <ArrowLeft size={17} aria-hidden /> 返回上一页
           </Link>
         }
       />
