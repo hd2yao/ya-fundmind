@@ -6,9 +6,9 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 ## 当前状态
 
-- 当前稳定版本：`v2.5.0`（Python package version：`2.5.0`）
-- 当前交付模式：`v2.5 Portfolio Workbench` delivery mode
-- 当前发布状态：`v2.5.0` 已完成配置持仓、主题/类型暴露与数据缺口的可浏览组合工作台；后续按 `v2.6` 证据浏览器的有限版本计划推进。
+- 当前稳定版本：`v2.6.0`（Python package version：`2.6.0`）
+- 当前交付模式：`v2.3`–`v2.6` local product delivery complete
+- 当前发布状态：`v2.6.0` 已完成已有新闻/公告 evidence 的本地筛选、溯源与基金关联浏览；本轮有限产品交付计划已收口。
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
@@ -407,6 +407,14 @@ python -m fund_agent.cli product-web --output-dir outputs
 - 当前估值缺失时，页面不展示由占位 `0` 推导出的市值、收益率或权重；观察性问题单独固定展示。
 
 该组合工作台只读现有本地 JSON，不写入 portfolio 配置，不计算调仓，也不改变主评分或主风险。发布证据见 [`docs/releases/v2.5.0-release-report.md`](docs/releases/v2.5.0-release-report.md)。
+
+`v2.6` 将已有新闻/公告 evidence 收敛为可核对的证据浏览器：
+
+- 支持文本、主题、来源质量与证据强度的本地筛选，不改写 evidence JSON。
+- 仅本地基金索引中存在的关联代码可进入 `/funds/:code`；索引外或无效代码保持不可点击并说明原因。
+- `http/https` 来源可在安全新窗口打开；低置信度、fixture、缺 URL 和不安全 URL 显式降级，不作为正向结论。
+
+该页面不抓取新闻、不将新闻接入主评分或主风险，也不输出买卖建议。发布证据见 [`docs/releases/v2.6.0-release-report.md`](docs/releases/v2.6.0-release-report.md)。
 
 可先离线检查依赖和构建：
 

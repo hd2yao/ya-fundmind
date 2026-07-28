@@ -388,6 +388,7 @@ export type NewsData = {
   low_confidence_count?: number;
   duplicate_count?: number;
   source?: string | null;
+  indexed_fund_codes?: string[];
   items?: NewsEvidenceItem[];
   warnings?: string[];
 };

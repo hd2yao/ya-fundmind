@@ -1,5 +1,12 @@
 import { Search } from "lucide-react";
 
+type SelectFilter = {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+};
+
 export function FilterBar({
   searchLabel,
   searchValue,
@@ -7,7 +14,8 @@ export function FilterBar({
   selectLabel,
   selectValue,
   selectOptions,
-  onSelectChange
+  onSelectChange,
+  additionalSelects = []
 }: {
   searchLabel: string;
   searchValue: string;
@@ -16,7 +24,15 @@ export function FilterBar({
   selectValue?: string;
   selectOptions?: string[];
   onSelectChange?: (value: string) => void;
+  additionalSelects?: SelectFilter[];
 }) {
+  const selects: SelectFilter[] = [
+    ...(selectLabel && selectOptions && onSelectChange
+      ? [{ label: selectLabel, value: selectValue || selectOptions[0] || "", options: selectOptions, onChange: onSelectChange }]
+      : []),
+    ...additionalSelects
+  ];
+
   return (
     <div className="filter-bar">
       <label className="search-control">
@@ -30,16 +46,16 @@ export function FilterBar({
           onChange={(event) => onSearchChange(event.target.value)}
         />
       </label>
-      {selectLabel && selectOptions && onSelectChange ? (
-        <label className="select-control">
-          <span>{selectLabel}</span>
-          <select aria-label={selectLabel} value={selectValue} onChange={(event) => onSelectChange(event.target.value)}>
-            {selectOptions.map((option) => (
+      {selects.length ? <div className="filter-bar__selects">{selects.map((select) => (
+        <label className="select-control" key={select.label}>
+          <span>{select.label}</span>
+          <select aria-label={select.label} value={select.value} onChange={(event) => select.onChange(event.target.value)}>
+            {select.options.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
         </label>
-      ) : null}
+      ))}</div> : null}
     </div>
   );
 }
