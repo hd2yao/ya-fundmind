@@ -9,11 +9,11 @@
 
 ## 当前状态
 
-- 当前稳定版本：`v2.6.0`
-- 当前开发状态：M1 执行中；Product API/view model、普通页面诊断隔离、一级导航、只读自选页、行业日线 endpoint 回退和显式刷新均已完成。下一步收口跨模块回归、PR 与 `alpha.1` 发布门禁。
-- 当前 Milestone：M1 Product Truth & Information Architecture
+- 当前稳定版本：`v2.6.0`；当前预发布版本：`v3.0.0-alpha.1`
+- 当前开发状态：M1 已完成并发布 alpha；M2 Fund Profile Data 尚未开始实现。
+- 当前 Milestone：M2 Fund Profile Data
 - 当前 P0：无
-- 当前 P1：M1 Product Truth & Information Architecture
+- 当前 P1：M2 Fund Profile Data
 
 ## P0 Blocking
 
@@ -41,10 +41,16 @@
 - [x] fixture 新闻默认不作为正式入口。
 - [x] 完成 1440/768/375、a11y 基础检查和全量回归。
 - [x] 行业日线使用 AKShare 精确同名 endpoint 回退；新增受控预热命令、cache 覆盖与用户层空态，真实 smoke 覆盖 `BK1042`、`BK1036`。
-- [ ] 完成 PR、CI、clean `main` 验收和 `v3.0.0-alpha.1` 发布门禁。
+- [x] 完成 PR、CI、clean `main` 验收和 `v3.0.0-alpha.1` 发布门禁。
 - [x] 用 v2.6 fixture score/risk snapshot 与离线 daily/weekly 回归证明主模型、Research/Evidence 不变；live smoke 仍按对应数据 Milestone 单独执行。
 
-### M2-M6
+### M2
+
+- [ ] 冻结 Fund Profile 数据契约、字段语义与 AKShare endpoint coverage。
+- [ ] 完成 Fund Profile cache、API、CLI、详情页和三类基金真实 smoke。
+- [ ] 完成 PR、CI、clean `main` 验收和 `v3.0.0-alpha.2` 发布门禁。
+
+### M3-M6
 
 按 `docs/roadmap/v3-delivery-roadmap.md` 执行。当前 Milestone 未通过前不展开实现。
 

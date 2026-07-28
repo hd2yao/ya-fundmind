@@ -6,11 +6,11 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 ## 当前状态
 
-- 当前稳定版本：`v2.6.0`（Python package version：`2.6.0`）
-- 当前交付模式：`v2.6` stable + V3 Fund Information Platform M1 execution
-- 当前发布状态：`v2.6.0` 已完成已有新闻/公告 evidence 的本地筛选、溯源与基金关联浏览；本轮有限产品交付计划已收口。
+- 当前稳定版本：`v2.6.0`；当前预发布版本：`v3.0.0-alpha.1`（Python package version：`3.0.0a1`）。
+- 当前交付模式：V3 Fund Information Platform；M1 已发布 alpha，M2 Fund Profile Data 为下一交付门。
+- 当前发布状态：`v3.0.0-alpha.1` 完成产品数据真实性、信息架构、只读自选页、普通页面诊断隔离和行业历史可用性收口；`v2.6.0` 仍是稳定基线。
 - 下一大版本定位：从“研究报告工作台”收敛为“本地基金/ETF 信息平台”，优先补齐基金档案、ETF 行情、产品信息架构和开源交付质量。
-- V3 当前状态：M1 已完成产品 view model、一级信息架构、只读自选页、普通页面诊断隔离，以及行业板块历史的精确同名端点回退和显式刷新；当前等待 M1 全量验收、PR 与 `v3.0.0-alpha.1` 门禁。尚未修改 package version。
+- V3 当前状态：M1 已完成并发布 `v3.0.0-alpha.1`；下一步按 Roadmap 进入 M2 Fund Profile Data。主评分、主风险、默认 Provider 与自动化运行边界继续冻结。
 - V3 产品评审：`docs/reviews/2026-07-28-v2.6-product-reassessment.md`
 - V3 开源复盘：`docs/research/2026-07-28-fund-platform-open-source-refresh.md`
 - V3 架构：`docs/architecture/v3-fund-information-platform.md`
@@ -20,6 +20,7 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 - V3 Spec：`specs/v3-fund-information-platform/`
 - V3 实现主计划：`docs/plans/2026-07-28-v3-fund-information-platform.md`
 - V3 行业历史验收：`docs/reviews/2026-07-28-v3-m1-sector-history-readiness.md`
+- V3 M1 alpha 发布报告：`docs/releases/v3.0.0-alpha.1-release-report.md`
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
