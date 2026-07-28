@@ -85,7 +85,7 @@ from .signal_review import (
 )
 from .snapshot import compare_snapshots, load_previous_snapshot, snapshot_from_result, write_snapshot
 from .tiantian_diagnostics import build_tiantian_cache_diagnostics, write_tiantian_cache_diagnostics
-from .trace import write_provider_trace
+from .trace import write_provider_health_trace, write_provider_trace
 from .web_console import build_web_console_state
 
 
@@ -751,7 +751,8 @@ def _run_refresh_market_sector_history(args) -> int:
         return 2
     try:
         symbols = _parse_market_sector_symbols(args.symbols)
-        payload = _build_cli_market_sector_service(args).refresh_sector_histories(
+        service = _build_cli_market_sector_service(args)
+        payload = service.refresh_sector_histories(
             symbols,
             now=datetime.now(timezone.utc),
             as_of=_parse_refresh_as_of(args.as_of),
@@ -763,12 +764,23 @@ def _run_refresh_market_sector_history(args) -> int:
         print(f"Market sector history refresh failed: {exc}")
         return 2
 
+    provider_config = load_provider_config(args.provider_config).akshare
+    trace_path = write_provider_health_trace(
+        as_of=str(payload["as_of"]),
+        provider_health=tuple(getattr(service, "last_refresh_health", ())),
+        output_dir=args.output_dir,
+        filename_prefix="provider-sector-history",
+        retention_days=provider_config.trace_retention_days,
+        max_trace_files=provider_config.max_trace_files,
+    )
+    payload["provider_trace"] = str(trace_path.relative_to(args.output_dir))
     output_path = args.output_dir / "market" / "sector_history_refresh_report.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    print(f"Provider trace: {trace_path}")
     print(f"Market sector history refresh report: {output_path}")
     print(
         "Market sector history refresh: success={success} fallback={fallback} unavailable={unavailable}".format(

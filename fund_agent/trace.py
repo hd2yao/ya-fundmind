@@ -5,19 +5,33 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .agents import ResearchResult
-from .snapshot import _provider_health_to_dict
+from .models import ProviderHealth
+from .snapshot import provider_health_to_dict
 
 SCHEMA_VERSION = "1.0"
 GENERATOR = "fund_agent"
 
 
 def provider_trace_payload(result: ResearchResult, *, generated_at: str | None = None) -> dict:
+    return provider_health_trace_payload(
+        as_of=result.as_of,
+        provider_health=result.provider_health,
+        generated_at=generated_at,
+    )
+
+
+def provider_health_trace_payload(
+    *,
+    as_of: str,
+    provider_health: tuple[ProviderHealth, ...],
+    generated_at: str | None = None,
+) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at or _generated_at(),
         "generator": GENERATOR,
-        "as_of": result.as_of,
-        "providers": [_provider_health_to_dict(item) for item in result.provider_health],
+        "as_of": as_of,
+        "providers": [provider_health_to_dict(item) for item in provider_health],
     }
 
 
@@ -29,13 +43,37 @@ def write_provider_trace(
     max_trace_files: int = 100,
     now: datetime | None = None,
 ) -> Path:
+    return write_provider_health_trace(
+        as_of=result.as_of,
+        provider_health=result.provider_health,
+        output_dir=output_dir,
+        retention_days=retention_days,
+        max_trace_files=max_trace_files,
+        now=now,
+    )
+
+
+def write_provider_health_trace(
+    *,
+    as_of: str,
+    provider_health: tuple[ProviderHealth, ...],
+    output_dir: Path | str,
+    filename_prefix: str = "provider",
+    retention_days: int = 30,
+    max_trace_files: int = 100,
+    now: datetime | None = None,
+) -> Path:
     resolved_now = _utc_now(now)
     trace_dir = Path(output_dir) / "traces"
     trace_dir.mkdir(parents=True, exist_ok=True)
-    path = trace_dir / f"provider-{result.as_of}.json"
+    path = trace_dir / f"{filename_prefix}-{as_of}.json"
     path.write_text(
         json.dumps(
-            provider_trace_payload(result, generated_at=resolved_now.isoformat()),
+            provider_health_trace_payload(
+                as_of=as_of,
+                provider_health=provider_health,
+                generated_at=resolved_now.isoformat(),
+            ),
             ensure_ascii=False,
             indent=2,
             sort_keys=True,

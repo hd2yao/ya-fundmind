@@ -8,8 +8,9 @@ from typing import Protocol
 
 from .cache import FundCache
 from .market_history import WINDOW_POINTS
-from .models import MarketEntity, MarketSeriesPoint
+from .models import MarketEntity, MarketSeriesPoint, ProviderHealth, ProviderWarning
 from .providers import ProviderUnavailable
+from .snapshot import provider_health_to_dict
 
 
 INDUSTRY_SYMBOL_PATTERN = re.compile(r"^BK\d{4}$")
@@ -60,6 +61,7 @@ class MarketSectorService:
         self.provider = provider
         self.cache_ttl_days = cache_ttl_days
         self.allow_stale_fallback = allow_stale_fallback
+        self.last_refresh_health: tuple[ProviderHealth, ...] = ()
 
     def search_sectors(
         self,
@@ -286,6 +288,7 @@ class MarketSectorService:
         resolved_symbols = _normalize_sector_symbols(symbols)
         sectors: list[dict[str, object]] = []
         warnings: list[dict[str, str]] = []
+        refresh_health: list[ProviderHealth] = []
 
         for symbol in resolved_symbols:
             try:
@@ -298,6 +301,17 @@ class MarketSectorService:
                 )
             except (MarketSectorUnavailable, ValueError) as exc:
                 message = str(exc)
+                refresh_health.append(
+                    _sector_refresh_health(
+                        self.provider,
+                        symbol=symbol,
+                        name=None,
+                        current_time=current_time,
+                        fallback_used=False,
+                        fallback_reason=None,
+                        unavailable_reason=message,
+                    )
+                )
                 sectors.append(
                     {
                         "symbol": symbol,
@@ -329,10 +343,26 @@ class MarketSectorService:
                 continue
 
             fallback_used = bool(payload["fallback_used"])
+            name = str(payload["name"])
+            refresh_health.append(
+                _sector_refresh_health(
+                    self.provider,
+                    symbol=str(payload["symbol"]),
+                    name=name,
+                    current_time=current_time,
+                    fallback_used=fallback_used,
+                    fallback_reason=(
+                        str(payload["fallback_reason"])
+                        if payload["fallback_reason"]
+                        else None
+                    ),
+                    unavailable_reason=None,
+                )
+            )
             sectors.append(
                 {
                     "symbol": payload["symbol"],
-                    "name": payload["name"],
+                    "name": name,
                     "status": "fallback" if fallback_used else "success",
                     "source": payload["source"],
                     "as_of": payload["as_of"],
@@ -356,12 +386,18 @@ class MarketSectorService:
                     }
                 )
 
+        self.last_refresh_health = tuple(refresh_health)
         return {
+            "as_of": _resolve_as_of_date(as_of, current_time).isoformat(),
             "generated_at": current_time.isoformat(),
             "sectors": sectors,
             "success_count": sum(item["status"] == "success" for item in sectors),
             "fallback_count": sum(item["status"] == "fallback" for item in sectors),
             "unavailable_count": sum(item["status"] == "unavailable" for item in sectors),
+            "provider_health": [
+                provider_health_to_dict(item)
+                for item in self.last_refresh_health
+            ],
             "warnings": warnings,
             "not_production_model": True,
             "main_score_changed": False,
@@ -612,6 +648,54 @@ def _normalize_sector_symbols(symbols: list[str]) -> list[str]:
     if not normalized:
         raise ValueError("At least one industry symbol is required.")
     return normalized
+
+
+def _sector_refresh_health(
+    provider: MarketSectorProvider,
+    *,
+    symbol: str,
+    name: str | None,
+    current_time: datetime,
+    fallback_used: bool,
+    fallback_reason: str | None,
+    unavailable_reason: str | None,
+) -> ProviderHealth:
+    health = getattr(provider, "last_health", None)
+    if not isinstance(health, ProviderHealth):
+        warning = ()
+        if unavailable_reason:
+            warning = (
+                ProviderWarning(
+                    code="sector_refresh_unavailable",
+                    message=unavailable_reason,
+                    severity="warning",
+                ),
+            )
+        health = ProviderHealth(
+            provider="akshare",
+            provider_version=None,
+            started_at=current_time.isoformat(),
+            finished_at=current_time.isoformat(),
+            duration_ms=0,
+            warnings=warning,
+        )
+    return replace(
+        health,
+        cache_read_count=(
+            max(1, health.cache_read_count)
+            if fallback_used
+            else health.cache_read_count
+        ),
+        fallback_used=fallback_used,
+        fallback_reason=fallback_reason if fallback_used else None,
+        fallback_source="cache" if fallback_used else None,
+        metadata={
+            **health.metadata,
+            "operation": "market_sector_history_refresh",
+            "sector_symbol": symbol,
+            "sector_name": name,
+        },
+    )
 
 
 def _resolve_as_of_date(value: str | None, current_time: datetime) -> date:

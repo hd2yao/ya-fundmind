@@ -821,6 +821,15 @@ class AkshareProvider:
             if fallback_result.success and fallback_points:
                 selected_endpoint = fallback_endpoint
                 selected_points = fallback_points
+                # A usable exact-name fallback is a degraded endpoint path, not
+                # a terminal provider failure. Keep the primary endpoint trace,
+                # but do not let its mapping-only critical warning degrade the
+                # consumer-facing provider health.
+                warnings = [
+                    warning
+                    for warning in warnings
+                    if warning.severity != "critical"
+                ]
                 warnings.append(fallback_warning)
             else:
                 fallback_reason = (
@@ -1754,7 +1763,10 @@ def _industry_entities_from_akshare_rows(
     )
 
 
-def _industry_endpoint_trace(trace: ProviderEndpointTrace, mapping: _MarketSeriesMappingResult | None) -> ProviderEndpointTrace:
+def _industry_endpoint_trace(
+    trace: ProviderEndpointTrace,
+    mapping: _MarketSeriesMappingResult | None,
+) -> ProviderEndpointTrace:
     if mapping is None:
         return trace
     return replace(

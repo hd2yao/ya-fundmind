@@ -223,6 +223,12 @@ class ExactThsNameOnly(EastmoneyUnavailableThsAvailable):
         return super().stock_board_industry_index_ths(**kwargs)
 
 
+class InvalidPrimaryThsAvailable(EastmoneyUnavailableThsAvailable):
+    def stock_board_industry_hist_em(self, **kwargs):
+        self.calls.append(("stock_board_industry_hist_em", kwargs))
+        return {"unexpected": "shape"}
+
+
 def test_akshare_industry_history_falls_back_to_exact_ths_name(tmp_path):
     cache = FundCache(tmp_path / "funds.sqlite")
     ak = EastmoneyUnavailableThsAvailable()
@@ -259,6 +265,29 @@ def test_akshare_industry_history_falls_back_to_exact_ths_name(tmp_path):
             source="akshare",
         )
     ) == 2
+
+
+def test_akshare_industry_history_fallback_clears_primary_critical_warning(tmp_path):
+    provider = AkshareProvider(
+        ak_module=InvalidPrimaryThsAvailable(),
+        cache=FundCache(tmp_path / "funds.sqlite"),
+    )
+
+    provider.fetch_industry_history(
+        "BK1042",
+        name="医药商业",
+        start_date="20260721",
+        end_date="20260722",
+        as_of="2026-07-23",
+    )
+
+    assert provider.last_health is not None
+    assert provider.last_health.endpoints[-1].success is True
+    assert any(
+        warning.code == "endpoint_fallback"
+        for warning in provider.last_health.warnings
+    )
+    assert not provider.last_health.has_critical_warnings
 
 
 def test_akshare_industry_history_does_not_substitute_a_similar_ths_name(tmp_path):

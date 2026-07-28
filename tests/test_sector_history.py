@@ -333,6 +333,10 @@ def test_sector_history_refreshes_explicit_symbols_and_continues_after_failure(t
     assert payload["unavailable_count"] == 1
     assert payload["sectors"][0]["status"] == "success"
     assert payload["sectors"][1]["status"] == "unavailable"
+    assert len(payload["provider_health"]) == 2
+    assert payload["provider_health"][0]["sector_symbol"] == "BK1036"
+    assert payload["provider_health"][1]["sector_symbol"] == "BK0475"
+    assert payload["provider_health"][1]["warnings"]
     assert len(
         cache.load_market_series(
             symbol="BK1036",
