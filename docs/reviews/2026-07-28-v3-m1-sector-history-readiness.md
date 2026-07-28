@@ -30,7 +30,7 @@
 
 ### 离线回归
 
-- Python：`543 passed, 1 skipped`。
+- Python：`547 passed, 1 skipped`。
 - `python -m compileall -q fund_agent`：通过。
 - Web：`14` 个测试文件、`46` 个测试通过；`npm run typecheck` 与 `npm run build` 通过。
 - focused provider/sector/CLI：`19 passed`。
@@ -42,16 +42,16 @@
 ```bash
 python -m fund_agent.cli refresh-market-sector-history \
   --provider akshare --symbols BK1042,BK1036 \
-  --output-dir /tmp/ya-fundmind-sector-trace-smoke.S2rMFY \
-  --cache-file /tmp/ya-fundmind-sector-trace-smoke.S2rMFY/funds.sqlite \
+  --output-dir /tmp/ya-fundmind-sector-final2-smoke.sKGFwt \
+  --cache-file /tmp/ya-fundmind-sector-final2-smoke.sKGFwt/funds.sqlite \
   --as-of 2026-07-28
 ```
 
 - 结果：`success=2`、`fallback=0`、`unavailable=0`。这里的 `fallback` 指 cache fallback；两条记录均走 AKShare 同名 endpoint fallback，且没有使用 stale cache。
 - `BK1042`（医药商业）与 `BK1036`（半导体）各写入 `4,613` 个有效历史点，范围 `2007-08-01` 至 `2026-07-27`。
 - 每个板块均生成 `ProviderHealth`：东方财富 `stock_board_industry_hist_em` 失败、同名 `stock_board_industry_index_ths` 成功，顶层仅保留 `endpoint_fallback` warning，不保留 critical warning。
-- 生成的 trace 通过 `validate-contract --trace`：`/tmp/ya-fundmind-sector-trace-smoke.S2rMFY/traces/provider-sector-history-2026-07-28.json`。
-- refresh 报告：`/tmp/ya-fundmind-sector-trace-smoke.S2rMFY/market/sector_history_refresh_report.json`。
+- 生成的 trace 通过 `validate-contract --trace`：`/tmp/ya-fundmind-sector-final2-smoke.sKGFwt/traces/provider-sector-history-2026-07-28.json`。
+- refresh 报告：`/tmp/ya-fundmind-sector-final2-smoke.sKGFwt/market/sector_history_refresh_report.json`。
 
 上述 smoke 是真实网络结果；不将 fixture、旧 cache 或近似板块表述为 live success。
 
@@ -61,6 +61,8 @@ python -m fund_agent.cli refresh-market-sector-history \
 
 1. 主 endpoint 映射异常、同名备用 endpoint 成功时，顶层 health 不再携带主 endpoint 的 critical warning；失败细节仍保留在 endpoint trace。
 2. 显式行业刷新会为每个 `BK` 保存结构化 health，并生成 `provider-sector-history-YYYY-MM-DD.json`。trace 包含 endpoint、attempts、映射/跳过行、cache 写入、cache fallback 和板块标识，且满足 Provider Trace v1 contract。
+3. sector refresh trace 使用独立 retention 集合，不会覆盖、抢占或清理 daily `provider-YYYY-MM-DD.json` trace；`validate-contract --output-dir` 仍只选择 daily trace。
+4. 每个板块刷新前后比较 ProviderHealth 对象；未实际发起或未更新 ProviderHealth 的失败路径会写零计数、无 endpoint 的独立 health，绝不复用上一板块的审计行。
 
 ### 浏览器与可访问性基础检查
 
