@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from dataclasses import asdict, replace
@@ -61,6 +62,7 @@ from .release_readiness import evaluate_release_readiness, write_release_readine
 from .research_evidence import build_evidence_bundle
 from .research_copilot import ResearchCopilot
 from .research_output import write_research_answer_outputs
+from .sector_history import MarketSectorService
 from .research_loop import (
     execute_research_step,
     run_weekly_research,
@@ -656,6 +658,28 @@ def _build_cli_market_history_service(args) -> MarketHistoryService:
     )
 
 
+def _build_cli_market_sector_service(args) -> MarketSectorService:
+    cache = FundCache(args.cache_file)
+    provider_config = load_provider_config(args.provider_config).akshare
+    provider = AkshareProvider(
+        cache=cache,
+        allow_stale_cache=True,
+        verbose=bool(
+            getattr(args, "provider_verbose", False)
+            or provider_config.verbose
+        ),
+        timeout_seconds=provider_config.timeout_seconds,
+        retry_count=provider_config.retry_count,
+        retry_backoff_seconds=provider_config.retry_backoff_seconds,
+    )
+    return MarketSectorService(
+        cache=cache,
+        provider=provider,
+        cache_ttl_days=1,
+        allow_stale_fallback=True,
+    )
+
+
 def _parse_refresh_as_of(as_of: str) -> str | None:
     if not as_of:
         return None
@@ -663,6 +687,26 @@ def _parse_refresh_as_of(as_of: str) -> str | None:
         return date.fromisoformat(as_of).isoformat()
     except ValueError as exc:
         raise ValueError("--as-of must be an ISO date, for example 2026-07-27.") from exc
+
+
+def _parse_market_sector_symbols(value: str) -> list[str]:
+    symbols: list[str] = []
+    seen: set[str] = set()
+    for raw in value.split(","):
+        symbol = raw.strip().upper()
+        if not symbol:
+            continue
+        if not re.fullmatch(r"BK\d{4}", symbol):
+            raise ValueError(
+                "--symbols must be a comma-separated list of BK codes, "
+                "for example BK1042,BK1036."
+            )
+        if symbol not in seen:
+            seen.add(symbol)
+            symbols.append(symbol)
+    if not symbols:
+        raise ValueError("--symbols requires at least one BK code.")
+    return symbols
 
 
 def _run_refresh_market_history(args) -> int:
@@ -690,6 +734,44 @@ def _run_refresh_market_history(args) -> int:
     print(f"Market index refresh report: {output_path}")
     print(
         "Market index refresh: success={success} fallback={fallback} unavailable={unavailable}".format(
+            success=payload["success_count"],
+            fallback=payload["fallback_count"],
+            unavailable=payload["unavailable_count"],
+        )
+    )
+    return 0 if payload["success_count"] or payload["fallback_count"] else 2
+
+
+def _run_refresh_market_sector_history(args) -> int:
+    if args.provider != "akshare":
+        print(
+            "refresh-market-sector-history requires --provider akshare; "
+            "fixture data is not refreshed."
+        )
+        return 2
+    try:
+        symbols = _parse_market_sector_symbols(args.symbols)
+        payload = _build_cli_market_sector_service(args).refresh_sector_histories(
+            symbols,
+            now=datetime.now(timezone.utc),
+            as_of=_parse_refresh_as_of(args.as_of),
+        )
+    except ValueError as exc:
+        print(str(exc))
+        return 2
+    except Exception as exc:
+        print(f"Market sector history refresh failed: {exc}")
+        return 2
+
+    output_path = args.output_dir / "market" / "sector_history_refresh_report.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Market sector history refresh report: {output_path}")
+    print(
+        "Market sector history refresh: success={success} fallback={fallback} unavailable={unavailable}".format(
             success=payload["success_count"],
             fallback=payload["fallback_count"],
             unavailable=payload["unavailable_count"],
@@ -1656,6 +1738,44 @@ def build_parser() -> argparse.ArgumentParser:
     refresh_market_history.add_argument("--as-of", default="")
     refresh_market_history.add_argument("--provider-verbose", action="store_true")
     refresh_market_history.set_defaults(func=_run_refresh_market_history)
+
+    refresh_market_sector_history = subparsers.add_parser(
+        "refresh-market-sector-history",
+        help="刷新明确行业板块的历史缓存；仅支持 akshare，不修改主评分/风险",
+    )
+    refresh_market_sector_history.add_argument(
+        "--provider",
+        choices=["fixture", "akshare"],
+        default="akshare",
+    )
+    refresh_market_sector_history.add_argument(
+        "--symbols",
+        required=True,
+        help="逗号分隔的行业 BK 代码，例如 BK1042,BK1036",
+    )
+    refresh_market_sector_history.add_argument(
+        "--cache-file",
+        type=Path,
+        default=DEFAULT_CACHE_FILE,
+    )
+    refresh_market_sector_history.add_argument(
+        "--provider-config",
+        type=Path,
+        default=DEFAULT_PROVIDER_CONFIG,
+    )
+    refresh_market_sector_history.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("outputs"),
+    )
+    refresh_market_sector_history.add_argument("--as-of", default="")
+    refresh_market_sector_history.add_argument(
+        "--provider-verbose",
+        action="store_true",
+    )
+    refresh_market_sector_history.set_defaults(
+        func=_run_refresh_market_sector_history
+    )
 
     historical = subparsers.add_parser("historical-backfill", help="生成历史回填观察数据，不修改主评分/风险")
     historical.add_argument("--provider", choices=["fixture", "cache"], default="fixture")

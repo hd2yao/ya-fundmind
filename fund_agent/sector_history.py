@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from math import ceil
 from typing import Protocol
 
@@ -147,6 +147,8 @@ class MarketSectorService:
         *,
         window: str = "6m",
         now: datetime | None = None,
+        as_of: str | None = None,
+        force_refresh: bool = False,
     ) -> dict[str, object]:
         resolved_symbol = str(symbol).strip().upper()
         if not INDUSTRY_SYMBOL_PATTERN.fullmatch(resolved_symbol):
@@ -154,6 +156,7 @@ class MarketSectorService:
         if window not in WINDOW_POINTS:
             raise ValueError(f"Unsupported history window: {window}")
         current_time = _utc_now(now)
+        requested_as_of = _resolve_as_of_date(as_of, current_time)
         catalog = self._load_catalog(current_time)
         entity = next(
             (
@@ -174,7 +177,7 @@ class MarketSectorService:
                 now=current_time,
             )
         )
-        if fresh and (
+        if fresh and not force_refresh and (
             window != "all" or _has_complete_history_horizon(fresh)
         ):
             return _build_history_payload(
@@ -190,7 +193,7 @@ class MarketSectorService:
             history_start = (
                 FULL_HISTORY_START
                 if history_horizon == "all"
-                else (current_time - timedelta(days=365 * 5)).strftime(
+                else (requested_as_of - timedelta(days=365 * 5)).strftime(
                     "%Y%m%d"
                 )
             )
@@ -198,8 +201,8 @@ class MarketSectorService:
                 resolved_symbol,
                 name=entity.name,
                 start_date=history_start,
-                end_date=current_time.strftime("%Y%m%d"),
-                as_of=current_time.date().isoformat(),
+                end_date=requested_as_of.strftime("%Y%m%d"),
+                as_of=requested_as_of.isoformat(),
             )
         except ProviderUnavailable as exc:
             stale: list[MarketSeriesPoint] = []
@@ -244,7 +247,7 @@ class MarketSectorService:
                     **point.metadata,
                     "provider": "akshare",
                     "series_kind": "market_industry_history",
-                    "as_of": current_time.date().isoformat(),
+                    "as_of": requested_as_of.isoformat(),
                     "updated_at": point.updated_at or current_time.isoformat(),
                     "expires_at": point.metadata.get(
                         "expires_at",
@@ -258,7 +261,7 @@ class MarketSectorService:
         ]
         self.cache.upsert_market_series(
             normalized_points,
-            as_of=current_time.date().isoformat(),
+            as_of=requested_as_of.isoformat(),
             ttl_days=self.cache_ttl_days,
             now=current_time,
         )
@@ -269,6 +272,101 @@ class MarketSectorService:
             fallback_used=False,
             fallback_reason=None,
         )
+
+    def refresh_sector_histories(
+        self,
+        symbols: list[str],
+        *,
+        now: datetime | None = None,
+        as_of: str | None = None,
+    ) -> dict[str, object]:
+        """Refresh explicit industry histories without failing the whole batch."""
+
+        current_time = _utc_now(now)
+        resolved_symbols = _normalize_sector_symbols(symbols)
+        sectors: list[dict[str, object]] = []
+        warnings: list[dict[str, str]] = []
+
+        for symbol in resolved_symbols:
+            try:
+                payload = self.get_sector_history(
+                    symbol,
+                    window="all",
+                    now=current_time,
+                    as_of=as_of,
+                    force_refresh=True,
+                )
+            except (MarketSectorUnavailable, ValueError) as exc:
+                message = str(exc)
+                sectors.append(
+                    {
+                        "symbol": symbol,
+                        "name": None,
+                        "status": "unavailable",
+                        "source": None,
+                        "as_of": None,
+                        "updated_at": None,
+                        "expires_at": None,
+                        "stale": False,
+                        "fallback_used": False,
+                        "warnings": [
+                            {
+                                "code": "sector_refresh_unavailable",
+                                "severity": "warning",
+                                "message": message,
+                            }
+                        ],
+                    }
+                )
+                warnings.append(
+                    {
+                        "code": "sector_refresh_unavailable",
+                        "severity": "warning",
+                        "symbol": symbol,
+                        "message": f"{symbol}: {message}",
+                    }
+                )
+                continue
+
+            fallback_used = bool(payload["fallback_used"])
+            sectors.append(
+                {
+                    "symbol": payload["symbol"],
+                    "name": payload["name"],
+                    "status": "fallback" if fallback_used else "success",
+                    "source": payload["source"],
+                    "as_of": payload["as_of"],
+                    "updated_at": payload["updated_at"],
+                    "expires_at": payload["expires_at"],
+                    "stale": payload["stale"],
+                    "fallback_used": fallback_used,
+                    "warnings": payload["warnings"],
+                }
+            )
+            if fallback_used:
+                warnings.append(
+                    {
+                        "code": "sector_refresh_fallback",
+                        "severity": "warning",
+                        "symbol": str(payload["symbol"]),
+                        "message": (
+                            f"{payload['symbol']} {payload['name']}: "
+                            "live refresh failed; cache fallback used."
+                        ),
+                    }
+                )
+
+        return {
+            "generated_at": current_time.isoformat(),
+            "sectors": sectors,
+            "success_count": sum(item["status"] == "success" for item in sectors),
+            "fallback_count": sum(item["status"] == "fallback" for item in sectors),
+            "unavailable_count": sum(item["status"] == "unavailable" for item in sectors),
+            "warnings": warnings,
+            "not_production_model": True,
+            "main_score_changed": False,
+            "main_risk_changed": False,
+        }
 
     def _load_catalog(self, current_time: datetime) -> _CatalogResult:
         fresh = self.cache.load_market_entities(
@@ -499,6 +597,32 @@ def _fallback_warnings(
             }
         )
     return warnings
+
+
+def _normalize_sector_symbols(symbols: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for symbol in symbols:
+        value = str(symbol).strip().upper()
+        if not INDUSTRY_SYMBOL_PATTERN.fullmatch(value):
+            raise ValueError(f"Unsupported industry symbol: {value}")
+        if value not in seen:
+            seen.add(value)
+            normalized.append(value)
+    if not normalized:
+        raise ValueError("At least one industry symbol is required.")
+    return normalized
+
+
+def _resolve_as_of_date(value: str | None, current_time: datetime) -> date:
+    if not value:
+        return current_time.date()
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(
+            "--as-of must be an ISO date, for example 2026-07-28."
+        ) from exc
 
 
 def _utc_now(value: datetime | None = None) -> datetime:

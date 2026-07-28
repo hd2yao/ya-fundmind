@@ -138,6 +138,14 @@ class FailingProvider:
         raise ProviderUnavailable("history network down")
 
 
+class PartiallyAvailableHistoryProvider(LiveProvider):
+    def fetch_industry_history(self, symbol, **kwargs):
+        self.history_calls.append((symbol, kwargs))
+        if symbol == "BK0475":
+            raise ProviderUnavailable("bank history unavailable")
+        return _points(25)
+
+
 def test_sector_search_falls_back_to_stale_catalog(tmp_path):
     cache = FundCache(tmp_path / "funds.sqlite")
     cache.upsert_market_entities(
@@ -303,6 +311,36 @@ def test_sector_history_falls_back_to_stale_cache(tmp_path):
         warning["code"] == "partial_history"
         for warning in payload["warnings"]
     )
+
+
+def test_sector_history_refreshes_explicit_symbols_and_continues_after_failure(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    provider = PartiallyAvailableHistoryProvider()
+    service = MarketSectorService(cache=cache, provider=provider)
+
+    payload = service.refresh_sector_histories(
+        ["BK1036", "BK0475"],
+        now=NOW,
+        as_of="2026-07-23",
+    )
+
+    assert [item["symbol"] for item in payload["sectors"]] == [
+        "BK1036",
+        "BK0475",
+    ]
+    assert payload["success_count"] == 1
+    assert payload["fallback_count"] == 0
+    assert payload["unavailable_count"] == 1
+    assert payload["sectors"][0]["status"] == "success"
+    assert payload["sectors"][1]["status"] == "unavailable"
+    assert len(
+        cache.load_market_series(
+            symbol="BK1036",
+            series_type="industry",
+            source="akshare",
+            now=NOW,
+        )
+    ) == 25
 
 
 def test_sector_search_missing_akshare_method_uses_stale_cache(tmp_path):
