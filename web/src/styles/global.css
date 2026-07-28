@@ -647,6 +647,13 @@ textarea:focus-visible {
   margin-bottom: 14px;
 }
 
+.filter-bar__selects {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(3, minmax(128px, 1fr));
+  gap: 8px;
+}
+
 .fund-filter-grid {
   display: grid;
   grid-template-columns: minmax(260px, 2fr) repeat(4, minmax(118px, 1fr)) minmax(92px, auto);
@@ -786,6 +793,7 @@ textarea:focus-visible {
 }
 
 .select-control {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -794,6 +802,8 @@ textarea:focus-visible {
 }
 
 .select-control select {
+  width: 100%;
+  min-width: 0;
   min-height: 38px;
   padding: 0 30px 0 10px;
   color: var(--color-text);
@@ -1525,6 +1535,19 @@ textarea:focus-visible {
   background: var(--color-blue-soft);
 }
 
+.tag--muted {
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+}
+
+.fund-evidence-link {
+  text-decoration: none;
+}
+
+.fund-evidence-link:hover {
+  text-decoration: underline;
+}
+
 .external-link {
   display: inline-flex;
   align-items: center;
@@ -2207,6 +2230,11 @@ textarea:focus-visible {
   .select-control {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .filter-bar__selects {
+    width: 100%;
+    grid-template-columns: 1fr;
   }
 
   .select-control select {

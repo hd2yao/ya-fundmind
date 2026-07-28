@@ -110,6 +110,36 @@ def test_read_api_exposes_structured_research_payloads(tmp_path):
     assert client.get("/api/news").json()["data"]["evidence"][0]["title"] == "政策"
 
 
+def test_news_api_marks_only_related_codes_present_in_the_local_fund_index(tmp_path):
+    output_dir = tmp_path / "outputs"
+    _write_json(
+        output_dir / "market" / "market_intelligence_report.json",
+        {
+            "records": [
+                {
+                    "code": "510300",
+                    "name": "沪深300ETF",
+                    "metadata": {},
+                }
+            ]
+        },
+    )
+    _write_json(
+        output_dir / "news" / "news_evidence_report.json",
+        {
+            "items": [
+                {"title": "已索引", "related_funds": ["510300", "SH510300"]},
+                {"title": "索引外", "related_funds": ["999999", "not-a-code"]},
+            ]
+        },
+    )
+
+    data = TestClient(create_web_app(output_dir=output_dir)).get("/api/news").json()["data"]
+
+    assert data["indexed_fund_codes"] == ["510300"]
+    assert data["items"][1]["related_funds"] == ["999999", "not-a-code"]
+
+
 def test_missing_research_payloads_are_explicit_and_non_fatal(tmp_path):
     client = TestClient(create_web_app(output_dir=tmp_path / "outputs"))
 

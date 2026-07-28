@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v2.6.0 - 2026-07-28
+
+- Add local text, theme, source-quality, and evidence-strength filters to the existing News / Announcement Evidence Browser without mutating evidence artifacts.
+- Link only related six-digit fund codes that are already present in the local Fund Explorer index; keep unindexed and invalid codes explicitly non-clickable.
+- Display source quality, evidence strength, published time, source, evidence warnings, low confidence, and missing/unsafe URL states for every evidence item.
+- Restrict external evidence links to `http`/`https` URLs opened with `noopener noreferrer`; no news ingestion, provider, main score/risk, recommendation, or output-contract change is introduced.
+
 ## v2.5.0 - 2026-07-28
 
 - Add a Portfolio Workbench that links configured holding codes and names to the existing local fund-detail route with a safe return path.

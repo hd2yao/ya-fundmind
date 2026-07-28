@@ -22,7 +22,7 @@ from .market_history import (
     MarketHistoryService,
     MarketHistoryUnavailable,
 )
-from .providers import AkshareProvider
+from .providers import AkshareProvider, normalize_fund_code
 from .review_state import VALID_REVIEW_STATUSES, list_review_state, summarize_review_state
 from .sector_history import (
     INDUSTRY_SYMBOL_PATTERN,
@@ -401,7 +401,10 @@ def create_web_app(
     @app.get("/api/news")
     def news() -> dict[str, object]:
         path = root / "news" / "news_evidence_report.json"
-        return _resource(_load_json_object(path), source_paths=(path,))
+        payload = _load_json_object(path)
+        if payload:
+            payload["indexed_fund_codes"] = _indexed_news_fund_codes(payload, app.state.fund_explorer)
+        return _resource(payload, source_paths=(path,))
 
     @app.get("/api/reports")
     def reports() -> dict[str, object]:
@@ -550,6 +553,26 @@ def create_web_app(
             raise HTTPException(status_code=404, detail="Product web build is missing.")
 
     return app
+
+
+def _indexed_news_fund_codes(payload: dict[str, object], fund_explorer: FundExplorerIndex) -> list[str]:
+    """Expose only evidence codes that already exist in the local fund index."""
+
+    values = payload.get("items")
+    if not isinstance(values, list):
+        return []
+    codes: set[str] = set()
+    for item in values:
+        if not isinstance(item, dict):
+            continue
+        related_funds = item.get("related_funds")
+        if not isinstance(related_funds, list):
+            continue
+        for value in related_funds:
+            code = normalize_fund_code(value)
+            if len(code) == 6 and code.isdigit() and fund_explorer.get(code) is not None:
+                codes.add(code)
+    return sorted(codes)
 
 
 def _build_fund_history_service(

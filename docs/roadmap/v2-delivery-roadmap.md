@@ -22,7 +22,7 @@
 | Fund Research Desk | `v2.3.0` | 市场新鲜度、指数 daily prewarm 与数据优先本地工作台，已发布 |
 | Fund Data Terminal & Detail | `v2.4.0` | 基金独立详情、历史净值、新鲜度和查询回链，已发布 |
 | Portfolio Workbench | `v2.5.0` | 配置持仓、暴露和数据缺口的可浏览工作台，已发布 |
-| Evidence Browser | `v2.6.0` | 新闻/公告证据筛选、溯源与基金关联，当前交付目标 |
+| Evidence Browser | `v2.6.0` | 新闻/公告证据筛选、溯源与基金关联，已发布 |
 
 ## v2.1：Local Product Web + Fund Explorer
 
