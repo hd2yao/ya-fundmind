@@ -82,6 +82,7 @@ def write_provider_health_trace(
     )
     _prune_provider_traces(
         trace_dir,
+        filename_prefix=filename_prefix,
         retention_days=retention_days,
         max_trace_files=max_trace_files,
         now=resolved_now,
@@ -92,20 +93,36 @@ def write_provider_health_trace(
 def _prune_provider_traces(
     trace_dir: Path,
     *,
+    filename_prefix: str,
     retention_days: int,
     max_trace_files: int,
     now: datetime,
 ) -> None:
-    traces = sorted(trace_dir.glob("provider-*.json"), key=lambda item: item.stat().st_mtime)
+    traces = sorted(
+        _trace_paths(trace_dir, filename_prefix),
+        key=lambda item: item.stat().st_mtime,
+    )
     cutoff = now - timedelta(days=max(0, retention_days))
     for path in traces:
         modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
         if modified_at < cutoff:
             path.unlink(missing_ok=True)
-    remaining = sorted(trace_dir.glob("provider-*.json"), key=lambda item: item.stat().st_mtime)
+    remaining = sorted(
+        _trace_paths(trace_dir, filename_prefix),
+        key=lambda item: item.stat().st_mtime,
+    )
     overflow = max(0, len(remaining) - max(1, max_trace_files))
     for path in remaining[:overflow]:
         path.unlink(missing_ok=True)
+
+
+def _trace_paths(trace_dir: Path, filename_prefix: str) -> list[Path]:
+    pattern = (
+        "provider-????-??-??.json"
+        if filename_prefix == "provider"
+        else f"{filename_prefix}-*.json"
+    )
+    return list(trace_dir.glob(pattern))
 
 
 def _generated_at() -> str:

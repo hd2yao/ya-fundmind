@@ -169,6 +169,14 @@ class HealthRecordingHistoryProvider(LiveProvider):
         return super().fetch_industry_history(symbol, **kwargs)
 
 
+class EmptyHistoryPreservesPreviousHealth(HealthRecordingHistoryProvider):
+    def fetch_industry_history(self, symbol, **kwargs):
+        if symbol == "BK0475":
+            self.history_calls.append((symbol, kwargs))
+            return []
+        return super().fetch_industry_history(symbol, **kwargs)
+
+
 def test_sector_search_falls_back_to_stale_catalog(tmp_path):
     cache = FundCache(tmp_path / "funds.sqlite")
     cache.upsert_market_entities(
@@ -391,6 +399,27 @@ def test_sector_history_refresh_unknown_symbol_does_not_reuse_previous_health(tm
     assert unknown["mapped_row_count"] == 0
     assert unknown["cache_write_count"] == 0
     assert unknown["endpoints"] == []
+
+
+def test_sector_history_refresh_unavailable_provider_does_not_reuse_previous_health(tmp_path):
+    provider = EmptyHistoryPreservesPreviousHealth()
+    service = MarketSectorService(
+        cache=FundCache(tmp_path / "funds.sqlite"),
+        provider=provider,
+    )
+
+    payload = service.refresh_sector_histories(
+        ["BK1036", "BK0475"],
+        now=NOW,
+        as_of="2026-07-23",
+    )
+
+    previous, unavailable = payload["provider_health"]
+    assert previous["sector_symbol"] == "BK1036"
+    assert previous["live_row_count"] == 25
+    assert unavailable["sector_symbol"] == "BK0475"
+    assert unavailable["live_row_count"] == 0
+    assert unavailable["endpoints"] == []
 
 
 def test_sector_search_missing_akshare_method_uses_stale_cache(tmp_path):

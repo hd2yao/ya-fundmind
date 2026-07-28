@@ -291,6 +291,7 @@ class MarketSectorService:
         refresh_health: list[ProviderHealth] = []
 
         for symbol in resolved_symbols:
+            previous_health = getattr(self.provider, "last_health", None)
             try:
                 payload = self.get_sector_history(
                     symbol,
@@ -303,14 +304,16 @@ class MarketSectorService:
                 message = str(exc)
                 refresh_health.append(
                     _sector_refresh_health(
-                        self.provider,
+                        health=_new_provider_health(
+                            self.provider,
+                            previous_health,
+                        ),
                         symbol=symbol,
                         name=None,
                         current_time=current_time,
                         fallback_used=False,
                         fallback_reason=None,
                         unavailable_reason=message,
-                        provider_requested=not isinstance(exc, ValueError),
                     )
                 )
                 sectors.append(
@@ -347,7 +350,10 @@ class MarketSectorService:
             name = str(payload["name"])
             refresh_health.append(
                 _sector_refresh_health(
-                    self.provider,
+                    health=_new_provider_health(
+                        self.provider,
+                        previous_health,
+                    ),
                     symbol=str(payload["symbol"]),
                     name=name,
                     current_time=current_time,
@@ -652,17 +658,15 @@ def _normalize_sector_symbols(symbols: list[str]) -> list[str]:
 
 
 def _sector_refresh_health(
-    provider: MarketSectorProvider,
     *,
+    health: ProviderHealth | None,
     symbol: str,
     name: str | None,
     current_time: datetime,
     fallback_used: bool,
     fallback_reason: str | None,
     unavailable_reason: str | None,
-    provider_requested: bool = True,
 ) -> ProviderHealth:
-    health = getattr(provider, "last_health", None) if provider_requested else None
     if not isinstance(health, ProviderHealth):
         warning = ()
         if unavailable_reason:
@@ -698,6 +702,16 @@ def _sector_refresh_health(
             "sector_name": name,
         },
     )
+
+
+def _new_provider_health(
+    provider: MarketSectorProvider,
+    previous_health: object,
+) -> ProviderHealth | None:
+    health = getattr(provider, "last_health", None)
+    if isinstance(health, ProviderHealth) and health is not previous_health:
+        return health
+    return None
 
 
 def _resolve_as_of_date(value: str | None, current_time: datetime) -> date:
