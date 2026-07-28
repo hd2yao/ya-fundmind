@@ -4,7 +4,7 @@
 
 把 v2.6 的本地研究底座收敛为一个面向用户的完整基金信息平台，并发布 `v3.0.0`。V3 的核心不是新增推荐模型，而是补齐基金资料、ETF 行情、产品信息架构和开源交付质量。
 
-当前进度：M1 已发布 `v3.0.0-alpha.1`；下一步进入 M2 Fund Profile Data。
+当前进度：M1 已完成实现与验收；`v3.0.0-alpha.1` 正在等待 PR、CI 和 clean `main` annotated tag。该发布门完成后才进入 M2 Fund Profile Data。
 
 ## 版本策略
 
