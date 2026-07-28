@@ -26,7 +26,7 @@
 - [x] `T108` 隐藏正式 fixture 新闻入口。
   映射：`AC-026`
 - [ ] `T109` 完成 Web 三视口、a11y、全量回归、PR 和 `alpha.1`。
-- [ ] `T110` 增加 fixture 新闻、Research/Evidence、daily/weekly 和 `main_score_changed=false/main_risk_changed=false` 回归。
+- [x] `T110` 增加 fixture 新闻、Research/Evidence、daily/weekly 和 `main_score_changed=false/main_risk_changed=false` 回归。
 
 ## Batch 2：M2 Fund Profile
 
