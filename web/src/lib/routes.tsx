@@ -6,7 +6,8 @@ import {
   LayoutDashboard,
   Newspaper,
   SearchCheck,
-  Sparkles
+  Sparkles,
+  Star
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -27,7 +28,8 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
     label: "数据终端",
     items: [
       { path: "/market", label: "行情总览", description: "指数 · 板块 · 主题", icon: ChartNoAxesCombined },
-      { path: "/funds", label: "基金终端", description: "全市场 · 自选 · 历史", icon: SearchCheck },
+      { path: "/funds", label: "基金终端", description: "全市场 · 历史", icon: SearchCheck },
+      { path: "/watchlist", label: "自选", description: "观察基金 · 只读", icon: Star },
       { path: "/portfolio", label: "组合", description: "持仓 · 暴露 · 缺口", icon: BriefcaseBusiness }
     ]
   },
@@ -39,7 +41,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
     ]
   },
   {
-    label: "系统",
+    label: "系统工具",
     items: [
       { path: "/status", label: "系统状态", description: "运行 · 资料 · 状态", icon: LayoutDashboard },
       { path: "/reports", label: "报告中心", description: "日报 · 周报 · 导出", icon: FileText }

@@ -21,6 +21,7 @@ describe("AppShell", () => {
     const labels = [
       "行情总览",
       "基金终端",
+      "自选",
       "组合",
       "研究助手",
       "人工审核",
@@ -32,7 +33,7 @@ describe("AppShell", () => {
     }
     expect(screen.getByText("数据终端")).toBeInTheDocument();
     expect(screen.getByText("研究工具")).toBeInTheDocument();
-    expect(screen.getByText("系统")).toBeInTheDocument();
+    expect(screen.getByText("系统工具")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "行情总览" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("FundMind OS · 行情总览")).toBeInTheDocument();
     expect(screen.getByText("基金与市场信息平台")).toBeInTheDocument();

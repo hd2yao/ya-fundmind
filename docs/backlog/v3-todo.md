@@ -10,7 +10,7 @@
 ## 当前状态
 
 - 当前稳定版本：`v2.6.0`
-- 当前开发状态：M1 执行中；组合未知估值已合并，Product API/view model 与普通页面诊断隔离已完成本地验收，待 PR/CI 合并。
+- 当前开发状态：M1 执行中；Product API/view model、普通页面诊断隔离、一级导航与只读自选页均已完成，下一步收口跨模块回归与 `alpha.1` 发布门禁。
 - 当前 Milestone：M1 Product Truth & Information Architecture
 - 当前 P0：无
 - 当前 P1：M1 Product Truth & Information Architecture
@@ -34,10 +34,10 @@
 - [x] 新增 V3 optional observation/product mapper，并以 legacy adapter 保持 `FundRecord` 和主 score/risk 不变。
 - [x] 修复组合估值 missing 时的 `current_value=0` 和 `-100%`。
 - [x] 建立产品 view model 和 diagnostics 分层。
-- [ ] 重组一级导航：市场、基金、自选、组合。
-- [ ] Research、Reports、System 降为二级。
-- [ ] 新增只读自选页。
-- [ ] 普通页面移除 raw provider/source code、schema、内部 warning code。
+- [x] 重组一级导航：市场、基金、自选、组合。
+- [x] Research、Reports、System 降为二级。
+- [x] 新增只读自选页。
+- [x] 核心普通页面移除 raw provider/source code、schema、内部 warning code。
 - [x] fixture 新闻默认不作为正式入口。
 - [ ] 完成 1440/768/375、a11y 和全量回归。
 - [ ] 用 v2.6 fixture/live snapshot 证明主 score/risk、Research/Evidence 和 daily/weekly 不变。
