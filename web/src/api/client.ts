@@ -1,15 +1,17 @@
 import type {
   ApiResource,
-  FundDetailResponse,
-  FundHistoryResponse,
   FundHistoryWindow,
   FundSearchParams,
-  FundSearchResponse,
   MarketIndexHistoryResponse,
   MarketIndexWindow,
   MarketSectorHistoryResponse,
   MarketSectorSearchParams,
-  MarketSectorSearchResponse
+  MarketSectorSearchResponse,
+  ProductFundDetailResponse,
+  ProductFundHistoryResponse,
+  ProductFundSearchResponse,
+  ProductMarketHistoryResponse,
+  ProductMarketSectorSearchResponse
 } from "./types";
 
 export class ApiError extends Error {
@@ -65,7 +67,7 @@ export async function postResource<TResponse, TBody>(path: string, body: TBody):
 export async function searchFunds(
   params: FundSearchParams = {},
   signal?: AbortSignal
-): Promise<FundSearchResponse> {
+): Promise<ProductFundSearchResponse> {
   const query = new URLSearchParams();
   appendQuery(query, "q", params.q);
   appendQuery(query, "fund_type", params.fundType);
@@ -77,15 +79,15 @@ export async function searchFunds(
   appendQuery(query, "page", params.page);
   appendQuery(query, "page_size", params.pageSize);
   const suffix = query.size ? `?${query.toString()}` : "";
-  const payload = await getJson<FundSearchResponse>(`/api/funds/search${suffix}`, signal);
+  const payload = await getJson<ProductFundSearchResponse>(`/api/product/funds/search${suffix}`, signal);
   if (!Array.isArray(payload.items) || typeof payload.total !== "number") {
     throw new ApiError("Local API returned an invalid fund search payload.", 502);
   }
   return payload;
 }
 
-export async function getFundDetail(code: string, signal?: AbortSignal): Promise<FundDetailResponse> {
-  const payload = await getJson<FundDetailResponse>(`/api/funds/${encodeURIComponent(code)}`, signal);
+export async function getFundDetail(code: string, signal?: AbortSignal): Promise<ProductFundDetailResponse> {
+  const payload = await getJson<ProductFundDetailResponse>(`/api/product/funds/${encodeURIComponent(code)}`, signal);
   if (!payload.fund || typeof payload.fund !== "object" || !payload.fund.code) {
     throw new ApiError("Local API returned an invalid fund detail payload.", 502);
   }
@@ -96,9 +98,9 @@ export async function getFundHistory(
   code: string,
   window: FundHistoryWindow = "6m",
   signal?: AbortSignal
-): Promise<FundHistoryResponse> {
-  const payload = await getJson<FundHistoryResponse>(
-    `/api/funds/${encodeURIComponent(code)}/history?range=${encodeURIComponent(window)}`,
+): Promise<ProductFundHistoryResponse> {
+  const payload = await getJson<ProductFundHistoryResponse>(
+    `/api/product/funds/${encodeURIComponent(code)}/history?range=${encodeURIComponent(window)}`,
     signal
   );
   if (
@@ -176,6 +178,52 @@ export async function getMarketSectorHistory(
     typeof payload.point_count !== "number"
   ) {
     throw new ApiError("Local API returned an invalid market sector history payload.", 502);
+  }
+  return payload;
+}
+
+export async function getProductMarketIndexHistory(
+  symbol: string,
+  window: MarketIndexWindow = "6m",
+  signal?: AbortSignal
+): Promise<ProductMarketHistoryResponse> {
+  const payload = await getJson<ProductMarketHistoryResponse>(
+    `/api/product/market/indices/${encodeURIComponent(symbol)}/history?range=${encodeURIComponent(window)}`,
+    signal
+  );
+  if (payload.symbol !== symbol || !Array.isArray(payload.points) || typeof payload.point_count !== "number") {
+    throw new ApiError("Local API returned an invalid product market index history payload.", 502);
+  }
+  return payload;
+}
+
+export async function searchProductMarketSectors(
+  params: MarketSectorSearchParams = {},
+  signal?: AbortSignal
+): Promise<ProductMarketSectorSearchResponse> {
+  const query = new URLSearchParams();
+  appendQuery(query, "q", params.q);
+  appendQuery(query, "page", params.page);
+  appendQuery(query, "page_size", params.pageSize);
+  const suffix = query.size ? `?${query.toString()}` : "";
+  const payload = await getJson<ProductMarketSectorSearchResponse>(`/api/product/market/sectors${suffix}`, signal);
+  if (!Array.isArray(payload.items) || typeof payload.total !== "number") {
+    throw new ApiError("Local API returned an invalid product market sector catalog payload.", 502);
+  }
+  return payload;
+}
+
+export async function getProductMarketSectorHistory(
+  symbol: string,
+  window: MarketIndexWindow = "6m",
+  signal?: AbortSignal
+): Promise<ProductMarketHistoryResponse> {
+  const payload = await getJson<ProductMarketHistoryResponse>(
+    `/api/product/market/sectors/${encodeURIComponent(symbol)}/history?range=${encodeURIComponent(window)}`,
+    signal
+  );
+  if (payload.symbol !== symbol || !Array.isArray(payload.points) || typeof payload.point_count !== "number") {
+    throw new ApiError("Local API returned an invalid product market sector history payload.", 502);
   }
   return payload;
 }

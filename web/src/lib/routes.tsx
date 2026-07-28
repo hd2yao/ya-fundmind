@@ -28,8 +28,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
     items: [
       { path: "/market", label: "行情总览", description: "指数 · 板块 · 主题", icon: ChartNoAxesCombined },
       { path: "/funds", label: "基金终端", description: "全市场 · 自选 · 历史", icon: SearchCheck },
-      { path: "/portfolio", label: "组合", description: "持仓 · 暴露 · 缺口", icon: BriefcaseBusiness },
-      { path: "/news", label: "研究证据", description: "新闻 · 公告 · 来源", icon: Newspaper }
+      { path: "/portfolio", label: "组合", description: "持仓 · 暴露 · 缺口", icon: BriefcaseBusiness }
     ]
   },
   {
@@ -42,7 +41,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
   {
     label: "系统",
     items: [
-      { path: "/status", label: "系统状态", description: "运行 · 质量 · 门禁", icon: LayoutDashboard },
+      { path: "/status", label: "系统状态", description: "运行 · 资料 · 状态", icon: LayoutDashboard },
       { path: "/reports", label: "报告中心", description: "日报 · 周报 · 导出", icon: FileText }
     ]
   }
@@ -50,10 +49,16 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
 
 export const NAVIGATION_ITEMS = NAVIGATION_GROUPS.flatMap((group) => group.items);
 
+// These routes remain directly addressable, but are not product navigation
+// destinations until they have formal, displayable data.
+const ROUTE_ONLY_ITEMS: NavigationItem[] = [
+  { path: "/news", label: "研究证据", description: "公开资料核对", icon: Newspaper }
+];
+
 export function getNavigationItem(pathname: string) {
   return (
-    NAVIGATION_ITEMS.find((item) => item.path === pathname)
-    || NAVIGATION_ITEMS.find((item) => pathname.startsWith(`${item.path}/`))
+    [...NAVIGATION_ITEMS, ...ROUTE_ONLY_ITEMS].find((item) => item.path === pathname)
+    || [...NAVIGATION_ITEMS, ...ROUTE_ONLY_ITEMS].find((item) => pathname.startsWith(`${item.path}/`))
     || NAVIGATION_ITEMS[0]
   );
 }

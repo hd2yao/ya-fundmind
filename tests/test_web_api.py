@@ -5,7 +5,9 @@ from dataclasses import asdict
 from fastapi.testclient import TestClient
 
 from fund_agent import __version__
+from fund_agent.market_history import MarketHistoryUnavailable
 from fund_agent.models import ResearchAnswer
+from fund_agent.sector_history import MarketSectorUnavailable
 from fund_agent.web_api import create_web_app
 
 
@@ -110,6 +112,136 @@ def test_read_api_exposes_structured_research_payloads(tmp_path):
     assert client.get("/api/news").json()["data"]["evidence"][0]["title"] == "政策"
 
 
+def test_product_api_projects_user_fields_without_provider_or_warning_codes(tmp_path):
+    output_dir = tmp_path / "outputs"
+    _write_json(
+        output_dir / "market" / "market_intelligence_report.json",
+        {
+            "as_of": "2026-07-27",
+            "total_funds": 21600,
+            "total_etfs": 3500,
+            "source": "cache:akshare",
+            "data_quality_summary": {"grade": "warning"},
+            "records": [
+                {
+                    "code": "510300",
+                    "name": "沪深300ETF",
+                    "fund_type": "ETF",
+                    "nav": 4.2,
+                    "source": "cache:akshare",
+                    "as_of": "2026-07-27",
+                    "metadata": {"returns": {"1m": 2.5}, "stale": True},
+                }
+            ],
+        },
+    )
+    _write_json(
+        output_dir / "fund_details" / "watchlist_fund_details.json",
+        {
+            "as_of": "2026-07-27",
+            "fund_details": [
+                {
+                    "code": "510300",
+                    "name": "沪深300ETF",
+                    "fund_company": "示例基金公司",
+                    "missing_fields": ["rating"],
+                    "source": "cache:akshare",
+                }
+            ],
+        },
+    )
+    _write_json(
+        output_dir / "portfolio" / "portfolio_report.json",
+        {
+            "as_of": "2026-07-27",
+            "portfolio_name": "我的组合",
+            "holding_count": 1,
+            "valuation_status": "unavailable",
+            "total_value": None,
+            "positions": [{"code": "510300", "name": "沪深300ETF", "current_value": None, "source": "cache:akshare"}],
+            "warnings": ["portfolio_current_value_unavailable"],
+        },
+    )
+    client = TestClient(create_web_app(output_dir=output_dir))
+
+    market = client.get("/api/product/market")
+    search = client.get("/api/product/funds/search")
+    detail = client.get("/api/product/funds/510300")
+    watchlist = client.get("/api/product/watchlist")
+    portfolio = client.get("/api/product/portfolio")
+
+    assert market.status_code == 200
+    assert search.status_code == 200
+    assert detail.status_code == 200
+    assert watchlist.status_code == 200
+    assert portfolio.status_code == 200
+    assert market.json()["data"]["data_status"]["label"] == "请留意数据日期"
+    assert search.json()["items"][0]["data_status"]["state"] == "attention"
+    assert detail.json()["fund"]["code"] == "510300"
+    assert watchlist.json()["data"]["funds"][0]["code"] == "510300"
+    assert portfolio.json()["data"]["valuation"]["label"] == "当前估值暂不可用"
+    for response in (market, search, detail, watchlist, portfolio):
+        _assert_product_payload_has_no_diagnostics(response.json())
+
+
+def test_product_market_subresources_hide_diagnostics_and_return_empty_state_when_unavailable(tmp_path):
+    class HistoryService:
+        def get_index_history(self, symbol, *, window):
+            assert (symbol, window) == ("000300", "6m")
+            return {
+                "symbol": symbol,
+                "name": "沪深300",
+                "range": window,
+                "point_count": 1,
+                "points": [{"date": "2026-07-27", "close": 4702.43, "source": "cache:akshare"}],
+                "source": "cache:akshare",
+                "as_of": "2026-07-27",
+                "stale": True,
+                "fallback_used": True,
+                "data_quality_grade": "warning",
+            }
+
+    class SectorService:
+        def search_sectors(self, *, q, page, page_size):
+            assert (q, page, page_size) == ("医药", 1, 12)
+            return {
+                "items": [{"symbol": "BK1607", "name": "医药流通", "latest": 1961.48, "source": "akshare"}],
+                "page": page,
+                "page_size": page_size,
+                "total": 1,
+                "total_pages": 1,
+                "query": q,
+                "source": "akshare",
+                "as_of": "2026-07-27",
+                "data_quality_grade": "normal",
+            }
+
+        def get_sector_history(self, symbol, *, window):
+            raise MarketSectorUnavailable("not available for test")
+
+    client = TestClient(
+        create_web_app(
+            output_dir=tmp_path / "outputs",
+            market_history_service=HistoryService(),
+            market_sector_service=SectorService(),
+        )
+    )
+
+    index = client.get("/api/product/market/indices/000300/history", params={"range": "6m"})
+    sectors = client.get("/api/product/market/sectors", params={"q": "医药", "page": 1, "page_size": 12})
+    unavailable = client.get("/api/product/market/sectors/BK1607/history", params={"range": "6m"})
+
+    assert index.status_code == 200
+    assert sectors.status_code == 200
+    assert unavailable.status_code == 200
+    assert index.json()["data_status"]["label"] == "请留意数据日期"
+    assert sectors.json()["items"][0]["name"] == "医药流通"
+    assert unavailable.json()["availability"] == "missing"
+    assert unavailable.json()["data_status"]["label"] == "暂未获取到数据"
+    for payload in (index.json(), sectors.json(), unavailable.json()):
+        _assert_product_payload_has_no_diagnostics(payload)
+
+
 def test_news_api_marks_only_related_codes_present_in_the_local_fund_index(tmp_path):
     output_dir = tmp_path / "outputs"
     _write_json(
@@ -148,6 +280,28 @@ def test_missing_research_payloads_are_explicit_and_non_fatal(tmp_path):
         assert response.status_code == 200
         assert response.json()["availability"] == "missing"
         assert response.json()["data"] in ({}, {"details": {}, "signal_candidates": {}}, {"intelligence": {}, "trend": {}})
+
+
+def _assert_product_payload_has_no_diagnostics(value):
+    forbidden = {
+        "source",
+        "updated_at",
+        "expires_at",
+        "stale",
+        "fallback_used",
+        "fallback_reason",
+        "data_quality_grade",
+        "warnings",
+        "schema_version",
+        "metadata",
+    }
+    if isinstance(value, dict):
+        assert not (set(value) & forbidden)
+        for child in value.values():
+            _assert_product_payload_has_no_diagnostics(child)
+    elif isinstance(value, list):
+        for child in value:
+            _assert_product_payload_has_no_diagnostics(child)
 
 
 def test_read_api_normalizes_non_object_json_roots(tmp_path):

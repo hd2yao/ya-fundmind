@@ -3,10 +3,13 @@ import {
   getFundHistory,
   getMarketIndexHistory,
   getMarketSectorHistory,
+  getProductMarketIndexHistory,
+  getProductMarketSectorHistory,
   getResource,
   postResource,
   searchFunds,
-  searchMarketSectors
+  searchMarketSectors,
+  searchProductMarketSectors
 } from "./client";
 
 describe("API client response validation", () => {
@@ -48,12 +51,9 @@ describe("API client response validation", () => {
         page_size: 25,
         total: 0,
         total_pages: 0,
-        facets: { fund_types: {}, themes: {}, exchange_traded: {}, qualities: {} },
-        as_of: "2026-07-21",
-        source: "akshare",
-        data_quality_grade: "normal",
-        index_stale: false,
-        warnings: []
+        facets: { fund_types: {}, themes: {}, exchange_traded: {}, data_states: {} },
+        data_date: "2026-07-21",
+        data_status: { state: "updated", label: "数据已更新", description: "已更新", as_of: "2026-07-21" }
       })
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -82,11 +82,8 @@ describe("API client response validation", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          fund: { code: "510300", name: "沪深300ETF华泰柏瑞" },
-          research_detail: {},
-          not_production_model: true,
-          main_score_changed: false,
-          main_risk_changed: false
+          fund: { code: "510300", name: "沪深300ETF华泰柏瑞", data_status: { state: "updated", label: "数据已更新", description: "已更新", as_of: "2026-07-21" } },
+          research: {}
         })
       })
       .mockResolvedValueOnce({
@@ -97,7 +94,7 @@ describe("API client response validation", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getFundDetail("510300")).resolves.toMatchObject({ fund: { code: "510300" } });
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/funds/510300");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/product/funds/510300");
     await expect(getFundDetail("999999")).rejects.toThrow("Fund is not present");
   });
 
@@ -114,25 +111,18 @@ describe("API client response validation", () => {
             unit_nav: 2.9699,
             accumulated_nav: 2.9699,
             daily_return: 1.2,
-            source: "cache:akshare"
+            data_status: { state: "updated", label: "数据已更新", description: "已更新", as_of: "2026-07-21" }
           }
         ],
-        source: "cache:akshare",
-        as_of: "2026-07-21",
-        stale: false,
-        fallback_used: false,
-        data_quality_grade: "normal",
-        warnings: [],
-        not_production_model: true,
-        main_score_changed: false,
-        main_risk_changed: false
+        data_date: "2026-07-21",
+        data_status: { state: "updated", label: "数据已更新", description: "已更新", as_of: "2026-07-21" }
       })
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const history = await getFundHistory("021511", "3m");
 
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/funds/021511/history?range=3m");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/product/funds/021511/history?range=3m");
     expect(history.points[0].unit_nav).toBe(2.9699);
   });
 
@@ -246,5 +236,63 @@ describe("API client response validation", () => {
       "/api/market/sectors/BK1036/history?range=3m"
     );
     expect(history.points[0].turnover_rate).toBe(2.3);
+  });
+
+  it("loads product market subresources without requiring legacy diagnostics", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          availability: "missing",
+          symbol: "000300",
+          name: "沪深300",
+          range: "6m",
+          point_count: 0,
+          required_points: null,
+          points: [],
+          data_date: null,
+          data_status: { state: "unavailable", label: "暂未获取到数据", description: "暂无数据", as_of: null }
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          availability: "available",
+          items: [{ symbol: "BK1036", name: "半导体", latest: 1823.4, change_pct: 1.2, rise_count: 10, fall_count: 3, leader_name: "示例", leader_change_pct: 2.3 }],
+          page: 1,
+          page_size: 10,
+          total: 1,
+          total_pages: 1,
+          query: "半导体",
+          data_date: "2026-07-27",
+          data_status: { state: "updated", label: "数据已更新", description: "已更新", as_of: "2026-07-27" }
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          availability: "available",
+          symbol: "BK1036",
+          name: "半导体",
+          range: "3m",
+          point_count: 1,
+          required_points: 60,
+          points: [{ date: "2026-07-27", open: null, close: 1823.4, high: null, low: null, volume: null, turnover: null, change_pct: 1.2 }],
+          data_date: "2026-07-27",
+          data_status: { state: "updated", label: "数据已更新", description: "已更新", as_of: "2026-07-27" }
+        })
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getProductMarketIndexHistory("000300", "6m")).resolves.toMatchObject({ availability: "missing", points: [] });
+    await expect(searchProductMarketSectors({ q: "半导体", page: 1, pageSize: 10 })).resolves.toMatchObject({ total: 1 });
+    await expect(getProductMarketSectorHistory("BK1036", "3m")).resolves.toMatchObject({ point_count: 1 });
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/product/market/indices/000300/history?range=6m",
+      "/api/product/market/sectors?q=%E5%8D%8A%E5%AF%BC%E4%BD%93&page=1&page_size=10",
+      "/api/product/market/sectors/BK1036/history?range=3m"
+    ]);
   });
 });

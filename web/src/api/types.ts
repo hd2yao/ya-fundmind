@@ -6,6 +6,88 @@ export type ApiResource<T> = {
   data: T;
 };
 
+export type ProductDataStatus = {
+  state: "updated" | "attention" | "limited" | "unavailable" | string;
+  label: string;
+  description: string;
+  as_of: string | null;
+};
+
+export type ProductThemeSummary = {
+  name: string | null;
+  returns: Partial<Record<"1w" | "1m" | "3m" | "6m" | "1y", number | null>>;
+  positive_ratio_1m: number | null;
+  sample_size: number | null;
+  fund_count: number | null;
+  etf_count: number | null;
+  data_status: ProductDataStatus;
+};
+
+export type ProductThemeChange = {
+  name: string | null;
+  rank: number | null;
+  rank_change: number | null;
+};
+
+export type ProductMarketData = {
+  as_of: string | null;
+  coverage: { fund_count: number | null; etf_count: number | null };
+  data_status: ProductDataStatus;
+  themes: ProductThemeSummary[];
+  trend: {
+    persistent: ProductThemeChange[];
+    new: ProductThemeChange[];
+    rising: ProductThemeChange[];
+    falling: ProductThemeChange[];
+  };
+};
+
+export type ProductMarketHistoryPoint = {
+  date: string | null;
+  open: number | null;
+  close: number | null;
+  high: number | null;
+  low: number | null;
+  volume: number | null;
+  turnover: number | null;
+  change_pct: number | null;
+};
+
+export type ProductMarketHistoryResponse = {
+  availability: Availability;
+  symbol: string | null;
+  name: string;
+  range: MarketIndexWindow;
+  point_count: number;
+  required_points: number | null;
+  points: ProductMarketHistoryPoint[];
+  data_date: string | null;
+  data_status: ProductDataStatus;
+};
+
+export type ProductMarketSectorItem = {
+  symbol: string;
+  name: string;
+  latest: number | null;
+  change_pct: number | null;
+  rise_count: number | null;
+  fall_count: number | null;
+  leader_name: string | null;
+  leader_change_pct: number | null;
+};
+
+export type ProductMarketSectorSearchResponse = {
+  availability: Availability;
+  items: ProductMarketSectorItem[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  query: string;
+  data_date: string | null;
+  data_status: ProductDataStatus;
+};
+
 export type DailyStatus = {
   as_of?: string | null;
   status?: string | null;
@@ -279,6 +361,37 @@ export type FundSearchResponse = {
   warnings: string[];
 };
 
+export type ProductFundSummary = {
+  code: string | null;
+  name: string | null;
+  fund_type: string | null;
+  primary_theme: string | null;
+  themes: string[];
+  nav: number | null;
+  scale: number | null;
+  exchange_traded: boolean;
+  returns: Partial<Record<"1m" | "3m" | "6m" | "1y", number | null>>;
+  data_date: string | null;
+  data_status: ProductDataStatus;
+};
+
+export type ProductFundSearchResponse = {
+  availability: Availability;
+  items: ProductFundSummary[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  facets: {
+    fund_types: Record<string, number>;
+    themes: Record<string, number>;
+    exchange_traded: Record<string, number>;
+    data_states: Record<string, number>;
+  };
+  data_date: string | null;
+  data_status: ProductDataStatus;
+};
+
 export type FundResearchDetail = Pick<
   FundDetailItem,
   | "fund_company"
@@ -308,6 +421,25 @@ export type FundDetailResponse = {
   not_production_model: boolean;
   main_score_changed: boolean;
   main_risk_changed: boolean;
+};
+
+export type ProductFundResearchDetail = {
+  fund_company: string | null;
+  fund_manager: string | null;
+  inception_date: string | null;
+  rating: string | number | null;
+  accumulated_nav: number | null;
+  return_windows: Record<string, { total_return: number | null; max_drawdown: number | null; volatility: number | null }>;
+  coverage: { coverage_ratio: number | null; label: string };
+  missing_fields: string[];
+  is_watchlist: boolean;
+  is_portfolio: boolean;
+  data_status: ProductDataStatus;
+};
+
+export type ProductFundDetailResponse = {
+  fund: ProductFundSummary;
+  research: ProductFundResearchDetail;
 };
 
 export type FundHistoryWindow = "1m" | "3m" | "6m" | "1y" | "all";
@@ -340,6 +472,23 @@ export type FundHistoryResponse = {
   main_risk_changed: boolean;
 };
 
+export type ProductFundHistoryPoint = {
+  date: string | null;
+  unit_nav: number | null;
+  accumulated_nav: number | null;
+  daily_return: number | null;
+};
+
+export type ProductFundHistoryResponse = {
+  code: string | null;
+  range: FundHistoryWindow;
+  point_count: number;
+  required_points: number | null;
+  points: ProductFundHistoryPoint[];
+  data_date: string | null;
+  data_status: ProductDataStatus;
+};
+
 export type PortfolioPosition = {
   code?: string;
   name?: string;
@@ -370,6 +519,57 @@ export type PortfolioData = {
   fund_type_exposure?: Record<string, { holding_count?: number; current_value?: number | null; weight?: number | null }>;
   observation_issues?: Array<{ issue_type?: string; severity?: string; message?: string; metadata?: Record<string, unknown> }>;
   warnings?: string[];
+};
+
+export type ProductWatchlistFund = {
+  code: string | null;
+  name: string | null;
+  fund_type: string | null;
+  primary_theme: string | null;
+  nav: number | null;
+  return_windows: Record<string, { total_return: number | null; max_drawdown: number | null; volatility: number | null }>;
+  coverage_ratio: number | null;
+  data_status: ProductDataStatus;
+};
+
+export type ProductWatchlistData = {
+  as_of: string | null;
+  funds: ProductWatchlistFund[];
+  detail_count: number;
+  coverage_ratio: number | null;
+  data_status: ProductDataStatus;
+};
+
+export type ProductPortfolioPosition = {
+  code: string | null;
+  name: string | null;
+  shares: number | null;
+  cost_value: number | null;
+  current_value: number | null;
+  unrealized_return_pct: number | null;
+  weight: number | null;
+  primary_theme: string | null;
+};
+
+export type ProductPortfolioData = {
+  as_of: string | null;
+  portfolio_name: string | null;
+  holding_count: number;
+  cash_available: number | null;
+  total_value: number | null;
+  valued_total_value: number | null;
+  total_unrealized_return_pct: number | null;
+  valuation: {
+    state: string;
+    label: string;
+    description: string;
+    valued_position_count: number | null;
+    unvalued_position_count: number | null;
+  };
+  positions: ProductPortfolioPosition[];
+  theme_exposure: Record<string, { holding_count?: number; current_value?: number | null; weight?: number | null; codes?: string[] }>;
+  fund_type_exposure: Record<string, { holding_count?: number; current_value?: number | null; weight?: number | null; codes?: string[] }>;
+  observations: Array<{ tone: string; title: string; description: string }>;
 };
 
 export type NewsEvidenceItem = {

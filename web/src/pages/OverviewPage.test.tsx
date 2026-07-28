@@ -36,12 +36,13 @@ describe("OverviewPage", () => {
 
     render(<OverviewPage />);
 
-    expect(screen.getByText("正在读取本地研究状态")).toBeInTheDocument();
+    expect(screen.getByText("正在读取运行状态")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("2026-07-15")).toBeInTheDocument());
-    expect(screen.getByText("warning")).toBeInTheDocument();
+    expect(screen.getByText("请留意数据日期")).toBeInTheDocument();
     expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getByText("insufficient_history")).toBeInTheDocument();
-    expect(screen.getByText(/仅阻塞主模型升级/)).toBeInTheDocument();
+    expect(screen.getByText("当前仍有观察条件待完成")).toBeInTheDocument();
+    expect(screen.getByText(/研究分析暂不调整/)).toBeInTheDocument();
+    expect(screen.queryByText("insufficient_history")).not.toBeInTheDocument();
   });
 
   it("shows a recovery command when outputs are missing", async () => {
@@ -56,6 +57,6 @@ describe("OverviewPage", () => {
     render(<OverviewPage />);
 
     await waitFor(() => expect(screen.getByText("尚无可用的每日研究产物")).toBeInTheDocument());
-    expect(screen.getByText(/run_daily_ops\.sh/)).toBeInTheDocument();
+    expect(screen.getByText(/完成一次日常更新后再查看/)).toBeInTheDocument();
   });
 });

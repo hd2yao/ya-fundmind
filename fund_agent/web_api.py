@@ -22,6 +22,18 @@ from .market_history import (
     MarketHistoryService,
     MarketHistoryUnavailable,
 )
+from .product_views import (
+    build_fund_detail_view,
+    build_fund_history_view,
+    build_market_history_view,
+    build_market_sector_catalog_view,
+    build_fund_search_view,
+    build_market_view,
+    build_portfolio_view,
+    build_unavailable_market_history_view,
+    build_unavailable_market_sector_catalog_view,
+    build_watchlist_view,
+)
 from .providers import AkshareProvider, normalize_fund_code
 from .review_state import VALID_REVIEW_STATUSES, list_review_state, summarize_review_state
 from .sector_history import (
@@ -185,6 +197,72 @@ def create_web_app(
             source_paths=(intelligence_path, trend_path),
         )
 
+    @app.get("/api/product/market")
+    def product_market() -> dict[str, object]:
+        """Return the user-facing market view without provider diagnostics."""
+
+        intelligence_path = root / "market" / "market_intelligence_report.json"
+        trend_path = root / "market" / "market_trend_report.json"
+        intelligence = _load_json_object(intelligence_path)
+        trend = _load_json_object(trend_path)
+        return _resource(
+            build_market_view(intelligence, trend),
+            source_paths=(intelligence_path, trend_path),
+        )
+
+    @app.get("/api/product/market/indices/{symbol}/history")
+    def product_market_index_history(
+        symbol: str,
+        window: Literal["1m", "3m", "6m", "1y", "all"] = Query(default="6m", alias="range"),
+    ) -> dict[str, object]:
+        name = INDEX_DEFINITIONS.get(symbol)
+        if name is None:
+            raise HTTPException(status_code=404, detail={"message": "暂不支持该指数。"})
+        if app.state.market_history_service is None:
+            app.state.market_history_service = _build_market_history_service(root)
+        try:
+            return build_market_history_view(
+                app.state.market_history_service.get_index_history(symbol, window=window),
+                name=name,
+            )
+        except MarketHistoryUnavailable:
+            return build_unavailable_market_history_view(symbol=symbol, name=name, window=window)
+
+    @app.get("/api/product/market/sectors")
+    def product_market_sectors(
+        q: str = Query(default="", max_length=200),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=25, ge=1, le=100),
+    ) -> dict[str, object]:
+        if app.state.market_sector_service is None:
+            app.state.market_sector_service = _build_market_sector_service(root)
+        try:
+            return build_market_sector_catalog_view(
+                app.state.market_sector_service.search_sectors(q=q, page=page, page_size=page_size)
+            )
+        except MarketSectorUnavailable:
+            return build_unavailable_market_sector_catalog_view(query=q, page=page, page_size=page_size)
+
+    @app.get("/api/product/market/sectors/{symbol}/history")
+    def product_market_sector_history(
+        symbol: str,
+        window: Literal["1m", "3m", "6m", "1y", "all"] = Query(default="6m", alias="range"),
+    ) -> dict[str, object]:
+        resolved_symbol = symbol.strip().upper()
+        if not INDUSTRY_SYMBOL_PATTERN.fullmatch(resolved_symbol):
+            raise HTTPException(status_code=422, detail={"message": "板块代码格式不正确。"})
+        if app.state.market_sector_service is None:
+            app.state.market_sector_service = _build_market_sector_service(root)
+        try:
+            raw = app.state.market_sector_service.get_sector_history(resolved_symbol, window=window)
+            return build_market_history_view(raw, name="行业板块")
+        except (MarketSectorUnavailable, ValueError):
+            return build_unavailable_market_history_view(
+                symbol=resolved_symbol,
+                name="行业板块",
+                window=window,
+            )
+
     @app.get("/api/market/indices")
     def market_indices() -> dict[str, object]:
         return {
@@ -341,6 +419,43 @@ def create_web_app(
             )
         )
 
+    @app.get("/api/product/funds/search")
+    def product_search_funds(
+        q: str = Query(default="", max_length=200),
+        fund_type: str | None = Query(default=None, max_length=120),
+        theme: str | None = Query(default=None, max_length=120),
+        exchange_traded: bool | None = None,
+        quality: Literal["normal", "warning", "degraded", "unknown"] | None = None,
+        sort: Literal[
+            "code",
+            "name",
+            "return_1m",
+            "return_3m",
+            "return_6m",
+            "return_1y",
+        ] = "code",
+        direction: Literal["asc", "desc"] = "asc",
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=25, ge=1, le=100),
+    ) -> dict[str, object]:
+        """Return server-side fund search results for ordinary product pages."""
+
+        return build_fund_search_view(
+            app.state.fund_explorer.search(
+                FundSearchQuery(
+                    q=q,
+                    fund_type=fund_type,
+                    theme=theme,
+                    exchange_traded=exchange_traded,
+                    quality=quality,
+                    sort=sort,
+                    direction=direction,
+                    page=page,
+                    page_size=page_size,
+                )
+            )
+        )
+
     @app.get("/api/funds/{code}/history")
     def fund_history(
         code: str,
@@ -372,6 +487,39 @@ def create_web_app(
                 },
             ) from exc
 
+    @app.get("/api/product/funds/{code}/history")
+    def product_fund_history(
+        code: str,
+        window: Literal["1m", "3m", "6m", "1y", "all"] = Query(
+            default="6m",
+            alias="range",
+        ),
+    ) -> dict[str, object]:
+        if len(code) != 6 or not code.isdigit():
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "invalid_fund_code", "message": "Fund code must be six digits."},
+            )
+        if app.state.fund_explorer.get(code) is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "fund_not_found", "message": "Fund is not present in the market index."},
+            )
+        if app.state.fund_history_service is None:
+            app.state.fund_history_service = _build_fund_history_service(root)
+        try:
+            return build_fund_history_view(
+                app.state.fund_history_service.get_history(code, window=window)
+            )
+        except FundHistoryUnavailable as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "fund_history_unavailable",
+                    "message": "基金历史净值暂不可用，请稍后重试。",
+                },
+            ) from exc
+
     @app.get("/api/funds/{code}")
     def fund_detail(code: str) -> dict[str, object]:
         if len(code) != 6 or not code.isdigit():
@@ -393,10 +541,41 @@ def create_web_app(
             "main_risk_changed": False,
         }
 
+    @app.get("/api/product/funds/{code}")
+    def product_fund_detail(code: str) -> dict[str, object]:
+        if len(code) != 6 or not code.isdigit():
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "invalid_fund_code", "message": "Fund code must be six digits."},
+            )
+        fund = app.state.fund_explorer.get(code)
+        if fund is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "fund_not_found", "message": "Fund is not present in the market index."},
+            )
+        return build_fund_detail_view(fund, _find_research_detail(root, code))
+
+    @app.get("/api/product/watchlist")
+    def product_watchlist() -> dict[str, object]:
+        path = root / "fund_details" / "watchlist_fund_details.json"
+        return _resource(
+            build_watchlist_view(_load_json_object(path)),
+            source_paths=(path,),
+        )
+
     @app.get("/api/portfolio")
     def portfolio() -> dict[str, object]:
         path = root / "portfolio" / "portfolio_report.json"
         return _resource(_load_json_object(path), source_paths=(path,))
+
+    @app.get("/api/product/portfolio")
+    def product_portfolio() -> dict[str, object]:
+        path = root / "portfolio" / "portfolio_report.json"
+        return _resource(
+            build_portfolio_view(_load_json_object(path)),
+            source_paths=(path,),
+        )
 
     @app.get("/api/news")
     def news() -> dict[str, object]:
