@@ -6,9 +6,9 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 ## 当前状态
 
-- 当前稳定版本：`v2.3.0`（Python package version：`2.3.0`）
-- 当前交付模式：`v2.3 Fund Research Desk` delivery mode
-- 当前发布状态：`v2.3.0` 已完成市场新鲜度与研究工作台发布门禁；后续按 `v2.4` 基金详情、`v2.5` 组合工作台、`v2.6` 证据浏览器的有限版本计划推进。
+- 当前稳定版本：`v2.4.0`（Python package version：`2.4.0`）
+- 当前交付模式：`v2.4 Fund Data Terminal & Detail` delivery mode
+- 当前发布状态：`v2.4.0` 已完成可链接基金详情与历史净值浏览；后续按 `v2.5` 组合工作台、`v2.6` 证据浏览器的有限版本计划推进。
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
@@ -391,6 +391,14 @@ python -m fund_agent.cli product-web --output-dir outputs
 - 顶栏搜索、市场主图区、数据带和各工作区共享一套本地研究台布局；刷新只重新读取本地结构化 API，不触发浏览器中的隐式 provider 请求。
 
 后续 `v2.4`–`v2.6` 的范围、验收与回滚边界见 [`docs/plans/2026-07-28-v2.3-to-v2.6-product-delivery.md`](docs/plans/2026-07-28-v2.3-to-v2.6-product-delivery.md)。
+
+`v2.4` 将已有的基金详情和净值缓存路径提升为独立本地浏览页面：
+
+- 从全市场搜索或自选池进入 `/funds/:code`；返回链接保留基金终端的查询条件。
+- 页面并列展示基础字段与历史净值的 `source / as_of / updated_at / expires_at / stale / fallback`，并保留明确的数据缺口。
+- 历史净值继续支持 `1 月 / 3 月 / 6 月 / 1 年 / 全部`，只读取已有本地结构化 API，不增加页面隐式 provider 请求。
+
+该详情仅供研究核对，不接入主评分、主风险或推荐逻辑。发布证据见 [`docs/releases/v2.4.0-release-report.md`](docs/releases/v2.4.0-release-report.md)。
 
 可先离线检查依赖和构建：
 

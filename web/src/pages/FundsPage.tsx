@@ -8,23 +8,18 @@ import {
   SlidersHorizontal
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
-import { getFundDetail, getFundHistory, searchFunds } from "../api/client";
+import { searchFunds } from "../api/client";
 import type {
   FundDetailItem,
-  FundDetailResponse,
-  FundHistoryResponse,
-  FundHistoryWindow,
   FundSearchItem,
   FundSearchParams,
   FundSearchResponse,
   FundsData
 } from "../api/types";
 import { DataTable } from "../components/DataTable";
-import { EvidenceDrawer } from "../components/EvidenceDrawer";
 import { FilterBar } from "../components/FilterBar";
-import { FundNavChart } from "../components/FundNavChart";
 import { Metric } from "../components/Metric";
 import { PageHeader } from "../components/PageHeader";
 import { StatePanel } from "../components/StatePanel";
@@ -35,11 +30,6 @@ type FundView = "market" | "watchlist";
 type MarketState = {
   loading: boolean;
   data: FundSearchResponse | null;
-  error: string | null;
-};
-type FundHistoryState = {
-  loading: boolean;
-  data: FundHistoryResponse | null;
   error: string | null;
 };
 
@@ -75,35 +65,18 @@ function returnClass(value?: number | null) {
 
 export function FundsPage() {
   const [urlSearchParams] = useSearchParams();
-  const urlQuery = urlSearchParams.get("q")?.trim() || "";
+  const navigate = useNavigate();
+  const location = useLocation();
+  const searchKey = urlSearchParams.toString();
   const watchlist = useApiResource<FundsData>("/api/funds");
   const [view, setView] = useState<FundView>("market");
-  const [search, setSearch] = useState<FundSearchParams>({
-    ...DEFAULT_SEARCH,
-    q: urlQuery
-  });
+  const [search, setSearch] = useState<FundSearchParams>(() => readSearchParams(urlSearchParams));
   const [market, setMarket] = useState<MarketState>({ loading: true, data: null, error: null });
-  const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [historyWindow, setHistoryWindow] = useState<FundHistoryWindow>("6m");
-  const [detail, setDetail] = useState<{ loading: boolean; data: FundDetailResponse | null; error: string | null }>({
-    loading: false,
-    data: null,
-    error: null
-  });
-  const [history, setHistory] = useState<FundHistoryState>({
-    loading: false,
-    data: null,
-    error: null
-  });
 
   useEffect(() => {
     setView("market");
-    setSearch((current) => (
-      current.q === urlQuery
-        ? current
-        : { ...current, q: urlQuery, page: 1 }
-    ));
-  }, [urlQuery]);
+    setSearch(readSearchParams(urlSearchParams));
+  }, [searchKey, urlSearchParams]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -121,53 +94,17 @@ export function FundsPage() {
     return () => controller.abort();
   }, [search]);
 
-  useEffect(() => {
-    if (!selectedCode) {
-      setDetail({ loading: false, data: null, error: null });
-      return undefined;
-    }
-    const controller = new AbortController();
-    setDetail({ loading: true, data: null, error: null });
-    getFundDetail(selectedCode, controller.signal)
-      .then((data) => setDetail({ loading: false, data, error: null }))
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setDetail({
-          loading: false,
-          data: null,
-          error: error instanceof Error ? error.message : "基金详情读取失败。"
-        });
-      });
-    return () => controller.abort();
-  }, [selectedCode]);
-
-  useEffect(() => {
-    if (!selectedCode) {
-      setHistory({ loading: false, data: null, error: null });
-      return undefined;
-    }
-    const controller = new AbortController();
-    setHistory({ loading: true, data: null, error: null });
-    getFundHistory(selectedCode, historyWindow, controller.signal)
-      .then((data) => setHistory({ loading: false, data, error: null }))
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setHistory({
-          loading: false,
-          data: null,
-          error: error instanceof Error ? error.message : "历史净值读取失败。"
-        });
-      });
-    return () => controller.abort();
-  }, [selectedCode, historyWindow]);
-
   const selectFund = (code: string) => {
-    setHistoryWindow("6m");
-    setSelectedCode(code);
+    const returnTo = `${location.pathname}${location.search}`;
+    navigate(`/funds/${code}?return_to=${encodeURIComponent(returnTo)}`);
   };
 
   const setSearchField = <K extends keyof FundSearchParams>(key: K, value: FundSearchParams[K]) => {
-    setSearch((current) => ({ ...current, [key]: value, page: key === "page" ? Number(value) : 1 }));
+    setSearch((current) => {
+      const next = { ...current, [key]: value, page: key === "page" ? Number(value) : 1 };
+      navigate({ pathname: "/funds", search: toSearchString(next) }, { replace: true });
+      return next;
+    });
   };
 
   const marketData = market.data;
@@ -228,20 +165,41 @@ export function FundsPage() {
         />
       )}
 
-      <EvidenceDrawer
-        open={selectedCode !== null}
-        title={`${selectedCode || "--"} 基金详情`}
-        onClose={() => setSelectedCode(null)}
-      >
-        <FundDetailPanel
-          state={detail}
-          history={history}
-          historyWindow={historyWindow}
-          onHistoryWindowChange={setHistoryWindow}
-        />
-      </EvidenceDrawer>
     </div>
   );
+}
+
+function readSearchParams(params: URLSearchParams): FundSearchParams {
+  const page = Number(params.get("page"));
+  const pageSize = Number(params.get("page_size"));
+  const exchangeTraded = params.get("exchange_traded");
+  return {
+    ...DEFAULT_SEARCH,
+    q: params.get("q")?.trim() || "",
+    fundType: params.get("fund_type") || undefined,
+    theme: params.get("theme") || undefined,
+    quality: (params.get("quality") || undefined) as FundSearchParams["quality"],
+    sort: (params.get("sort") || DEFAULT_SEARCH.sort) as FundSearchParams["sort"],
+    direction: (params.get("direction") || DEFAULT_SEARCH.direction) as FundSearchParams["direction"],
+    exchangeTraded: exchangeTraded === "true" ? true : undefined,
+    page: Number.isFinite(page) && page > 0 ? page : DEFAULT_SEARCH.page,
+    pageSize: Number.isFinite(pageSize) && pageSize > 0 ? pageSize : DEFAULT_SEARCH.pageSize
+  };
+}
+
+function toSearchString(search: FundSearchParams): string {
+  const params = new URLSearchParams();
+  if (search.q) params.set("q", search.q);
+  if (search.fundType) params.set("fund_type", search.fundType);
+  if (search.theme) params.set("theme", search.theme);
+  if (search.quality) params.set("quality", search.quality);
+  if (search.sort && search.sort !== DEFAULT_SEARCH.sort) params.set("sort", search.sort);
+  if (search.direction && search.direction !== DEFAULT_SEARCH.direction) params.set("direction", search.direction);
+  if (search.exchangeTraded) params.set("exchange_traded", "true");
+  if (search.page && search.page !== DEFAULT_SEARCH.page) params.set("page", String(search.page));
+  if (search.pageSize && search.pageSize !== DEFAULT_SEARCH.pageSize) params.set("page_size", String(search.pageSize));
+  const value = params.toString();
+  return value ? `?${value}` : "";
 }
 
 function MarketExplorer({
@@ -537,134 +495,5 @@ function FilterSelect({
         {options.map((option) => <option key={option} value={option}>{labels[option] || option}</option>)}
       </select>
     </label>
-  );
-}
-
-function FundDetailPanel({
-  state,
-  history,
-  historyWindow,
-  onHistoryWindowChange
-}: {
-  state: { loading: boolean; data: FundDetailResponse | null; error: string | null };
-  history: FundHistoryState;
-  historyWindow: FundHistoryWindow;
-  onHistoryWindowChange: (window: FundHistoryWindow) => void;
-}) {
-  if (state.loading) return <StatePanel kind="loading" title="正在读取基金详情" description="合并市场记录和已有 enrichment 产物。" />;
-  if (state.error) return <StatePanel kind="error" title="基金详情读取失败" description={state.error} />;
-  if (!state.data) return null;
-
-  const { fund, research_detail: research } = state.data;
-  const missingFields = research.missing_fields || [];
-  return (
-    <div className="drawer-stack">
-      <div>
-        <h3>{fund.name || "名称缺失"}</h3>
-        <p>{fund.fund_type || "类型未知"} · {fund.primary_theme || "主题未知"}</p>
-      </div>
-      <div className="status-row">
-        <StatusBadge tone={qualityTone(fund.data_quality_grade)}>{fund.stale ? "stale" : fund.data_quality_grade}</StatusBadge>
-        {fund.exchange_traded ? <StatusBadge tone="info">ETF</StatusBadge> : null}
-      </div>
-      <FundHistoryPanel
-        code={fund.code}
-        state={history}
-        window={historyWindow}
-        onWindowChange={onHistoryWindowChange}
-      />
-      <dl className="detail-list">
-        <div><dt>净值</dt><dd>{formatNumber(fund.nav, 4)}</dd></div>
-        <div><dt>1 月 / 3 月</dt><dd>{formatReturn(fund.returns["1m"])} · {formatReturn(fund.returns["3m"])}</dd></div>
-        <div><dt>基金公司</dt><dd>{research.fund_company || "--"}</dd></div>
-        <div><dt>基金经理</dt><dd>{research.fund_manager || "--"}</dd></div>
-        <div><dt>评级</dt><dd>{research.rating ?? "--"}</dd></div>
-        <div><dt>source / as_of</dt><dd>{fund.source || "--"} · {fund.as_of || "--"}</dd></div>
-        <div><dt>主题</dt><dd>{fund.themes.length ? fund.themes.join(" · ") : "未分类"}</dd></div>
-        <div><dt>缺失字段</dt><dd>{missingFields.length ? missingFields.join(" · ") : "无"}</dd></div>
-      </dl>
-      {missingFields.length ? (
-        <div className="notice">
-          <CircleAlert size={18} aria-hidden />
-          <div><strong>缺失字段不会形成正向信号</strong><p>需补充可靠来源并通过回归验证后，才可能进入实验候选层。</p></div>
-        </div>
-      ) : null}
-      <div className="boundary-band">
-        <strong>研究观察边界</strong>
-        <p>该详情没有修改主评分或主风险，也不构成买卖建议。</p>
-      </div>
-    </div>
-  );
-}
-
-const HISTORY_WINDOWS: Array<{ value: FundHistoryWindow; label: string }> = [
-  { value: "1m", label: "1 月" },
-  { value: "3m", label: "3 月" },
-  { value: "6m", label: "6 月" },
-  { value: "1y", label: "1 年" },
-  { value: "all", label: "全部" }
-];
-
-function FundHistoryPanel({
-  code,
-  state,
-  window,
-  onWindowChange
-}: {
-  code: string;
-  state: FundHistoryState;
-  window: FundHistoryWindow;
-  onWindowChange: (window: FundHistoryWindow) => void;
-}) {
-  const latest = state.data?.points.at(-1);
-  return (
-    <section className="fund-history-panel" aria-labelledby="fund-history-title">
-      <div className="fund-history-header">
-        <div>
-          <p className="eyebrow">NAV history</p>
-          <h3 id="fund-history-title">历史净值</h3>
-        </div>
-        <div className="history-window-tabs" aria-label="历史净值时间范围">
-          {HISTORY_WINDOWS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              aria-label={item.label}
-              aria-pressed={window === item.value}
-              className={window === item.value ? "history-window history-window--active" : "history-window"}
-              onClick={() => onWindowChange(item.value)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      {state.loading && !state.data ? (
-        <StatePanel kind="loading" title="正在读取历史净值" description="优先使用本地缓存，缺失时按需读取 AKShare。" />
-      ) : null}
-      {state.error ? (
-        <StatePanel kind="error" title="历史净值暂不可用" description={state.error} />
-      ) : null}
-      {state.data && state.data.points.length ? (
-        <>
-          <FundNavChart code={code} points={state.data.points} />
-          <div className="history-summary">
-            <div><span>最新净值</span><strong>{formatNumber(latest?.unit_nav, 4)}</strong></div>
-            <div><span>样本</span><strong>{state.data.point_count} 个净值点</strong></div>
-            <div><span>来源</span><strong>{state.data.source}</strong></div>
-            <div><span>截至</span><strong>{state.data.as_of || latest?.date || "--"}</strong></div>
-          </div>
-          <div className="status-row">
-            <StatusBadge tone={qualityTone(state.data.data_quality_grade)}>
-              {state.data.stale ? "stale" : state.data.data_quality_grade}
-            </StatusBadge>
-            {state.data.fallback_used ? <StatusBadge tone="warning">cache fallback</StatusBadge> : null}
-          </div>
-          {state.data.warnings.length ? (
-            <p className="history-warning">{state.data.warnings.map((warning) => warning.message).join(" · ")}</p>
-          ) : null}
-        </>
-      ) : null}
-    </section>
   );
 }

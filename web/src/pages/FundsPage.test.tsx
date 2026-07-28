@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 import { FundsPage } from "./FundsPage";
 
@@ -156,6 +156,20 @@ function renderFunds(initialEntry = "/funds") {
   );
 }
 
+function LocationProbe() {
+  const location = useLocation();
+  return <output aria-label="当前测试地址">{`${location.pathname}${location.search}`}</output>;
+}
+
+function renderFundsWithLocation(initialEntry = "/funds") {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <FundsPage />
+      <LocationProbe />
+    </MemoryRouter>
+  );
+}
+
 describe("FundsPage", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -206,68 +220,15 @@ describe("FundsPage", () => {
     expect(screen.getByText("仅来自 configs/watchlist.yaml")).toBeInTheDocument();
   });
 
-  it("loads structured fund detail and explains missing fields", async () => {
-    const fetchMock = stubApi();
-    renderFunds();
-
-    await waitFor(() => expect(screen.getByRole("button", { name: "查看510300详情" })).toBeInTheDocument());
-    const trigger = screen.getByRole("button", { name: "查看510300详情" });
-    trigger.focus();
-    fireEvent.click(trigger);
-
-    await waitFor(() => expect(screen.getByText("华泰柏瑞基金")).toBeInTheDocument());
-    expect(screen.getByRole("dialog", { name: "510300 基金详情" })).toBeInTheDocument();
-    expect(screen.getByText("rating")).toBeInTheDocument();
-    expect(screen.getByText(/缺失字段不会形成正向信号/)).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "510300 历史净值曲线" })).toBeInTheDocument();
-    expect(screen.getByText("历史净值")).toBeInTheDocument();
-    expect(screen.getByText("3 个净值点")).toBeInTheDocument();
-    expect(screen.getByText("cache:akshare")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "1 月" }));
-    await waitFor(() => {
-      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
-      expect(urls.some((url) => url.endsWith("history?range=1m"))).toBe(true);
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "关闭详情" }));
-    expect(trigger).toHaveFocus();
-  });
-
-  it("clears the previous history while a new window is loading", async () => {
-    const fetchMock = stubApi();
-    const baseImplementation = fetchMock.getMockImplementation();
-    let resolveOneMonth: ((value: {
-      ok: boolean;
-      json: () => Promise<typeof historyResponse>;
-    }) => void) | undefined;
-    const oneMonthResponse = new Promise<{
-      ok: boolean;
-      json: () => Promise<typeof historyResponse>;
-    }>((resolve) => {
-      resolveOneMonth = resolve;
-    });
-    fetchMock.mockImplementation((input: string | URL) => {
-      const url = String(input);
-      if (url.endsWith("/history?range=1m")) {
-        return oneMonthResponse;
-      }
-      return baseImplementation?.(input);
-    });
-    renderFunds();
+  it("routes a fund row to a standalone detail URL and preserves the terminal query", async () => {
+    stubApi();
+    renderFundsWithLocation("/funds?q=510300&fund_type=ETF");
 
     fireEvent.click(await screen.findByRole("button", { name: "查看510300详情" }));
-    await waitFor(() => expect(screen.getByText("3 个净值点")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "1 月" }));
-
-    expect(screen.getByText("正在读取历史净值")).toBeInTheDocument();
-    expect(screen.queryByText("3 个净值点")).not.toBeInTheDocument();
-    resolveOneMonth?.({
-      ok: true,
-      json: async () => ({ ...historyResponse, range: "1m" }),
-    });
-    await waitFor(() => expect(screen.getByText("3 个净值点")).toBeInTheDocument());
+    expect(screen.getByLabelText("当前测试地址")).toHaveTextContent(
+      "/funds/510300?return_to=%2Ffunds%3Fq%3D510300%26fund_type%3DETF"
+    );
   });
 
   it("changes result pages without loading all rows in the browser", async () => {
