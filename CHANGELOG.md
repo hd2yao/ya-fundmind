@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v2.4.0 - 2026-07-28
+
+- Promote an indexed fund from a transient drawer to a standalone `/funds/:code` local research route.
+- Persist supported terminal filters in the URL and preserve the originating fund search URL when returning from a detail page.
+- Present fund identity, basic-field freshness, NAV history freshness, 1m/3m/6m/1y/all windows, structured enrichment, missing fields and research boundary in one detail workspace.
+- Reuse only existing local Fund Explorer and Fund History APIs; no new provider request, score/risk update, recommendation or data-contract change is introduced.
+
 ## v2.3.0 - 2026-07-28
 
 - Add an AKShare-only daily index-history prewarm that refreshes the three existing allowlisted primary indices while preserving isolated failure, cache fallback and endpoint trace behavior.

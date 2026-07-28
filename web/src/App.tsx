@@ -4,6 +4,7 @@ import { AppShell } from "./layout/AppShell";
 import { CopilotPage } from "./pages/CopilotPage";
 import { MarketPage } from "./pages/MarketPage";
 import { FundsPage } from "./pages/FundsPage";
+import { FundDetailPage } from "./pages/FundDetailPage";
 import { NewsPage } from "./pages/NewsPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { PortfolioPage } from "./pages/PortfolioPage";
@@ -46,6 +47,7 @@ export function App() {
         <Route path="/" element={<Navigate to="/market" replace />} />
         <Route path="/market" element={<MarketPage />} />
         <Route path="/funds" element={<FundsPage />} />
+        <Route path="/funds/:code" element={<FundDetailPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/copilot" element={<CopilotPage />} />
