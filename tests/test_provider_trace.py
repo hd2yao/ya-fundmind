@@ -6,7 +6,7 @@ from fund_agent.agents import run_research
 from fund_agent.cache import FundCache
 from fund_agent.models import FundRecord, ProviderEndpointTrace, ProviderHealth, ProviderWarning
 from fund_agent.providers import AkshareProvider
-from fund_agent.trace import write_provider_trace
+from fund_agent.trace import write_provider_health_trace, write_provider_trace
 
 
 class FakeDataFrame:
@@ -115,6 +115,36 @@ def test_provider_trace_retention_prunes_old_trace_files(tmp_path):
     assert not old_by_age.exists()
     assert not old_by_count.exists()
     assert keep.exists()
+
+
+def test_sector_refresh_trace_retention_does_not_prune_daily_trace(tmp_path):
+    result = run_research(
+        [FundRecord(code="510300", name="沪深300ETF", category="ETF", nav=5.0)],
+        as_of="2026-06-23",
+    )
+    daily_trace = write_provider_trace(result, tmp_path)
+    now = datetime(2026, 6, 23, tzinfo=timezone.utc)
+    old_sector_trace = write_provider_health_trace(
+        as_of="2026-06-22",
+        provider_health=(),
+        output_dir=tmp_path,
+        filename_prefix="provider-sector-history",
+        max_trace_files=1,
+        now=now - timedelta(days=1),
+    )
+
+    latest_sector_trace = write_provider_health_trace(
+        as_of="2026-06-23",
+        provider_health=(),
+        output_dir=tmp_path,
+        filename_prefix="provider-sector-history",
+        max_trace_files=1,
+        now=now,
+    )
+
+    assert daily_trace.exists()
+    assert not old_sector_trace.exists()
+    assert latest_sector_trace.exists()
 
 
 def test_tiantian_provider_trace_contract(tmp_path):

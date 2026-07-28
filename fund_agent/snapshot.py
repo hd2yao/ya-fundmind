@@ -61,12 +61,12 @@ def snapshot_from_result(result: ResearchResult) -> dict[str, Any]:
             for code, valuation in result.valuations.items()
         },
         "portfolio": portfolio,
-        "provider_health": [_provider_health_to_dict(item) for item in result.provider_health],
+        "provider_health": [provider_health_to_dict(item) for item in result.provider_health],
         "data_quality_grade": result.data_quality_grade,
     }
 
 
-def _provider_health_to_dict(item) -> dict[str, Any]:
+def provider_health_to_dict(item) -> dict[str, Any]:
     return {
         "provider": item.provider,
         "provider_version": item.provider_version,
@@ -117,8 +117,15 @@ def _provider_metadata_fields(metadata: dict[str, Any]) -> dict[str, Any]:
     allowed = {
         "windows_requested",
         "windows_generated",
+        "operation",
+        "sector_symbol",
+        "sector_name",
     }
     return {key: value for key, value in metadata.items() if key in allowed}
+
+
+# Compatibility for existing private imports while callers move to the public helper.
+_provider_health_to_dict = provider_health_to_dict
 
 
 def write_snapshot(result: ResearchResult, output_dir: Path | str) -> Path:

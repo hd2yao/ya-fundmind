@@ -226,7 +226,12 @@ def create_web_app(
                 name=name,
             )
         except MarketHistoryUnavailable:
-            return build_unavailable_market_history_view(symbol=symbol, name=name, window=window)
+            return build_unavailable_market_history_view(
+                symbol=symbol,
+                name=name,
+                window=window,
+                description="当前指数暂未取得可连续展示的历史行情，请稍后再查看。",
+            )
 
     @app.get("/api/product/market/sectors")
     def product_market_sectors(
@@ -261,6 +266,10 @@ def create_web_app(
                 symbol=resolved_symbol,
                 name="行业板块",
                 window=window,
+                description=(
+                    "当前板块暂未取得可连续展示的历史行情。"
+                    "可查看当日行情，或选择其他板块。"
+                ),
             )
 
     @app.get("/api/market/indices")

@@ -6,7 +6,7 @@ from fund_agent.contract import validate_contract_file, validate_output_dir
 from fund_agent.models import FundRecord, ProviderHealth
 from fund_agent.report import write_json_report
 from fund_agent.snapshot import write_snapshot
-from fund_agent.trace import write_provider_trace
+from fund_agent.trace import write_provider_health_trace, write_provider_trace
 
 
 def _result():
@@ -41,6 +41,24 @@ def test_current_provider_trace_passes_contract_validation(tmp_path):
 
     assert result.ok is True
     assert result.errors == ()
+
+
+def test_output_dir_validation_prefers_daily_trace_over_sector_refresh_trace(tmp_path):
+    result = _result()
+    daily_trace = write_provider_trace(result, tmp_path)
+    sector_trace = write_provider_health_trace(
+        as_of=result.as_of,
+        provider_health=result.provider_health,
+        output_dir=tmp_path,
+        filename_prefix="provider-sector-history",
+    )
+    sector_trace.write_text("{}", encoding="utf-8")
+
+    summary = validate_output_dir(tmp_path)
+
+    trace_result = next(item for item in summary.results if item.contract_type == "trace")
+    assert trace_result.path == daily_trace
+    assert trace_result.ok is True
 
 
 def test_current_snapshot_passes_contract_validation(tmp_path):

@@ -5,19 +5,33 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .agents import ResearchResult
-from .snapshot import _provider_health_to_dict
+from .models import ProviderHealth
+from .snapshot import provider_health_to_dict
 
 SCHEMA_VERSION = "1.0"
 GENERATOR = "fund_agent"
 
 
 def provider_trace_payload(result: ResearchResult, *, generated_at: str | None = None) -> dict:
+    return provider_health_trace_payload(
+        as_of=result.as_of,
+        provider_health=result.provider_health,
+        generated_at=generated_at,
+    )
+
+
+def provider_health_trace_payload(
+    *,
+    as_of: str,
+    provider_health: tuple[ProviderHealth, ...],
+    generated_at: str | None = None,
+) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at or _generated_at(),
         "generator": GENERATOR,
-        "as_of": result.as_of,
-        "providers": [_provider_health_to_dict(item) for item in result.provider_health],
+        "as_of": as_of,
+        "providers": [provider_health_to_dict(item) for item in provider_health],
     }
 
 
@@ -29,13 +43,37 @@ def write_provider_trace(
     max_trace_files: int = 100,
     now: datetime | None = None,
 ) -> Path:
+    return write_provider_health_trace(
+        as_of=result.as_of,
+        provider_health=result.provider_health,
+        output_dir=output_dir,
+        retention_days=retention_days,
+        max_trace_files=max_trace_files,
+        now=now,
+    )
+
+
+def write_provider_health_trace(
+    *,
+    as_of: str,
+    provider_health: tuple[ProviderHealth, ...],
+    output_dir: Path | str,
+    filename_prefix: str = "provider",
+    retention_days: int = 30,
+    max_trace_files: int = 100,
+    now: datetime | None = None,
+) -> Path:
     resolved_now = _utc_now(now)
     trace_dir = Path(output_dir) / "traces"
     trace_dir.mkdir(parents=True, exist_ok=True)
-    path = trace_dir / f"provider-{result.as_of}.json"
+    path = trace_dir / f"{filename_prefix}-{as_of}.json"
     path.write_text(
         json.dumps(
-            provider_trace_payload(result, generated_at=resolved_now.isoformat()),
+            provider_health_trace_payload(
+                as_of=as_of,
+                provider_health=provider_health,
+                generated_at=resolved_now.isoformat(),
+            ),
             ensure_ascii=False,
             indent=2,
             sort_keys=True,
@@ -44,6 +82,7 @@ def write_provider_trace(
     )
     _prune_provider_traces(
         trace_dir,
+        filename_prefix=filename_prefix,
         retention_days=retention_days,
         max_trace_files=max_trace_files,
         now=resolved_now,
@@ -54,20 +93,36 @@ def write_provider_trace(
 def _prune_provider_traces(
     trace_dir: Path,
     *,
+    filename_prefix: str,
     retention_days: int,
     max_trace_files: int,
     now: datetime,
 ) -> None:
-    traces = sorted(trace_dir.glob("provider-*.json"), key=lambda item: item.stat().st_mtime)
+    traces = sorted(
+        _trace_paths(trace_dir, filename_prefix),
+        key=lambda item: item.stat().st_mtime,
+    )
     cutoff = now - timedelta(days=max(0, retention_days))
     for path in traces:
         modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
         if modified_at < cutoff:
             path.unlink(missing_ok=True)
-    remaining = sorted(trace_dir.glob("provider-*.json"), key=lambda item: item.stat().st_mtime)
+    remaining = sorted(
+        _trace_paths(trace_dir, filename_prefix),
+        key=lambda item: item.stat().st_mtime,
+    )
     overflow = max(0, len(remaining) - max(1, max_trace_files))
     for path in remaining[:overflow]:
         path.unlink(missing_ok=True)
+
+
+def _trace_paths(trace_dir: Path, filename_prefix: str) -> list[Path]:
+    pattern = (
+        "provider-????-??-??.json"
+        if filename_prefix == "provider"
+        else f"{filename_prefix}-*.json"
+    )
+    return list(trace_dir.glob(pattern))
 
 
 def _generated_at() -> str:

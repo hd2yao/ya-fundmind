@@ -104,6 +104,7 @@ def build_unavailable_market_history_view(
     symbol: str,
     name: str,
     window: str,
+    description: str = "当前暂无可连续展示的历史行情。",
 ) -> dict[str, Any]:
     """Return a product-safe empty history instead of surfacing a provider error."""
 
@@ -116,7 +117,12 @@ def build_unavailable_market_history_view(
         "required_points": None,
         "points": [],
         "data_date": None,
-        "data_status": build_data_status(as_of=None, has_data=False),
+        "data_status": {
+            "state": "unavailable",
+            "label": "历史日线暂未取得",
+            "description": description,
+            "as_of": None,
+        },
     }
 
 

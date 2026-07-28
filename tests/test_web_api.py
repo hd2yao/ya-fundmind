@@ -237,7 +237,11 @@ def test_product_market_subresources_hide_diagnostics_and_return_empty_state_whe
     assert index.json()["data_status"]["label"] == "请留意数据日期"
     assert sectors.json()["items"][0]["name"] == "医药流通"
     assert unavailable.json()["availability"] == "missing"
-    assert unavailable.json()["data_status"]["label"] == "暂未获取到数据"
+    assert unavailable.json()["data_status"]["label"] == "历史日线暂未取得"
+    assert (
+        unavailable.json()["data_status"]["description"]
+        == "当前板块暂未取得可连续展示的历史行情。可查看当日行情，或选择其他板块。"
+    )
     for payload in (index.json(), sectors.json(), unavailable.json()):
         _assert_product_payload_has_no_diagnostics(payload)
 

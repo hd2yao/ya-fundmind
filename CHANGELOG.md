@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add an AKShare industry-history endpoint fallback that uses only an exact same-name industry board. A controlled `refresh-market-sector-history` CLI can prewarm selected `BK` codes without changing the daily schedule.
+- Keep unavailable industry histories in a user-facing state while retaining the selected board's current quote; normal product pages no longer expose provider, cache or raw warning diagnostics.
+- Preserve main score/risk, provider defaults, watchlist, portfolio, scheduler schedules and all non-trading boundaries.
+
 ## v2.6.0 - 2026-07-28
 
 - Add local text, theme, source-quality, and evidence-strength filters to the existing News / Announcement Evidence Browser without mutating evidence artifacts.

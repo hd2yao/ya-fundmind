@@ -596,8 +596,11 @@ function SectorMarketPanel({
             {history.data?.availability === "missing" ? (
               <StatePanel
                 kind="empty"
-                title="板块日线暂不可用"
-                description={historyStatus?.description || "当前没有可展示的板块历史数据。"}
+                title={historyStatus?.label || "历史日线暂未取得"}
+                description={
+                  historyStatus?.description
+                  || "当前板块暂未取得可连续展示的历史行情。可查看当日行情，或选择其他板块。"
+                }
               />
             ) : null}
             {history.data && history.data.points.length ? (

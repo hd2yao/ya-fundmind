@@ -25,8 +25,11 @@
   映射：`AC-023`
 - [x] `T108` 隐藏正式 fixture 新闻入口。
   映射：`AC-026`
-- [ ] `T109` 完成 Web 三视口、a11y、全量回归、PR 和 `alpha.1`。
+- [x] `T109` 完成 Web 三视口、a11y 和全量回归。
 - [x] `T110` 增加 fixture 新闻、Research/Evidence、daily/weekly 和 `main_score_changed=false/main_risk_changed=false` 回归。
+- [x] `T111` 行业板块历史 endpoint 回退、显式预热、cache 覆盖、用户空态与真实 smoke。
+  映射：`AC-020`、`AC-021`
+- [ ] `T112` 完成 M1 PR、CI、clean `main` 验收和 `v3.0.0-alpha.1`。
 
 ## Batch 2：M2 Fund Profile
 

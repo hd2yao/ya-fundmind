@@ -53,7 +53,13 @@ Current v1 optional Tiantian enrichment fields may include:
 - `windows_requested`
 - `windows_generated`
 
-These fields are diagnostic extensions for explicit Tiantian enrichment and cache fallback. Consumers must not require them for all providers.
+Current v1 optional explicit industry-history refresh fields may include:
+
+- `operation`: `"market_sector_history_refresh"`
+- `sector_symbol`: the requested `BK` board code
+- `sector_name`: the selected board name, or `null` when unavailable
+
+These fields are diagnostic extensions for explicit enrichment, refresh and cache-fallback operations. Consumers must not require them for all providers.
 
 ## Compatibility
 

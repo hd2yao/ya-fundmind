@@ -172,6 +172,150 @@ class InvalidSectorAkshare:
         return FakeDataFrame([(0, {"日期": "", "收盘": ""})])
 
 
+class EastmoneyUnavailableThsAvailable:
+    __version__ = "9.9.9"
+
+    def __init__(self):
+        self.calls = []
+
+    def stock_board_industry_hist_em(self, **kwargs):
+        self.calls.append(("stock_board_industry_hist_em", kwargs))
+        raise ValueError("EastMoney history endpoint unavailable")
+
+    def stock_board_industry_index_ths(self, **kwargs):
+        self.calls.append(("stock_board_industry_index_ths", kwargs))
+        assert kwargs["symbol"] == "医药商业"
+        return FakeDataFrame(
+            [
+                (
+                    0,
+                    {
+                        "日期": "2026-07-21",
+                        "开盘价": "4100.0",
+                        "收盘价": "4150.0",
+                        "最高价": "4160.0",
+                        "最低价": "4090.0",
+                        "成交量": "123456",
+                        "成交额": "987654321",
+                    },
+                ),
+                (
+                    1,
+                    {
+                        "日期": "2026-07-22",
+                        "开盘价": "4150.0",
+                        "收盘价": "4326.2",
+                        "最高价": "4335.0",
+                        "最低价": "4140.0",
+                        "成交量": "130000",
+                        "成交额": "1000000000",
+                    },
+                ),
+            ]
+        )
+
+
+class ExactThsNameOnly(EastmoneyUnavailableThsAvailable):
+    def stock_board_industry_index_ths(self, **kwargs):
+        self.calls.append(("stock_board_industry_index_ths", kwargs))
+        if kwargs["symbol"] != "医药商业":
+            raise KeyError(kwargs["symbol"])
+        return super().stock_board_industry_index_ths(**kwargs)
+
+
+class InvalidPrimaryThsAvailable(EastmoneyUnavailableThsAvailable):
+    def stock_board_industry_hist_em(self, **kwargs):
+        self.calls.append(("stock_board_industry_hist_em", kwargs))
+        return {"unexpected": "shape"}
+
+
+def test_akshare_industry_history_falls_back_to_exact_ths_name(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    ak = EastmoneyUnavailableThsAvailable()
+    provider = AkshareProvider(ak_module=ak, cache=cache, cache_ttl_days=2)
+
+    points = provider.fetch_industry_history(
+        "BK1042",
+        name="医药商业",
+        start_date="20260721",
+        end_date="20260722",
+        as_of="2026-07-23",
+    )
+
+    assert [point.date for point in points] == ["2026-07-21", "2026-07-22"]
+    assert points[-1].close == 4326.2
+    assert [name for name, _kwargs in ak.calls] == [
+        "stock_board_industry_hist_em",
+        "stock_board_industry_index_ths",
+    ]
+    assert provider.last_health is not None
+    assert [trace.endpoint for trace in provider.last_health.endpoints] == [
+        "stock_board_industry_hist_em",
+        "stock_board_industry_index_ths",
+    ]
+    assert provider.last_health.endpoints[-1].success is True
+    assert any(
+        warning.code == "endpoint_fallback"
+        for warning in provider.last_health.warnings
+    )
+    assert len(
+        cache.load_market_series(
+            symbol="BK1042",
+            series_type="industry",
+            source="akshare",
+        )
+    ) == 2
+
+
+def test_akshare_industry_history_fallback_clears_primary_critical_warning(tmp_path):
+    provider = AkshareProvider(
+        ak_module=InvalidPrimaryThsAvailable(),
+        cache=FundCache(tmp_path / "funds.sqlite"),
+    )
+
+    provider.fetch_industry_history(
+        "BK1042",
+        name="医药商业",
+        start_date="20260721",
+        end_date="20260722",
+        as_of="2026-07-23",
+    )
+
+    assert provider.last_health is not None
+    assert provider.last_health.endpoints[-1].success is True
+    assert any(
+        warning.code == "endpoint_fallback"
+        for warning in provider.last_health.warnings
+    )
+    assert not provider.last_health.has_critical_warnings
+
+
+def test_akshare_industry_history_does_not_substitute_a_similar_ths_name(tmp_path):
+    cache = FundCache(tmp_path / "funds.sqlite")
+    provider = AkshareProvider(
+        ak_module=ExactThsNameOnly(),
+        cache=cache,
+        cache_ttl_days=2,
+    )
+
+    with pytest.raises(ProviderUnavailable, match="BK1607"):
+        provider.fetch_industry_history(
+            "BK1607",
+            name="医药流通",
+            start_date="20260721",
+            end_date="20260722",
+            as_of="2026-07-23",
+        )
+
+    assert cache.load_market_series(
+        symbol="BK1607",
+        series_type="industry",
+        source="akshare",
+    ) == []
+    assert provider.last_health is not None
+    assert provider.last_health.endpoints[-1].success is False
+
+
 def test_akshare_industry_catalog_rejects_invalid_response(tmp_path):
     provider = AkshareProvider(
         ak_module=InvalidSectorAkshare(),

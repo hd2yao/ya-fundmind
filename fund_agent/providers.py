@@ -715,7 +715,6 @@ class AkshareProvider:
         started_at = _utc_now()
         resolved_symbol = str(symbol).strip()
         resolved_as_of = as_of or date.today().isoformat()
-        endpoint = "stock_board_industry_hist_em"
         if self._ak is None:
             reason = "AKShare is not installed"
             self.last_health = _build_health(
@@ -734,57 +733,136 @@ class AkshareProvider:
 
         range_start = (start_date or "19700101").replace("-", "")
         range_end = (end_date or resolved_as_of).replace("-", "")
-        result = self._call_akshare(
-            endpoint,
+        primary_endpoint = "stock_board_industry_hist_em"
+        primary_result = self._call_akshare(
+            primary_endpoint,
             symbol=resolved_symbol,
             start_date=range_start,
             end_date=range_end,
             period="日k",
             adjust="",
         )
-        mapping = (
+        primary_mapping = (
             _industry_points_from_akshare_rows(
-                result.data,
+                primary_result.data,
                 symbol=resolved_symbol,
                 name=name,
-                endpoint=endpoint,
+                endpoint=primary_endpoint,
             )
-            if result.success
+            if primary_result.success
             else None
         )
-        endpoint_trace = result.trace
-        if mapping is not None:
-            endpoint_trace = replace(
-                endpoint_trace,
-                live_row_count=mapping.live_row_count,
-                mapped_row_count=len(mapping.points),
-                skipped_row_count=mapping.skipped_row_count,
-            )
-        if not result.success:
-            message = f"{endpoint}: {result.error}"
-            warning = ProviderWarning(
-                code="live_fetch_error",
-                message=message,
-                severity="critical",
-                details={"endpoint": endpoint},
-            )
-            self.last_health = _build_health(
-                provider="akshare",
-                provider_version=self.provider_version,
-                started_at=started_at,
-                endpoints=(endpoint_trace,),
-                warnings=(warning,),
-            )
-            raise ProviderUnavailable(
-                f"AKShare industry history fetch failed: {message}"
-            )
-        selected_points = [
-            point
-            for point in (mapping.points if mapping is not None else ())
-            if range_start <= point.date.replace("-", "") <= range_end
+        endpoint_traces = [
+            _industry_endpoint_trace(primary_result.trace, primary_mapping)
         ]
-        if mapping is None or not selected_points:
-            mapping_warnings = mapping.warnings if mapping is not None else ()
+        live_row_count = primary_mapping.live_row_count if primary_mapping else 0
+        skipped_row_count = (
+            primary_mapping.skipped_row_count if primary_mapping else 0
+        )
+        warnings = list(primary_mapping.warnings if primary_mapping else ())
+        selected_endpoint = primary_endpoint
+        selected_points = _filter_market_series_points(
+            primary_mapping.points if primary_mapping else (),
+            range_start=range_start,
+            range_end=range_end,
+        )
+
+        if not primary_result.success or not selected_points:
+            primary_reason = (
+                primary_result.error
+                if not primary_result.success
+                else "no valid rows returned"
+            )
+            fallback_endpoint = "stock_board_industry_index_ths"
+            fallback_warning = ProviderWarning(
+                code="endpoint_fallback",
+                message=(
+                    "stock_board_industry_hist_em was unavailable; "
+                    "stock_board_industry_index_ths was used."
+                ),
+                severity="warning",
+                details={
+                    "primary_endpoint": primary_endpoint,
+                    "fallback_endpoint": fallback_endpoint,
+                    "reason": primary_reason,
+                },
+            )
+            fallback_result = self._call_akshare(
+                fallback_endpoint,
+                symbol=name,
+                start_date=range_start,
+                end_date=range_end,
+            )
+            fallback_mapping = (
+                _industry_points_from_akshare_rows(
+                    fallback_result.data,
+                    symbol=resolved_symbol,
+                    name=name,
+                    endpoint=fallback_endpoint,
+                )
+                if fallback_result.success
+                else None
+            )
+            endpoint_traces.append(
+                _industry_endpoint_trace(fallback_result.trace, fallback_mapping)
+            )
+            live_row_count += (
+                fallback_mapping.live_row_count if fallback_mapping else 0
+            )
+            skipped_row_count += (
+                fallback_mapping.skipped_row_count if fallback_mapping else 0
+            )
+            warnings.extend(fallback_mapping.warnings if fallback_mapping else ())
+            fallback_points = _filter_market_series_points(
+                fallback_mapping.points if fallback_mapping else (),
+                range_start=range_start,
+                range_end=range_end,
+            )
+            if fallback_result.success and fallback_points:
+                selected_endpoint = fallback_endpoint
+                selected_points = fallback_points
+                # A usable exact-name fallback is a degraded endpoint path, not
+                # a terminal provider failure. Keep the primary endpoint trace,
+                # but do not let its mapping-only critical warning degrade the
+                # consumer-facing provider health.
+                warnings = [
+                    warning
+                    for warning in warnings
+                    if warning.severity != "critical"
+                ]
+                warnings.append(fallback_warning)
+            else:
+                fallback_reason = (
+                    fallback_result.error
+                    if not fallback_result.success
+                    else "no valid rows returned"
+                )
+                message = (
+                    f"AKShare returned no valid industry history for {resolved_symbol}: "
+                    f"{primary_endpoint}={primary_reason}; "
+                    f"{fallback_endpoint}={fallback_reason}"
+                )
+                warning = ProviderWarning(
+                    code="live_fetch_error",
+                    message=message,
+                    severity="critical",
+                    details={
+                        "primary_endpoint": primary_endpoint,
+                        "fallback_endpoint": fallback_endpoint,
+                    },
+                )
+                self.last_health = _build_health(
+                    provider="akshare",
+                    provider_version=self.provider_version,
+                    started_at=started_at,
+                    live_row_count=live_row_count,
+                    skipped_row_count=skipped_row_count,
+                    endpoints=tuple(endpoint_traces),
+                    warnings=(*warnings, warning),
+                )
+                raise ProviderUnavailable(message)
+
+        if not selected_points:
             warning = ProviderWarning(
                 code="empty_live_response",
                 message=(
@@ -798,10 +876,10 @@ class AkshareProvider:
                 provider="akshare",
                 provider_version=self.provider_version,
                 started_at=started_at,
-                live_row_count=mapping.live_row_count if mapping else 0,
-                skipped_row_count=mapping.skipped_row_count if mapping else 0,
-                endpoints=(endpoint_trace,),
-                warnings=(*mapping_warnings, warning),
+                live_row_count=live_row_count,
+                skipped_row_count=skipped_row_count,
+                endpoints=tuple(endpoint_traces),
+                warnings=(*warnings, warning),
             )
             raise ProviderUnavailable(warning.message)
 
@@ -814,6 +892,7 @@ class AkshareProvider:
                 metadata={
                     **point.metadata,
                     "provider": "akshare",
+                    "endpoint": selected_endpoint,
                     "series_kind": "market_industry_history",
                     "as_of": resolved_as_of,
                     "updated_at": updated_at.isoformat(),
@@ -836,12 +915,12 @@ class AkshareProvider:
             provider="akshare",
             provider_version=self.provider_version,
             started_at=started_at,
-            live_row_count=mapping.live_row_count,
+            live_row_count=live_row_count,
             mapped_row_count=len(normalized_points),
-            skipped_row_count=mapping.skipped_row_count,
+            skipped_row_count=skipped_row_count,
             cache_write_count=cache_write_count,
-            endpoints=(endpoint_trace,),
-            warnings=mapping.warnings,
+            endpoints=tuple(endpoint_traces),
+            warnings=tuple(warnings),
         )
         return normalized_points
 
@@ -1684,6 +1763,33 @@ def _industry_entities_from_akshare_rows(
     )
 
 
+def _industry_endpoint_trace(
+    trace: ProviderEndpointTrace,
+    mapping: _MarketSeriesMappingResult | None,
+) -> ProviderEndpointTrace:
+    if mapping is None:
+        return trace
+    return replace(
+        trace,
+        live_row_count=mapping.live_row_count,
+        mapped_row_count=len(mapping.points),
+        skipped_row_count=mapping.skipped_row_count,
+    )
+
+
+def _filter_market_series_points(
+    points: tuple[MarketSeriesPoint, ...],
+    *,
+    range_start: str,
+    range_end: str,
+) -> list[MarketSeriesPoint]:
+    return [
+        point
+        for point in points
+        if range_start <= point.date.replace("-", "") <= range_end
+    ]
+
+
 def _industry_points_from_akshare_rows(
     df: object,
     *,
@@ -1714,16 +1820,16 @@ def _industry_points_from_akshare_rows(
         live_row_count += 1
         try:
             series_date = _date_text(_first(row, "日期", "date"))
-            close = _to_float(_first(row, "收盘", "close"))
+            close = _to_float(_first(row, "收盘", "收盘价", "close"))
             point = MarketSeriesPoint(
                 symbol=symbol,
                 name=name,
                 series_type="industry",
                 date=series_date or "",
-                open=_to_float(_first(row, "开盘", "open")),
+                open=_to_float(_first(row, "开盘", "开盘价", "open")),
                 close=close,
-                high=_to_float(_first(row, "最高", "high")),
-                low=_to_float(_first(row, "最低", "low")),
+                high=_to_float(_first(row, "最高", "最高价", "high")),
+                low=_to_float(_first(row, "最低", "最低价", "low")),
                 volume=_to_float(_first(row, "成交量", "volume")),
                 turnover=_to_float(_first(row, "成交额", "amount", "turnover")),
                 change_pct=_to_float(_first(row, "涨跌幅", "change_pct")),
