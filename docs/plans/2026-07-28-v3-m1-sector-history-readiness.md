@@ -186,4 +186,3 @@ python -m fund_agent.cli product-web --output-dir outputs
 
 - 将完成项和仍受上游可用性限制的项同步到 `tasks.md`、backlog 和 review。
 - 仅 P0/P1 清零且核心 live trace 成功后，恢复 `v3.0.0-alpha.1` release worktree；否则保持 alpha release pending。
-
