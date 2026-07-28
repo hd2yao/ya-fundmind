@@ -538,5 +538,7 @@ def _latest_trace(output_dir: Path) -> Path | None:
     trace_dir = output_dir / "traces"
     if not trace_dir.exists():
         return None
-    candidates = sorted(trace_dir.glob("provider-*.json"))
+    # Daily validation must never select an auxiliary provider trace such as
+    # provider-sector-history-YYYY-MM-DD.json.
+    candidates = sorted(trace_dir.glob("provider-????-??-??.json"))
     return candidates[-1] if candidates else None

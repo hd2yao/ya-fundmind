@@ -310,6 +310,7 @@ class MarketSectorService:
                         fallback_used=False,
                         fallback_reason=None,
                         unavailable_reason=message,
+                        provider_requested=not isinstance(exc, ValueError),
                     )
                 )
                 sectors.append(
@@ -659,8 +660,9 @@ def _sector_refresh_health(
     fallback_used: bool,
     fallback_reason: str | None,
     unavailable_reason: str | None,
+    provider_requested: bool = True,
 ) -> ProviderHealth:
-    health = getattr(provider, "last_health", None)
+    health = getattr(provider, "last_health", None) if provider_requested else None
     if not isinstance(health, ProviderHealth):
         warning = ()
         if unavailable_reason:

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from fund_agent.cache import FundCache
-from fund_agent.models import MarketEntity, MarketSeriesPoint
+from fund_agent.models import MarketEntity, MarketSeriesPoint, ProviderEndpointTrace, ProviderHealth
 from fund_agent.providers import AkshareProvider, ProviderUnavailable
 from fund_agent.sector_history import MarketSectorService, MarketSectorUnavailable
 
@@ -144,6 +144,29 @@ class PartiallyAvailableHistoryProvider(LiveProvider):
         if symbol == "BK0475":
             raise ProviderUnavailable("bank history unavailable")
         return _points(25)
+
+
+class HealthRecordingHistoryProvider(LiveProvider):
+    def fetch_industry_history(self, symbol, **kwargs):
+        self.last_health = ProviderHealth(
+            provider="akshare",
+            provider_version="9.9.9",
+            started_at=NOW.isoformat(),
+            finished_at=NOW.isoformat(),
+            duration_ms=1,
+            live_row_count=25,
+            mapped_row_count=25,
+            cache_write_count=25,
+            endpoints=(
+                ProviderEndpointTrace(
+                    endpoint="stock_board_industry_hist_em",
+                    started_at=NOW.isoformat(),
+                    finished_at=NOW.isoformat(),
+                    duration_ms=1,
+                ),
+            ),
+        )
+        return super().fetch_industry_history(symbol, **kwargs)
 
 
 def test_sector_search_falls_back_to_stale_catalog(tmp_path):
@@ -345,6 +368,29 @@ def test_sector_history_refreshes_explicit_symbols_and_continues_after_failure(t
             now=NOW,
         )
     ) == 25
+
+
+def test_sector_history_refresh_unknown_symbol_does_not_reuse_previous_health(tmp_path):
+    provider = HealthRecordingHistoryProvider()
+    service = MarketSectorService(
+        cache=FundCache(tmp_path / "funds.sqlite"),
+        provider=provider,
+    )
+
+    payload = service.refresh_sector_histories(
+        ["BK1036", "BK9999"],
+        now=NOW,
+        as_of="2026-07-23",
+    )
+
+    previous, unknown = payload["provider_health"]
+    assert previous["sector_symbol"] == "BK1036"
+    assert previous["live_row_count"] == 25
+    assert unknown["sector_symbol"] == "BK9999"
+    assert unknown["live_row_count"] == 0
+    assert unknown["mapped_row_count"] == 0
+    assert unknown["cache_write_count"] == 0
+    assert unknown["endpoints"] == []
 
 
 def test_sector_search_missing_akshare_method_uses_stale_cache(tmp_path):
