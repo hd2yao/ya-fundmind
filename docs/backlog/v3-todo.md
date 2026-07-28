@@ -40,7 +40,7 @@
 - [x] 核心普通页面移除 raw provider/source code、schema、内部 warning code。
 - [x] fixture 新闻默认不作为正式入口。
 - [ ] 完成 1440/768/375、a11y 和全量回归。
-- [ ] 用 v2.6 fixture/live snapshot 证明主 score/risk、Research/Evidence 和 daily/weekly 不变。
+- [x] 用 v2.6 fixture score/risk snapshot 与离线 daily/weekly 回归证明主模型、Research/Evidence 不变；live smoke 仍按对应数据 Milestone 单独执行。
 
 ### M2-M6
 
