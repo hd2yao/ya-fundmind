@@ -46,7 +46,7 @@ function dataStatusTone(status?: ProductDataStatus | null): StatusTone {
 function safeReturnTo(value: string | null): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/funds";
   const pathname = value.split("?", 1)[0];
-  return ["/funds", "/portfolio", "/news"].includes(pathname) ? value : "/funds";
+  return ["/funds", "/watchlist", "/portfolio", "/news"].includes(pathname) ? value : "/funds";
 }
 
 export function FundDetailPage() {

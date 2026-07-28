@@ -3,39 +3,6 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 
 import { FundsPage } from "./FundsPage";
 
-const watchlistResponse = {
-  availability: "available",
-  generated_at: "2026-07-21T10:00:00Z",
-  data: {
-    as_of: "2026-07-21",
-    detail_count: 2,
-    coverage_ratio: 0.67,
-    data_status: { state: "attention", label: "请留意数据日期", description: "当前展示截至 2026-07-21 的数据，最新更新仍待确认。", as_of: "2026-07-21" },
-    funds: [
-        {
-          code: "021511",
-          name: "宏利半导体产业混合发起C",
-          fund_type: "基金",
-          primary_theme: "半导体",
-          nav: 2.9704,
-          return_windows: { "1m": { total_return: 9.99 }, "3m": { total_return: 46.61 } },
-          coverage_ratio: 0.67,
-          data_status: { state: "attention", label: "请留意数据日期", description: "当前展示截至 2026-07-21 的数据，最新更新仍待确认。", as_of: "2026-07-21" }
-        },
-        {
-          code: "021580",
-          name: "华夏人工智能ETF联接D",
-          fund_type: "基金",
-          primary_theme: "人工智能",
-          nav: 1.8126,
-          return_windows: { "1m": { total_return: 3.65 }, "3m": { total_return: 22.8 } },
-          coverage_ratio: 1,
-          data_status: { state: "updated", label: "数据已更新", description: "当前展示截至 2026-07-21 的结构化数据。", as_of: "2026-07-21" }
-        }
-      ]
-  }
-};
-
 const searchResponse = {
   availability: "available",
   items: [
@@ -90,9 +57,6 @@ function stubApi() {
         })
       });
     }
-    if (url === "/api/product/watchlist") {
-      return Promise.resolve({ ok: true, json: async () => watchlistResponse });
-    }
     throw new Error(`Unexpected request: ${url}`);
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -129,7 +93,7 @@ describe("FundsPage", () => {
     renderFunds();
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "基金终端" })).toBeInTheDocument());
-    expect(screen.getByRole("tab", { name: "全市场" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
     expect(screen.getAllByText("21,570").length).toBeGreaterThan(0);
     expect(screen.getByText("沪深300ETF华泰柏瑞")).toBeInTheDocument();
 
@@ -159,16 +123,13 @@ describe("FundsPage", () => {
     });
   });
 
-  it("keeps the configured watchlist as a separate view", async () => {
-    stubApi();
+  it("keeps the fund terminal scoped to server-side market search", async () => {
+    const fetchMock = stubApi();
     renderFunds();
-    await waitFor(() => expect(screen.getByRole("tab", { name: "我的自选" })).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("tab", { name: "我的自选" }));
-
-    expect(screen.getByText("配置中的观察基金")).toBeInTheDocument();
-    expect(screen.getByText("宏利半导体产业混合发起C")).toBeInTheDocument();
-    expect(screen.getByText("已配置自选")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "基金终端" });
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).not.toContain("/api/product/watchlist");
+    expect(screen.queryByText("配置中的观察基金")).not.toBeInTheDocument();
   });
 
   it("routes a fund row to a standalone detail URL and preserves the terminal query", async () => {

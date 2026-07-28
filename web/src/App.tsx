@@ -10,6 +10,7 @@ import { OverviewPage } from "./pages/OverviewPage";
 import { PortfolioPage } from "./pages/PortfolioPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { ReviewPage } from "./pages/ReviewPage";
+import { WatchlistPage } from "./pages/WatchlistPage";
 
 function NotFound() {
   return (
@@ -32,6 +33,7 @@ export function App() {
         <Route path="/market" element={<MarketPage />} />
         <Route path="/funds" element={<FundsPage />} />
         <Route path="/funds/:code" element={<FundDetailPage />} />
+        <Route path="/watchlist" element={<WatchlistPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/copilot" element={<CopilotPage />} />
