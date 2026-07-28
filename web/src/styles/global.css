@@ -2931,6 +2931,14 @@ body {
   color: var(--color-negative);
 }
 
+.market-index-summary strong.number-positive {
+  color: var(--color-positive);
+}
+
+.market-index-summary strong.number-negative {
+  color: var(--color-negative);
+}
+
 .state-panel {
   background: #f9fbf8;
   border-radius: var(--radius-md);
@@ -3055,5 +3063,203 @@ body {
 
   .market-index-summary div:last-child {
     border-bottom: 0;
+  }
+}
+
+/* V3 M1: product-facing market surface. Diagnostics remain on the system page. */
+.topbar {
+  grid-template-columns: minmax(190px, 0.72fr) minmax(340px, 1.28fr);
+}
+
+.number-neutral {
+  color: var(--color-neutral-number);
+}
+
+.market-status--ready {
+  color: var(--color-teal-strong) !important;
+}
+
+.market-status--attention {
+  color: var(--color-amber) !important;
+}
+
+.market-index-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.market-index-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.market-index-summary--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.market-data-note {
+  display: flex;
+  margin: 0;
+  padding: 10px 12px;
+  color: #7c510d;
+  background: #fff8e9;
+  border-left: 3px solid #d18a16;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.market-chart-tooltip {
+  display: flex;
+  min-width: 168px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  color: #23332d;
+  background: rgb(255 254 250 / 96%);
+  border: 1px solid #cfd9d1;
+  border-left: 3px solid var(--color-teal);
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgb(22 48 39 / 12%);
+  font-variant-numeric: tabular-nums;
+}
+
+.market-chart-tooltip span {
+  color: #65766d;
+  font-size: 11px;
+}
+
+.market-chart-tooltip strong {
+  font-size: 13px;
+}
+
+.market-chart-tooltip b {
+  font-size: 12px;
+}
+
+.market-chart-tooltip__neutral {
+  color: var(--color-neutral-number);
+}
+
+.market-sector-table .data-table {
+  min-width: 650px;
+}
+
+.market-sector-row {
+  cursor: pointer;
+}
+
+.market-sector-row td:first-child,
+.market-sector-table .data-table th:first-child {
+  position: sticky;
+  z-index: 1;
+  left: 0;
+  background: var(--color-surface);
+}
+
+.market-sector-table .data-table th:first-child {
+  z-index: 2;
+  background: #edf2ed;
+}
+
+.market-sector-row:hover td:first-child {
+  background: #f4f8f4;
+}
+
+.market-sector-row--active,
+.market-sector-row--active:hover {
+  background: #fff5ee !important;
+}
+
+.market-sector-row--active td:first-child,
+.market-sector-row--active:hover td:first-child {
+  background: #fff5ee;
+  box-shadow: inset 3px 0 var(--color-positive);
+}
+
+.market-sector-select {
+  display: flex;
+  width: 100%;
+  min-width: 132px;
+  padding: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.market-sector-select strong {
+  color: #1f352c;
+  font-size: 13px;
+}
+
+.market-sector-select span {
+  color: #6b7a72;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 10px;
+}
+
+.market-sector-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgb(8 127 115 / 42%);
+}
+
+.market-movement-panel {
+  padding-bottom: 18px;
+}
+
+.market-movement-panel .movement-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.movement-item--interactive {
+  width: 100%;
+  color: inherit;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.movement-item--interactive:hover {
+  background: #f0f6f2;
+  border-color: #c6ddd1;
+}
+
+.movement-item--interactive:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (max-width: 960px) {
+  .topbar {
+    grid-template-columns: auto minmax(150px, 0.7fr) minmax(220px, 1.3fr);
+  }
+
+  .market-index-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .global-fund-search {
+    grid-column: 1 / -1;
+  }
+
+  .market-index-summary,
+  .market-movement-panel .movement-list {
+    grid-template-columns: 1fr;
+  }
+
+  .market-sector-table .data-table {
+    min-width: 590px;
   }
 }

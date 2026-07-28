@@ -19,6 +19,37 @@ function formatValue(value: unknown) {
     : "--";
 }
 
+function formatReturn(value: unknown) {
+  return typeof value === "number" ? `${value > 0 ? "+" : ""}${value.toFixed(2)}%` : "--";
+}
+
+function returnClass(value: unknown) {
+  if (typeof value !== "number" || value === 0) return "market-chart-tooltip__neutral";
+  return value > 0 ? "number-positive" : "number-negative";
+}
+
+function MarketChartTooltip({
+  active,
+  payload,
+  label,
+  seriesLabel
+}: {
+  active?: boolean;
+  payload?: ReadonlyArray<{ payload?: MarketIndexHistoryPoint }>;
+  label?: string | number;
+  seriesLabel: string;
+}) {
+  const point = payload?.[0]?.payload;
+  if (!active || !point) return null;
+  return (
+    <div className="market-chart-tooltip">
+      <span>{label || point.date}</span>
+      <strong>{seriesLabel}收盘 {formatValue(point.close)}</strong>
+      <b className={returnClass(point.change_pct)}>当日 {formatReturn(point.change_pct)}</b>
+    </div>
+  );
+}
+
 export function MarketIndexChart({
   name,
   points,
@@ -47,10 +78,7 @@ export function MarketIndexChart({
               tickLine={false}
               width={72}
             />
-            <Tooltip
-              formatter={(value) => [formatValue(value), "收盘"]}
-              labelFormatter={(label) => `日期 ${label}`}
-            />
+            <Tooltip content={(props) => <MarketChartTooltip {...props} seriesLabel={seriesLabel} />} />
             <Line
               type="monotone"
               dataKey="close"
@@ -86,7 +114,7 @@ export function MarketIndexChart({
                   <td>{formatValue(point.high)}</td>
                   <td>{formatValue(point.low)}</td>
                   <td>{formatValue(point.close)}</td>
-                  <td>{typeof point.change_pct === "number" ? `${point.change_pct.toFixed(2)}%` : "--"}</td>
+                  <td className={returnClass(point.change_pct)}>{formatReturn(point.change_pct)}</td>
                 </tr>
               ))}
             </tbody>

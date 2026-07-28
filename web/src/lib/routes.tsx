@@ -43,7 +43,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
     label: "系统",
     items: [
       { path: "/status", label: "系统状态", description: "运行 · 质量 · 门禁", icon: LayoutDashboard },
-      { path: "/reports", label: "报告中心", description: "本地产物", icon: FileText }
+      { path: "/reports", label: "报告中心", description: "日报 · 周报 · 导出", icon: FileText }
     ]
   }
 ];

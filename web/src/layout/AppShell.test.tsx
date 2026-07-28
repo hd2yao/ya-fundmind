@@ -35,8 +35,10 @@ describe("AppShell", () => {
     expect(screen.getByText("研究工具")).toBeInTheDocument();
     expect(screen.getByText("系统")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "行情总览" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByText("研究工作区 · 行情总览")).toBeInTheDocument();
-    expect(screen.getByText("本地研究工作区")).toBeInTheDocument();
+    expect(screen.getByText("FundMind OS · 行情总览")).toBeInTheDocument();
+    expect(screen.getByText("基金与市场信息平台")).toBeInTheDocument();
+    expect(screen.queryByText("本地研究工作区")).not.toBeInTheDocument();
+    expect(screen.queryByText(/SQLite/)).not.toBeInTheDocument();
   });
 
   it("sends the global fund search to the fund terminal", () => {
