@@ -109,6 +109,7 @@ def create_web_app(
     static_dir: Path | str | None = None,
     fund_history_service: Any | None = None,
     fund_profile_service: Any | None = None,
+    fund_catalog_cache: FundCache | None = None,
     market_history_service: Any | None = None,
     market_sector_service: Any | None = None,
 ) -> FastAPI:
@@ -135,8 +136,16 @@ def create_web_app(
     app.state.output_dir = root
     app.state.review_state_path = state_path
     app.state.static_dir = static_root
+    profile_cache = getattr(fund_profile_service, "cache", None)
+    resolved_catalog_cache = (
+        fund_catalog_cache
+        or (profile_cache if isinstance(profile_cache, FundCache) else None)
+        or FundCache(root.parent / "data" / "cache" / "funds.sqlite")
+    )
+    app.state.fund_profile_cache = resolved_catalog_cache
     app.state.fund_explorer = FundExplorerIndex(
-        root / "market" / "market_intelligence_report.json"
+        root / "market" / "market_intelligence_report.json",
+        catalog_cache=resolved_catalog_cache,
     )
     app.state.fund_history_service = fund_history_service
     app.state.fund_profile_service = fund_profile_service
@@ -410,6 +419,7 @@ def create_web_app(
         fund_type: str | None = Query(default=None, max_length=120),
         theme: str | None = Query(default=None, max_length=120),
         exchange_traded: bool | None = None,
+        purchase_status: str | None = Query(default=None, max_length=120),
         quality: Literal["normal", "warning", "degraded", "unknown"] | None = None,
         sort: Literal[
             "code",
@@ -429,6 +439,7 @@ def create_web_app(
                 fund_type=fund_type,
                 theme=theme,
                 exchange_traded=exchange_traded,
+                purchase_status=purchase_status,
                 quality=quality,
                 sort=sort,
                 direction=direction,
@@ -443,6 +454,7 @@ def create_web_app(
         fund_type: str | None = Query(default=None, max_length=120),
         theme: str | None = Query(default=None, max_length=120),
         exchange_traded: bool | None = None,
+        purchase_status: str | None = Query(default=None, max_length=120),
         quality: Literal["normal", "warning", "degraded", "unknown"] | None = None,
         sort: Literal[
             "code",
@@ -465,6 +477,7 @@ def create_web_app(
                     fund_type=fund_type,
                     theme=theme,
                     exchange_traded=exchange_traded,
+                    purchase_status=purchase_status,
                     quality=quality,
                     sort=sort,
                     direction=direction,
@@ -817,7 +830,10 @@ def _validate_fund_code(code: str) -> None:
 
 def _get_fund_profile_service(app: FastAPI, root: Path):
     if app.state.fund_profile_service is None:
-        app.state.fund_profile_service = _build_fund_profile_service(root)
+        app.state.fund_profile_service = _build_fund_profile_service(
+            root,
+            cache=app.state.fund_profile_cache,
+        )
     return app.state.fund_profile_service
 
 
@@ -895,15 +911,18 @@ def _build_fund_profile_service(
     root: Path,
     *,
     project_root: Path | None = None,
+    cache: FundCache | None = None,
 ) -> FundProfileService:
     del root
     resolved_project_root = (project_root or PROJECT_ROOT).expanduser().resolve()
     provider_config = load_provider_config(
         resolved_project_root / "configs" / "providers.yaml"
     ).akshare
-    cache = FundCache(resolved_project_root / "data" / "cache" / "funds.sqlite")
+    resolved_cache = cache or FundCache(
+        resolved_project_root / "data" / "cache" / "funds.sqlite"
+    )
     provider = AkshareProvider(
-        cache=cache,
+        cache=resolved_cache,
         allow_stale_cache=True,
         cache_ttl_days=7,
         verbose=provider_config.verbose,
@@ -911,7 +930,7 @@ def _build_fund_profile_service(
         retry_count=provider_config.retry_count,
         retry_backoff_seconds=provider_config.retry_backoff_seconds,
     )
-    return FundProfileService(cache=cache, provider=provider, cache_ttl_days=7)
+    return FundProfileService(cache=resolved_cache, provider=provider, cache_ttl_days=7)
 
 
 def _build_market_history_service(

@@ -51,7 +51,7 @@ describe("API client response validation", () => {
         page_size: 25,
         total: 0,
         total_pages: 0,
-        facets: { fund_types: {}, themes: {}, exchange_traded: {}, data_states: {} },
+        facets: { fund_types: {}, themes: {}, exchange_traded: {}, purchase_statuses: {}, data_states: {} },
         data_date: "2026-07-21",
         data_status: { state: "updated", label: "数据已更新", description: "已更新", as_of: "2026-07-21" }
       })
@@ -61,6 +61,7 @@ describe("API client response validation", () => {
     await searchFunds({
       q: "人工 智能",
       fundType: "ETF",
+      purchaseStatus: "开放申购",
       exchangeTraded: true,
       page: 2,
       pageSize: 25,
@@ -71,6 +72,7 @@ describe("API client response validation", () => {
     const requestedUrl = String(fetchMock.mock.calls[0][0]);
     expect(requestedUrl).toContain("q=%E4%BA%BA%E5%B7%A5+%E6%99%BA%E8%83%BD");
     expect(requestedUrl).toContain("fund_type=ETF");
+    expect(requestedUrl).toContain("purchase_status=%E5%BC%80%E6%94%BE%E7%94%B3%E8%B4%AD");
     expect(requestedUrl).toContain("exchange_traded=true");
     expect(requestedUrl).toContain("page=2");
     expect(requestedUrl).not.toContain("theme=undefined");

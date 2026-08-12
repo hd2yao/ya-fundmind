@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
+from fund_agent.cache import FundCache
 from fund_agent.fund_explorer import FundExplorerIndex, FundSearchQuery
+from fund_agent.models import FundCatalogEntry, FundTradingRule
 
 
 def _write_market_report(path: Path) -> None:
@@ -82,6 +86,56 @@ def _write_market_report(path: Path) -> None:
     )
 
 
+def _write_profile_reference_cache(path: Path) -> FundCache:
+    cache = FundCache(path)
+    now = datetime(2026, 7, 21, 14, 0, tzinfo=timezone.utc)
+    cache.replace_fund_catalog_snapshot(
+        [
+            FundCatalogEntry(
+                code="510300",
+                name="目录版沪深300ETF",
+                fund_type="ETF-指数型",
+                exchange_traded=True,
+                catalog_sources=("fund_name_em", "fund_etf_spot_em"),
+                source="akshare",
+            ),
+            FundCatalogEntry(
+                code="021511",
+                name="创新药混合A",
+                fund_type="混合型",
+                exchange_traded=False,
+                catalog_sources=("fund_name_em", "fund_open_fund_rank_em"),
+                source="akshare",
+            ),
+        ],
+        snapshot_id="catalog-v1",
+        as_of="2026-07-21",
+        ttl_days=30,
+        now=now,
+    )
+    cache.replace_purchase_snapshot(
+        [
+            FundTradingRule(
+                code="510300",
+                purchase_status="场内交易",
+                redemption_status="场内交易",
+                source="akshare",
+            ),
+            FundTradingRule(
+                code="021511",
+                purchase_status="开放申购",
+                redemption_status="开放赎回",
+                source="akshare",
+            ),
+        ],
+        snapshot_id="purchase-v1",
+        as_of="2026-07-21",
+        ttl_days=30,
+        now=now,
+    )
+    return cache
+
+
 def test_search_normalizes_and_merges_market_records(tmp_path: Path) -> None:
     report_path = tmp_path / "market" / "market_intelligence_report.json"
     _write_market_report(report_path)
@@ -133,6 +187,75 @@ def test_search_supports_filters(
     result = FundExplorerIndex(report_path).search(query)
 
     assert [item["code"] for item in result["items"]] == expected_codes
+
+
+def test_search_unions_catalog_with_market_and_uses_catalog_identity(tmp_path: Path) -> None:
+    report_path = tmp_path / "market.json"
+    _write_market_report(report_path)
+    cache = _write_profile_reference_cache(tmp_path / "funds.sqlite")
+
+    index = FundExplorerIndex(report_path, catalog_cache=cache)
+
+    catalog_only = index.search(FundSearchQuery(q="创新药"))
+    overlap = index.get("510300")
+
+    assert [item["code"] for item in catalog_only["items"]] == ["021511"]
+    assert catalog_only["items"][0]["purchase_status"] == "开放申购"
+    assert overlap is not None
+    assert overlap["name"] == "目录版沪深300ETF"
+    assert overlap["fund_type"] == "ETF-指数型"
+    assert overlap["nav"] == 4.21
+    assert overlap["themes"] == ["宽基", "沪深300"]
+    assert index.search(FundSearchQuery())["total"] == 4
+
+
+def test_search_filters_and_facets_purchase_status(tmp_path: Path) -> None:
+    report_path = tmp_path / "market.json"
+    _write_market_report(report_path)
+    cache = _write_profile_reference_cache(tmp_path / "funds.sqlite")
+
+    result = FundExplorerIndex(report_path, catalog_cache=cache).search(
+        FundSearchQuery(purchase_status="开放申购")
+    )
+
+    assert [item["code"] for item in result["items"]] == ["021511"]
+    assert result["facets"]["purchase_statuses"] == {"开放申购": 1}
+
+
+def test_catalog_index_hot_reloads_and_keeps_last_good_on_cache_error(tmp_path: Path) -> None:
+    report_path = tmp_path / "market.json"
+    _write_market_report(report_path)
+    cache = _write_profile_reference_cache(tmp_path / "funds.sqlite")
+    index = FundExplorerIndex(report_path, catalog_cache=cache)
+    assert index.search(FundSearchQuery(q="021511"))["total"] == 1
+
+    cache.replace_fund_catalog_snapshot(
+        [
+            FundCatalogEntry(
+                code="021580",
+                name="创新药混合C",
+                fund_type="混合型",
+                source="akshare",
+            )
+        ],
+        snapshot_id="catalog-v2",
+        as_of="2026-07-22",
+        ttl_days=30,
+        now=datetime(2026, 7, 22, 14, 0, tzinfo=timezone.utc),
+    )
+    stat = cache.path.stat()
+    os.utime(cache.path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+
+    reloaded = index.search(FundSearchQuery(q="021580"))
+    assert reloaded["total"] == 1
+    assert index.load_count == 2
+
+    cache.path.write_bytes(b"not-a-sqlite-database")
+    failed = index.search(FundSearchQuery(q="021580"))
+
+    assert failed["total"] == 1
+    assert failed["index_stale"] is True
+    assert failed["warnings"] == ["fund_explorer_index_reload_failed:DatabaseError"]
 
 
 def test_search_sorts_paginates_and_returns_facets(tmp_path: Path) -> None:

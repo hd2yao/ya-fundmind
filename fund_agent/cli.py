@@ -1575,6 +1575,7 @@ def _run_product_web(args) -> int:
         output_dir=args.output_dir,
         review_state_path=args.review_state,
         static_dir=args.static_dir,
+        cache_file=args.cache_file,
         host=args.host,
         port=args.port,
     )
@@ -1585,6 +1586,7 @@ def _run_product_web_server(
     output_dir: Path,
     review_state_path: Path | None,
     static_dir: Path,
+    cache_file: Path,
     host: str,
     port: int,
 ) -> int:
@@ -1596,6 +1598,7 @@ def _run_product_web_server(
         output_dir=output_dir,
         review_state_path=review_state_path,
         static_dir=static_dir,
+        fund_catalog_cache=FundCache(cache_file),
     )
     uvicorn.run(app, host=host, port=port, log_level="info")
     return 0
@@ -2202,6 +2205,7 @@ def build_parser() -> argparse.ArgumentParser:
     product_web.add_argument("--output-dir", type=Path, default=Path("outputs"))
     product_web.add_argument("--review-state", type=Path)
     product_web.add_argument("--static-dir", type=Path, default=_default_product_web_static_dir())
+    product_web.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
     product_web.add_argument("--host", default="127.0.0.1")
     product_web.add_argument("--port", type=int, default=8768)
     product_web.add_argument("--dry-run", action="store_true")

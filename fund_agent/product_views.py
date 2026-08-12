@@ -206,6 +206,7 @@ def build_fund_search_view(payload: dict[str, Any]) -> dict[str, Any]:
             "fund_types": _string_count_map(raw_facets.get("fund_types")),
             "themes": _string_count_map(raw_facets.get("themes")),
             "exchange_traded": _string_count_map(raw_facets.get("exchange_traded")),
+            "purchase_statuses": _string_count_map(raw_facets.get("purchase_statuses")),
             "data_states": _quality_facets_to_data_states(raw_qualities),
         },
         "data_date": as_of,
@@ -585,6 +586,7 @@ def _build_fund_summary(item: dict[str, Any]) -> dict[str, Any]:
         "nav": _as_number(item.get("nav")),
         "scale": _as_number(item.get("scale")),
         "exchange_traded": bool(item.get("exchange_traded")),
+        "purchase_status": _display_text(item.get("purchase_status")),
         "returns": {window: _as_number(returns.get(window)) for window in ("1m", "3m", "6m", "1y")},
         "data_date": data_date,
         "data_status": build_data_status(

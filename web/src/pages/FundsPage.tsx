@@ -58,6 +58,12 @@ function returnClass(value?: number | null) {
   return value > 0 ? "number-positive" : "number-negative";
 }
 
+function purchaseStatusTone(status?: string | null): StatusTone {
+  if (!status) return "neutral";
+  if (status.includes("暂停") || status.includes("限制") || status.includes("封闭")) return "warning";
+  return "success";
+}
+
 export function FundsPage() {
   const [urlSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -125,6 +131,7 @@ function readSearchParams(params: URLSearchParams): FundSearchParams {
     q: params.get("q")?.trim() || "",
     fundType: params.get("fund_type") || undefined,
     theme: params.get("theme") || undefined,
+    purchaseStatus: params.get("purchase_status") || undefined,
     quality: (params.get("quality") || undefined) as FundSearchParams["quality"],
     sort: (params.get("sort") || DEFAULT_SEARCH.sort) as FundSearchParams["sort"],
     direction: (params.get("direction") || DEFAULT_SEARCH.direction) as FundSearchParams["direction"],
@@ -139,6 +146,7 @@ function toSearchString(search: FundSearchParams): string {
   if (search.q) params.set("q", search.q);
   if (search.fundType) params.set("fund_type", search.fundType);
   if (search.theme) params.set("theme", search.theme);
+  if (search.purchaseStatus) params.set("purchase_status", search.purchaseStatus);
   if (search.quality) params.set("quality", search.quality);
   if (search.sort && search.sort !== DEFAULT_SEARCH.sort) params.set("sort", search.sort);
   if (search.direction && search.direction !== DEFAULT_SEARCH.direction) params.set("direction", search.direction);
@@ -163,6 +171,7 @@ function MarketExplorer({
   const data = state.data;
   const fundTypes = Object.keys(data?.facets.fund_types || {});
   const themes = Object.keys(data?.facets.themes || {});
+  const purchaseStatuses = Object.keys(data?.facets.purchase_statuses || {});
 
   if (state.loading && !data) {
     return <StatePanel kind="loading" title="正在建立全市场索引" description="仅向浏览器传输当前页，不加载全部基金记录。" />;
@@ -238,6 +247,13 @@ function MarketExplorer({
             onChange={(value) => onSearchChange("quality", (value || undefined) as FundSearchParams["quality"])}
           />
           <FilterSelect
+            label="申购状态"
+            value={search.purchaseStatus || ""}
+            options={purchaseStatuses}
+            allLabel="全部申购状态"
+            onChange={(value) => onSearchChange("purchaseStatus", value || undefined)}
+          />
+          <FilterSelect
             label="排序"
             value={search.sort || "code"}
             options={["code", "name", "return_1m", "return_3m", "return_6m", "return_1y"]}
@@ -265,7 +281,7 @@ function MarketExplorer({
         {data.items.length ? (
           <MarketFundTable items={data.items} onSelect={onSelect} />
         ) : (
-          <StatePanel kind="empty" title="没有匹配的基金" description="调整代码、名称、类型、主题或质量条件。" />
+          <StatePanel kind="empty" title="没有匹配的基金" description="调整代码、名称、类型、主题、申购状态或质量条件。" />
         )}
 
         <div className="pagination-bar" aria-label="基金搜索分页">
@@ -310,10 +326,10 @@ function MarketExplorer({
 
 function MarketFundTable({ items, onSelect }: { items: ProductFundSummary[]; onSelect: (code: string) => void }) {
   return (
-    <DataTable label="全市场基金数据表" minWidth={1120}>
+    <DataTable label="全市场基金数据表" minWidth={1240}>
       <thead>
         <tr>
-          <th>代码</th><th>名称</th><th>类型</th><th>主题</th><th>净值</th><th>1 月</th><th>3 月</th><th>资料状态</th><th aria-label="操作" />
+          <th>代码</th><th>名称</th><th>类型</th><th>主题</th><th>申购状态</th><th>净值</th><th>1 月</th><th>3 月</th><th>资料状态</th><th aria-label="操作" />
         </tr>
       </thead>
       <tbody>
@@ -325,6 +341,7 @@ function MarketFundTable({ items, onSelect }: { items: ProductFundSummary[]; onS
             <td className="fund-name-cell">{fund.name || "名称缺失"}</td>
             <td>{fund.fund_type || "类型待补充"}</td>
             <td>{fund.primary_theme || "未分类"}</td>
+            <td><StatusBadge tone={purchaseStatusTone(fund.purchase_status)}>{fund.purchase_status || "待补充"}</StatusBadge></td>
             <td>{formatNumber(fund.nav, 4)}</td>
             <td className={returnClass(fund.returns["1m"])}>{formatReturn(fund.returns["1m"])}</td>
             <td className={returnClass(fund.returns["3m"])}>{formatReturn(fund.returns["3m"])}</td>

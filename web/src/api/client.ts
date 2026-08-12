@@ -74,6 +74,7 @@ export async function searchFunds(
   appendQuery(query, "fund_type", params.fundType);
   appendQuery(query, "theme", params.theme);
   appendQuery(query, "exchange_traded", params.exchangeTraded);
+  appendQuery(query, "purchase_status", params.purchaseStatus);
   appendQuery(query, "quality", params.quality);
   appendQuery(query, "sort", params.sort);
   appendQuery(query, "direction", params.direction);

@@ -319,6 +319,7 @@ export type FundSearchItem = {
   nav: number | null;
   scale: number | null;
   exchange_traded: boolean;
+  purchase_status?: string | null;
   returns: Partial<Record<"1m" | "3m" | "6m" | "1y", number>>;
   source: string;
   as_of: string | null;
@@ -334,6 +335,7 @@ export type FundSearchParams = {
   fundType?: string;
   theme?: string;
   exchangeTraded?: boolean;
+  purchaseStatus?: string;
   quality?: "normal" | "warning" | "degraded" | "unknown";
   sort?: "code" | "name" | "return_1m" | "return_3m" | "return_6m" | "return_1y";
   direction?: "asc" | "desc";
@@ -352,6 +354,7 @@ export type FundSearchResponse = {
     fund_types: Record<string, number>;
     themes: Record<string, number>;
     exchange_traded: Record<string, number>;
+    purchase_statuses: Record<string, number>;
     qualities: Record<string, number>;
   };
   as_of: string | null;
@@ -370,6 +373,7 @@ export type ProductFundSummary = {
   nav: number | null;
   scale: number | null;
   exchange_traded: boolean;
+  purchase_status: string | null;
   returns: Partial<Record<"1m" | "3m" | "6m" | "1y", number | null>>;
   data_date: string | null;
   data_status: ProductDataStatus;
@@ -386,6 +390,7 @@ export type ProductFundSearchResponse = {
     fund_types: Record<string, number>;
     themes: Record<string, number>;
     exchange_traded: Record<string, number>;
+    purchase_statuses: Record<string, number>;
     data_states: Record<string, number>;
   };
   data_date: string | null;
