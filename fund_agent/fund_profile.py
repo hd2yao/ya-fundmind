@@ -199,7 +199,7 @@ class FundProfileService:
                 )
             )
 
-        if profile is None and trading_rule is None and not fees:
+        if catalog is None and profile is None and trading_rule is None and not fees:
             reason = failures[0] if failures else "no fund profile components are available"
             raise FundProfileUnavailable(reason)
 

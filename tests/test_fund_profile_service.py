@@ -6,7 +6,7 @@ import pytest
 
 from fund_agent.cache import FundCache
 from fund_agent.fund_profile import FundProfileService, FundProfileUnavailable
-from fund_agent.models import FundFee, FundProfile, FundTradingRule
+from fund_agent.models import FundCatalogEntry, FundFee, FundProfile, FundTradingRule
 from fund_agent.providers import ProviderUnavailable
 
 
@@ -181,6 +181,27 @@ def test_profile_service_fails_clearly_without_live_or_cache(tmp_path):
 
     with pytest.raises(FundProfileUnavailable, match="profile endpoint down"):
         service.get_profile("021511")
+
+
+def test_profile_service_returns_catalog_only_bundle_when_detail_components_fail(tmp_path):
+    now = datetime(2026, 7, 28, tzinfo=timezone.utc)
+    cache = FundCache(tmp_path / "funds.sqlite")
+    cache.replace_fund_catalog_snapshot(
+        [FundCatalogEntry(code="021511", name="示例混合A", source="akshare")],
+        snapshot_id="catalog-v1",
+        as_of="2026-07-28",
+        now=now,
+    )
+    service = FundProfileService(cache=cache, provider=FailingProvider())
+
+    bundle = service.get_profile("021511", now=now)
+
+    assert bundle.catalog is not None
+    assert bundle.catalog.name == "示例混合A"
+    assert bundle.profile is None
+    assert bundle.trading_rule is None
+    assert bundle.fees == ()
+    assert bundle.data_status == "limited"
 
 
 @pytest.mark.parametrize("code", ["bad", "12345", "ABCDEF"])

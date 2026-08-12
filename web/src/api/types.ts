@@ -442,6 +442,52 @@ export type ProductFundDetailResponse = {
   research: ProductFundResearchDetail;
 };
 
+export type ProductFundProfileOverview = {
+  full_name: string | null;
+  fund_company: string | null;
+  custodian: string | null;
+  fund_manager: string | null;
+  issue_date: string | null;
+  inception_date: string | null;
+  asset_scale: number | null;
+  asset_scale_unit: string | null;
+  share_scale: number | null;
+  share_scale_unit: string | null;
+  benchmark: string | null;
+  tracking_target: string | null;
+};
+
+export type ProductFundTradingRule = {
+  purchase_status: string | null;
+  redemption_status: string | null;
+  next_open_date: string | null;
+  minimum_purchase_amount: string | null;
+  daily_purchase_limit: string | null;
+  confirmation_rule: string | null;
+};
+
+export type ProductFundFee = {
+  fee_type: string | null;
+  condition: string | null;
+  period: string | null;
+  channel: string | null;
+  original_rate: string | null;
+  discounted_rate: string | null;
+};
+
+export type ProductFundProfileResponse = {
+  fund: { code: string; name: string | null; fund_type: string | null };
+  profile: ProductFundProfileOverview | null;
+  trading_rule: ProductFundTradingRule | null;
+  fees: ProductFundFee[];
+  data_status: ProductDataStatus;
+  component_status: {
+    profile: ProductDataStatus;
+    trading_rule: ProductDataStatus;
+    fees: ProductDataStatus;
+  };
+};
+
 export type FundHistoryWindow = "1m" | "3m" | "6m" | "1y" | "all";
 
 export type FundHistoryPoint = {

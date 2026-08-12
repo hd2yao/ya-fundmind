@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .models import FundRecord
+from .models import FundProfileBundle, FundRecord
 
 
 _LIMITED_QUALITY_GRADES = {"critical", "degraded"}
@@ -267,6 +267,176 @@ def build_fund_detail_view(fund: dict[str, Any], research_detail: dict[str, Any]
                 has_data=bool(research_detail),
             ),
         },
+    }
+
+
+def build_fund_profile_view(
+    bundle: FundProfileBundle,
+    *,
+    fallback_fund: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Project profile data without provider, cache, endpoint or warning details."""
+
+    fallback = fallback_fund or {}
+    catalog = bundle.catalog
+    profile = bundle.profile
+    trading_rule = bundle.trading_rule
+    name = _display_text(profile.name if profile is not None else None)
+    if name is None:
+        name = _display_text(catalog.name if catalog is not None else None)
+    if name is None:
+        name = _display_text(fallback.get("name"))
+    fund_type = _display_text(profile.fund_type if profile is not None else None)
+    if fund_type is None:
+        fund_type = _display_text(catalog.fund_type if catalog is not None else None)
+    if fund_type is None:
+        fund_type = _display_text(fallback.get("fund_type"))
+
+    profile_as_of = _as_text(profile.as_of if profile is not None else None)
+    trading_as_of = _as_text(trading_rule.as_of if trading_rule is not None else None)
+    fee_as_of = next(
+        (
+            value
+            for fee in bundle.fees
+            if (value := _as_text(fee.as_of)) is not None
+        ),
+        None,
+    )
+    catalog_as_of = _as_text(catalog.as_of if catalog is not None else None)
+    as_of = profile_as_of or trading_as_of or fee_as_of or catalog_as_of
+    return {
+        "fund": {
+            "code": bundle.code,
+            "name": name,
+            "fund_type": fund_type,
+        },
+        "profile": (
+            {
+                "full_name": _display_text(profile.full_name),
+                "fund_company": _display_text(profile.fund_company),
+                "custodian": _display_text(profile.custodian),
+                "fund_manager": _display_text(profile.fund_manager),
+                "issue_date": _display_text(profile.issue_date),
+                "inception_date": _display_text(profile.inception_date),
+                "asset_scale": _as_number(profile.asset_scale),
+                "asset_scale_unit": _display_text(profile.asset_scale_unit),
+                "share_scale": _as_number(profile.share_scale),
+                "share_scale_unit": _display_text(profile.share_scale_unit),
+                "benchmark": _display_text(profile.benchmark),
+                "tracking_target": _display_text(profile.tracking_target),
+            }
+            if profile is not None
+            else None
+        ),
+        "trading_rule": (
+            {
+                "purchase_status": _display_text(trading_rule.purchase_status),
+                "redemption_status": _display_text(trading_rule.redemption_status),
+                "next_open_date": _display_text(trading_rule.next_open_date),
+                "minimum_purchase_amount": _display_text(
+                    trading_rule.minimum_purchase_amount
+                ),
+                "daily_purchase_limit": _display_text(
+                    trading_rule.daily_purchase_limit
+                ),
+                "confirmation_rule": _display_text(trading_rule.confirmation_rule),
+            }
+            if trading_rule is not None
+            else None
+        ),
+        "fees": [
+            {
+                "fee_type": _display_text(fee.fee_type),
+                "condition": _display_text(fee.condition),
+                "period": _display_text(fee.period),
+                "channel": _display_text(fee.channel),
+                "original_rate": _display_text(fee.original_rate),
+                "discounted_rate": _display_text(fee.discounted_rate),
+            }
+            for fee in bundle.fees
+        ],
+        "data_status": _build_profile_status(
+            bundle.data_status,
+            as_of=as_of,
+            label="基金资料",
+        ),
+        "component_status": {
+            "profile": _build_profile_status(
+                bundle.profile_status,
+                as_of=profile_as_of or catalog_as_of,
+                label="概况",
+            ),
+            "trading_rule": _build_profile_status(
+                bundle.trading_status,
+                as_of=trading_as_of,
+                label="规则",
+            ),
+            "fees": _build_profile_status(
+                bundle.fee_status,
+                as_of=fee_as_of,
+                label="费率",
+            ),
+        },
+    }
+
+
+def build_unavailable_fund_profile_view(
+    *,
+    code: str,
+    fallback_fund: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    fallback = fallback_fund or {}
+    unavailable = _build_profile_status("unavailable", as_of=None, label="基金资料")
+    return {
+        "fund": {
+            "code": code,
+            "name": _display_text(fallback.get("name")),
+            "fund_type": _display_text(fallback.get("fund_type")),
+        },
+        "profile": None,
+        "trading_rule": None,
+        "fees": [],
+        "data_status": unavailable,
+        "component_status": {
+            "profile": _build_profile_status("unavailable", as_of=None, label="概况"),
+            "trading_rule": _build_profile_status("unavailable", as_of=None, label="规则"),
+            "fees": _build_profile_status("unavailable", as_of=None, label="费率"),
+        },
+    }
+
+
+def _build_profile_status(
+    state: str,
+    *,
+    as_of: str | None,
+    label: str,
+) -> dict[str, str | None]:
+    if state == "updated":
+        return {
+            "state": "updated",
+            "label": f"{label}已更新",
+            "description": f"{label}资料可供浏览。",
+            "as_of": as_of,
+        }
+    if state == "attention":
+        return {
+            "state": "attention",
+            "label": f"请留意{label}日期",
+            "description": f"{label}资料的最新更新时间仍待确认。",
+            "as_of": as_of,
+        }
+    if state == "unavailable":
+        return {
+            "state": "unavailable",
+            "label": f"{label}暂未取得",
+            "description": f"当前没有可展示的{label}资料，请稍后再查看。",
+            "as_of": as_of,
+        }
+    return {
+        "state": "limited",
+        "label": f"{label}待补充",
+        "description": f"当前仅取得部分{label}资料，请结合数据日期查看。",
+        "as_of": as_of,
     }
 
 

@@ -17,6 +17,11 @@ from .cache import FundCache
 from .config import load_provider_config
 from .fund_explorer import FundExplorerIndex, FundSearchQuery
 from .fund_history import FundHistoryService, FundHistoryUnavailable
+from .fund_profile import (
+    FundProfileService,
+    FundProfileUnavailable,
+    fund_profile_artifact_payload,
+)
 from .market_history import (
     INDEX_DEFINITIONS,
     MarketHistoryService,
@@ -24,12 +29,14 @@ from .market_history import (
 )
 from .product_views import (
     build_fund_detail_view,
+    build_fund_profile_view,
     build_fund_history_view,
     build_market_history_view,
     build_market_sector_catalog_view,
     build_fund_search_view,
     build_market_view,
     build_portfolio_view,
+    build_unavailable_fund_profile_view,
     build_unavailable_market_history_view,
     build_unavailable_market_sector_catalog_view,
     build_watchlist_view,
@@ -101,6 +108,7 @@ def create_web_app(
     review_state_path: Path | str | None = None,
     static_dir: Path | str | None = None,
     fund_history_service: Any | None = None,
+    fund_profile_service: Any | None = None,
     market_history_service: Any | None = None,
     market_sector_service: Any | None = None,
 ) -> FastAPI:
@@ -131,6 +139,7 @@ def create_web_app(
         root / "market" / "market_intelligence_report.json"
     )
     app.state.fund_history_service = fund_history_service
+    app.state.fund_profile_service = fund_profile_service
     app.state.market_history_service = market_history_service
     app.state.market_sector_service = market_sector_service
 
@@ -478,7 +487,7 @@ def create_web_app(
                 status_code=422,
                 detail={"code": "invalid_fund_code", "message": "Fund code must be six digits."},
             )
-        if app.state.fund_explorer.get(code) is None:
+        if _indexed_fund(app, code) is None:
             raise HTTPException(
                 status_code=404,
                 detail={"code": "fund_not_found", "message": "Fund is not present in the market index."},
@@ -509,7 +518,7 @@ def create_web_app(
                 status_code=422,
                 detail={"code": "invalid_fund_code", "message": "Fund code must be six digits."},
             )
-        if app.state.fund_explorer.get(code) is None:
+        if _indexed_fund(app, code) is None:
             raise HTTPException(
                 status_code=404,
                 detail={"code": "fund_not_found", "message": "Fund is not present in the market index."},
@@ -529,14 +538,53 @@ def create_web_app(
                 },
             ) from exc
 
+    @app.get("/api/funds/{code}/profile")
+    def fund_profile(code: str) -> dict[str, object]:
+        _validate_fund_code(code)
+        service = _get_fund_profile_service(app, root)
+        fund = _indexed_fund(app, code, profile_service=service)
+        if fund is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "fund_not_found", "message": "Fund is not present in the fund index."},
+            )
+        try:
+            bundle = service.get_profile(code)
+        except FundProfileUnavailable as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "fund_profile_unavailable", "message": str(exc)},
+            ) from exc
+        return fund_profile_artifact_payload(
+            bundle,
+            as_of=_fund_profile_as_of(bundle),
+        )
+
+    @app.get("/api/product/funds/{code}/profile")
+    def product_fund_profile(code: str) -> dict[str, object]:
+        _validate_fund_code(code)
+        service = _get_fund_profile_service(app, root)
+        fund = _indexed_fund(app, code, profile_service=service)
+        if fund is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "fund_not_found", "message": "Fund is not present in the fund index."},
+            )
+        try:
+            return build_fund_profile_view(
+                service.get_profile(code),
+                fallback_fund=fund,
+            )
+        except FundProfileUnavailable:
+            return build_unavailable_fund_profile_view(
+                code=code,
+                fallback_fund=fund,
+            )
+
     @app.get("/api/funds/{code}")
     def fund_detail(code: str) -> dict[str, object]:
-        if len(code) != 6 or not code.isdigit():
-            raise HTTPException(
-                status_code=422,
-                detail={"code": "invalid_fund_code", "message": "Fund code must be six digits."},
-            )
-        fund = app.state.fund_explorer.get(code)
+        _validate_fund_code(code)
+        fund = _indexed_fund(app, code)
         if fund is None:
             raise HTTPException(
                 status_code=404,
@@ -552,12 +600,8 @@ def create_web_app(
 
     @app.get("/api/product/funds/{code}")
     def product_fund_detail(code: str) -> dict[str, object]:
-        if len(code) != 6 or not code.isdigit():
-            raise HTTPException(
-                status_code=422,
-                detail={"code": "invalid_fund_code", "message": "Fund code must be six digits."},
-            )
-        fund = app.state.fund_explorer.get(code)
+        _validate_fund_code(code)
+        fund = _indexed_fund(app, code)
         if fund is None:
             raise HTTPException(
                 status_code=404,
@@ -763,6 +807,62 @@ def _indexed_news_fund_codes(payload: dict[str, object], fund_explorer: FundExpl
     return sorted(codes)
 
 
+def _validate_fund_code(code: str) -> None:
+    if len(code) != 6 or not code.isdigit():
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_fund_code", "message": "Fund code must be six digits."},
+        )
+
+
+def _get_fund_profile_service(app: FastAPI, root: Path):
+    if app.state.fund_profile_service is None:
+        app.state.fund_profile_service = _build_fund_profile_service(root)
+    return app.state.fund_profile_service
+
+
+def _indexed_fund(
+    app: FastAPI,
+    code: str,
+    *,
+    profile_service=None,
+) -> dict[str, Any] | None:
+    fund = app.state.fund_explorer.get(code)
+    if fund is not None:
+        return fund
+    service = profile_service or _get_fund_profile_service(app, app.state.output_dir)
+    cache = getattr(service, "cache", None)
+    if not isinstance(cache, FundCache):
+        return None
+    entries = cache.load_catalog_entries(code=code)
+    if not entries:
+        entries = cache.load_catalog_entries(code=code, allow_stale=True)
+    if not entries:
+        return None
+    entry = entries[0]
+    return {
+        "code": entry.code,
+        "name": entry.name,
+        "fund_type": entry.fund_type,
+        "exchange_traded": entry.exchange_traded,
+        "source": entry.source,
+        "as_of": entry.as_of,
+        "updated_at": entry.updated_at,
+        "expires_at": entry.expires_at,
+        "stale": entry.stale,
+        "returns": {},
+        "themes": [],
+    }
+
+
+def _fund_profile_as_of(bundle) -> str | None:
+    for component in (bundle.profile, bundle.trading_rule, bundle.catalog, *bundle.fees):
+        value = getattr(component, "as_of", None)
+        if value:
+            return str(value)
+    return None
+
+
 def _build_fund_history_service(
     root: Path,
     *,
@@ -789,6 +889,29 @@ def _build_fund_history_service(
         cache_ttl_days=1,
         allow_stale_fallback=True,
     )
+
+
+def _build_fund_profile_service(
+    root: Path,
+    *,
+    project_root: Path | None = None,
+) -> FundProfileService:
+    del root
+    resolved_project_root = (project_root or PROJECT_ROOT).expanduser().resolve()
+    provider_config = load_provider_config(
+        resolved_project_root / "configs" / "providers.yaml"
+    ).akshare
+    cache = FundCache(resolved_project_root / "data" / "cache" / "funds.sqlite")
+    provider = AkshareProvider(
+        cache=cache,
+        allow_stale_cache=True,
+        cache_ttl_days=7,
+        verbose=provider_config.verbose,
+        timeout_seconds=provider_config.timeout_seconds,
+        retry_count=provider_config.retry_count,
+        retry_backoff_seconds=provider_config.retry_backoff_seconds,
+    )
+    return FundProfileService(cache=cache, provider=provider, cache_ttl_days=7)
 
 
 def _build_market_history_service(
