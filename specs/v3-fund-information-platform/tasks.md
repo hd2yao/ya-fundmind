@@ -41,7 +41,7 @@
 - [x] `T205` 新增独立 catalog/purchase/profile cache migration、原子 snapshot 切换、TTL 和 stale fallback；证明 `fund_basics` / `fund_details` 未改变。
 - [x] `T206` 新增 profile service/API/CLI 和申购状态筛选；详情路径禁止调用 catalog/purchase 全量 endpoint。
 - [x] `T207` 新增概览、净值与业绩、费率与规则 UI。
-- [x] `T208` 三类基金 mandatory live smoke、trace、本地回归、浏览器验收、PR #55、CI、clean `main` 合并和 `alpha.2` annotated tag 发布门禁完成。
+- [x] `T208` 三类基金 mandatory live smoke、trace、本地回归、浏览器验收、实现 PR #55、发布状态 PR #56、CI、clean `main` 合并和 `alpha.2` annotated tag 发布门禁完成。
 
 ## Batch 3：M3 ETF Market
 

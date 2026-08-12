@@ -59,6 +59,7 @@ AKShare `1.18.64` 的当前上游标题与旧“申购费率（前端）”indic
 ## 发布与回滚
 
 - 实现 PR：[#55](https://github.com/hd2yao/ya-fundmind/pull/55)，merge commit `90fc27f89f325ab29d7ec28696a84a7120a4053f`；三项必需 CI 全部通过。
+- 发布状态收尾：[#56](https://github.com/hd2yao/ya-fundmind/pull/56)，仅更新发布事实、任务状态与文档索引。
 - `v3.0.0-alpha.2` annotated tag 从通过发布门禁的 clean `main` 创建并推送。
 - M3 ETF Market Workspace 尚未开始，不得把 M2 的场内交易状态当成 ETF 盘口、订单或交易能力。
 - 回滚到 `v3.0.0-alpha.1` 时只切换代码并重新部署 Product Web；不得删除 SQLite、`outputs/`、用户配置或 scheduler 来掩盖外部数据问题。

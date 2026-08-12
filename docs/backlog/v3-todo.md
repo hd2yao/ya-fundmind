@@ -49,7 +49,7 @@
 - [x] 冻结 Fund Profile 数据契约、P0 隔离边界、字段语义与 AKShare endpoint coverage。
 - [x] 完成独立 cache、API、CLI、基金终端目录并集/申购筛选、详情 tabs 和三类基金真实 smoke。
 - [x] 完成本地全量回归、contract、真实浏览器和 clean-main 集成准备。
-- [x] 完成 PR #55、Python 3.10/3.12、Product Web CI、clean `main` 合并和 `v3.0.0-alpha.2` annotated tag 发布门禁。
+- [x] 完成实现 PR #55、发布状态 PR #56、Python 3.10/3.12、Product Web CI、clean `main` 合并和 `v3.0.0-alpha.2` annotated tag 发布门禁。
 
 ### M3-M6
 
