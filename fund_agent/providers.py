@@ -5,6 +5,7 @@ import contextlib
 import io
 import concurrent.futures
 import os
+import re
 import signal
 import socket
 import threading
@@ -19,8 +20,10 @@ from urllib.request import urlopen
 
 from .cache import FundCache
 from .models import (
+    FundFee,
     FundDetail,
     FundNavPoint,
+    FundProfile,
     FundRecord,
     MarketEntity,
     MarketSeriesPoint,
@@ -1324,6 +1327,14 @@ class _MarketEntityMappingResult:
 
 
 @dataclass(frozen=True)
+class _FundFeeMappingResult:
+    live_row_count: int
+    fees: tuple[FundFee, ...]
+    skipped_row_count: int
+    warnings: tuple[ProviderWarning, ...]
+
+
+@dataclass(frozen=True)
 class _EndpointCallResult:
     data: object | None
     success: bool
@@ -1943,6 +1954,210 @@ def _fund_from_akshare_row(row: object) -> FundRecord:
         fee_rate=_to_float(_first(row, "费率", "手续费", "fee_rate")),
         source="akshare",
     )
+
+
+def _fund_profile_from_akshare_row(
+    row: object,
+    *,
+    code: str | None = None,
+) -> FundProfile:
+    resolved_code = normalize_fund_code(
+        code if code is not None else _first(row, "基金代码", "代码", "fund_code")
+    )
+    if len(resolved_code) != 6 or not resolved_code.isdigit():
+        raise ValueError("profile requires a six-digit fund code")
+
+    inception_and_scale = _clean_profile_text(
+        _first(row, "成立日期/规模", "基金成立日期/规模")
+    )
+    inception_date = _date_text(
+        _first(row, "成立日期", "基金成立日", "基金成立日期", "inception_date")
+    )
+    share_scale_text = _clean_profile_text(
+        _first(row, "份额规模", "基金份额规模", "share_scale")
+    )
+    if inception_and_scale:
+        combined_parts = re.split(r"\s*[/／]\s*", inception_and_scale, maxsplit=1)
+        if inception_date is None:
+            inception_date = _date_text(combined_parts[0])
+        if share_scale_text is None and len(combined_parts) == 2:
+            share_scale_text = combined_parts[1]
+
+    asset_scale, asset_scale_unit = _scale_value_and_unit(
+        _first(row, "资产规模", "基金资产规模", "asset_scale")
+    )
+    share_scale, share_scale_unit = _scale_value_and_unit(share_scale_text)
+    full_name = _clean_profile_text(
+        _first(row, "基金全称", "基金名称", "full_name")
+    )
+    short_name = _clean_profile_text(
+        _first(row, "基金简称", "简称", "name")
+    )
+    if short_name is None:
+        short_name = full_name
+
+    return FundProfile(
+        code=resolved_code,
+        name=short_name,
+        full_name=full_name,
+        fund_type=_clean_profile_text(
+            _first(row, "基金类型", "类型", "fund_type")
+        ),
+        fund_company=_clean_profile_text(
+            _first(row, "基金管理人", "基金公司", "管理人", "fund_company")
+        ),
+        custodian=_clean_profile_text(
+            _first(row, "基金托管人", "托管人", "custodian")
+        ),
+        fund_manager=_clean_profile_text(
+            _first(row, "基金经理人", "基金经理", "经理", "fund_manager")
+        ),
+        issue_date=_date_text(_first(row, "发行日期", "认购日期", "issue_date")),
+        inception_date=inception_date,
+        asset_scale=asset_scale,
+        asset_scale_unit=asset_scale_unit,
+        share_scale=share_scale,
+        share_scale_unit=share_scale_unit,
+        benchmark=_clean_profile_text(
+            _first(row, "业绩比较基准", "业绩基准", "benchmark")
+        ),
+        tracking_target=_clean_tracking_target(
+            _first(row, "跟踪标的", "跟踪标的名称", "tracking_target")
+        ),
+        source="akshare",
+        metadata={"endpoint": "fund_overview_em"},
+    )
+
+
+def _fund_fees_from_akshare_rows(
+    df: object,
+    *,
+    code: str,
+    indicator: str,
+) -> _FundFeeMappingResult:
+    resolved_code = normalize_fund_code(code)
+    if len(resolved_code) != 6 or not resolved_code.isdigit():
+        raise ValueError("fees require a six-digit fund code")
+    iterrows = getattr(df, "iterrows", None)
+    if not callable(iterrows):
+        return _FundFeeMappingResult(
+            live_row_count=0,
+            fees=(),
+            skipped_row_count=0,
+            warnings=(
+                ProviderWarning(
+                    code="invalid_response",
+                    message="fund_fee_em returned a non-tabular response",
+                    severity="critical",
+                    details={"endpoint": "fund_fee_em", "indicator": indicator},
+                ),
+            ),
+        )
+
+    fees: list[FundFee] = []
+    warnings: list[ProviderWarning] = []
+    live_row_count = 0
+    skipped_row_count = 0
+    for row_index, row in iterrows():
+        live_row_count += 1
+        try:
+            condition = _clean_profile_text(
+                _first(row, "适用金额", "适用条件", "金额条件", "condition")
+            )
+            period = _clean_profile_text(
+                _first(row, "适用期限", "持有期限", "期限", "period")
+            )
+            original_rate = _clean_profile_text(
+                _first(row, "原费率", "费率", "标准费率", "original_rate")
+            )
+            channels = _fee_channels(row)
+        except Exception as exc:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=f"fund_fee_em row {row_index} skipped: {exc}",
+                    details={"endpoint": "fund_fee_em", "row_index": row_index},
+                )
+            )
+            continue
+        if original_rate is None and not channels:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=f"fund_fee_em row {row_index} skipped: missing fee value",
+                    severity="info",
+                    details={"endpoint": "fund_fee_em", "row_index": row_index},
+                )
+            )
+            continue
+        if not channels:
+            channels = ((None, None),)
+        for channel, discounted_rate in channels:
+            fees.append(
+                FundFee(
+                    code=resolved_code,
+                    fee_type=str(indicator or "费率").strip() or "费率",
+                    condition=condition,
+                    period=period,
+                    channel=channel,
+                    original_rate=original_rate,
+                    discounted_rate=discounted_rate,
+                    source="akshare",
+                    metadata={"endpoint": "fund_fee_em", "indicator": indicator},
+                )
+            )
+    return _FundFeeMappingResult(
+        live_row_count=live_row_count,
+        fees=tuple(fees),
+        skipped_row_count=skipped_row_count,
+        warnings=tuple(warnings),
+    )
+
+
+def _clean_profile_text(value: object) -> str | None:
+    text = str(value or "").strip()
+    if not text or text in {"--", "-", "暂无", "无", "nan", "None"}:
+        return None
+    return text
+
+
+def _clean_tracking_target(value: object) -> str | None:
+    text = _clean_profile_text(value)
+    if text is None or "无跟踪标的" in text:
+        return None
+    return text
+
+
+def _scale_value_and_unit(value: object) -> tuple[float | None, str | None]:
+    text = _clean_profile_text(value)
+    if text is None:
+        return None, None
+    match = re.search(r"([-+]?\d+(?:\.\d+)?)\s*((?:万|亿)?(?:元|份))", text)
+    if match is None:
+        return None, None
+    return float(match.group(1)), match.group(2)
+
+
+def _fee_channels(row: object) -> tuple[tuple[str | None, str | None], ...]:
+    channel_columns = (
+        ("天天基金优惠费率-银行卡购买", "银行卡购买"),
+        ("天天基金优惠费率-活期宝购买", "活期宝购买"),
+        ("天天基金优惠费率 银行卡购买", "银行卡购买"),
+        ("天天基金优惠费率 活期宝购买", "活期宝购买"),
+        ("天天基金优惠费率", "天天基金"),
+        ("优惠费率", "优惠"),
+    )
+    channels: list[tuple[str | None, str | None]] = []
+    seen: set[tuple[str | None, str | None]] = set()
+    for column, channel in channel_columns:
+        discounted_rate = _clean_profile_text(_first(row, column))
+        item = (channel, discounted_rate)
+        if discounted_rate is not None and item not in seen:
+            channels.append(item)
+            seen.add(item)
+    return tuple(channels)
 
 
 def _fund_from_mapping(item: dict, *, source: str) -> FundRecord:

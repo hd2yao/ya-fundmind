@@ -159,6 +159,80 @@ class FundRecord:
 
 
 @dataclass(frozen=True)
+class FundCatalogEntry:
+    code: str
+    name: str
+    fund_type: str | None = None
+    exchange_traded: bool = False
+    catalog_sources: tuple[str, ...] = ()
+    source: str = "unknown"
+    as_of: str | None = None
+    updated_at: str | None = None
+    expires_at: str | None = None
+    stale: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class FundProfile:
+    code: str
+    name: str | None = None
+    full_name: str | None = None
+    fund_type: str | None = None
+    fund_company: str | None = None
+    custodian: str | None = None
+    fund_manager: str | None = None
+    issue_date: str | None = None
+    inception_date: str | None = None
+    asset_scale: float | None = None
+    asset_scale_unit: str | None = None
+    share_scale: float | None = None
+    share_scale_unit: str | None = None
+    benchmark: str | None = None
+    tracking_target: str | None = None
+    source: str = "unknown"
+    as_of: str | None = None
+    updated_at: str | None = None
+    expires_at: str | None = None
+    stale: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class FundTradingRule:
+    code: str
+    purchase_status: str | None = None
+    redemption_status: str | None = None
+    next_open_date: str | None = None
+    minimum_purchase_amount: str | None = None
+    daily_purchase_limit: str | None = None
+    confirmation_rule: str | None = None
+    source: str = "unknown"
+    as_of: str | None = None
+    updated_at: str | None = None
+    expires_at: str | None = None
+    stale: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class FundFee:
+    code: str
+    fee_type: str
+    condition: str | None = None
+    period: str | None = None
+    channel: str | None = None
+    original_rate: str | None = None
+    discounted_rate: str | None = None
+    source: str = "unknown"
+    as_of: str | None = None
+    updated_at: str | None = None
+    expires_at: str | None = None
+    stale: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class FundDetail:
     code: str
     name: str
