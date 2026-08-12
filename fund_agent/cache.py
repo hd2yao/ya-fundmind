@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
 from .models import (
+    FundCatalogEntry,
     FundDetail,
+    FundFee,
     FundNavPoint,
+    FundProfile,
     FundRecord,
+    FundTradingRule,
     MarketEntity,
     MarketSeriesPoint,
 )
@@ -92,6 +96,86 @@ class FundCache:
                     updated_at TEXT NOT NULL,
                     expires_at TEXT NOT NULL,
                     PRIMARY KEY (code, as_of, source)
+                );
+
+                CREATE TABLE IF NOT EXISTS fund_catalog_snapshots (
+                    snapshot_id TEXT PRIMARY KEY,
+                    as_of TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    entry_count INTEGER NOT NULL,
+                    active INTEGER NOT NULL DEFAULT 0,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS fund_catalog_one_active
+                ON fund_catalog_snapshots(active) WHERE active = 1;
+
+                CREATE TABLE IF NOT EXISTS fund_catalog_entries (
+                    snapshot_id TEXT NOT NULL,
+                    code TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    fund_type TEXT,
+                    exchange_traded INTEGER NOT NULL DEFAULT 0,
+                    catalog_sources_json TEXT NOT NULL DEFAULT '[]',
+                    source TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    PRIMARY KEY (snapshot_id, code)
+                );
+
+                CREATE TABLE IF NOT EXISTS fund_purchase_snapshots (
+                    snapshot_id TEXT PRIMARY KEY,
+                    as_of TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    entry_count INTEGER NOT NULL,
+                    active INTEGER NOT NULL DEFAULT 0,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS fund_purchase_one_active
+                ON fund_purchase_snapshots(active) WHERE active = 1;
+
+                CREATE TABLE IF NOT EXISTS fund_purchase_statuses (
+                    snapshot_id TEXT NOT NULL,
+                    code TEXT NOT NULL,
+                    rule_json TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    PRIMARY KEY (snapshot_id, code)
+                );
+
+                CREATE TABLE IF NOT EXISTS fund_profiles (
+                    code TEXT NOT NULL,
+                    as_of TEXT NOT NULL,
+                    profile_json TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    PRIMARY KEY (code, as_of, source)
+                );
+
+                CREATE TABLE IF NOT EXISTS fund_trading_rules (
+                    code TEXT NOT NULL,
+                    as_of TEXT NOT NULL,
+                    rule_json TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    PRIMARY KEY (code, as_of, source)
+                );
+
+                CREATE TABLE IF NOT EXISTS fund_fees (
+                    code TEXT NOT NULL,
+                    as_of TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    fee_index INTEGER NOT NULL,
+                    fee_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    PRIMARY KEY (code, as_of, source, fee_index)
                 );
 
                 CREATE TABLE IF NOT EXISTS market_series (
@@ -335,6 +419,393 @@ class FundCache:
         with self._connect() as conn:
             rows = conn.execute(f"SELECT * FROM fund_details {where} ORDER BY code", params).fetchall()
         return [self._row_to_detail(row, current_time=current_time) for row in rows]
+
+    def replace_fund_catalog_snapshot(
+        self,
+        entries: Iterable[FundCatalogEntry],
+        *,
+        snapshot_id: str,
+        as_of: str,
+        ttl_days: int = 1,
+        minimum_entry_count: int = 1,
+        raw_entry_count: int | None = None,
+        minimum_mapped_ratio: float = 0.0,
+        now: datetime | None = None,
+        metadata: dict | None = None,
+    ) -> None:
+        materialized = list(entries)
+        if len(materialized) < minimum_entry_count:
+            raise ValueError(
+                f"catalog snapshot did not reach minimum entry count: "
+                f"{len(materialized)} < {minimum_entry_count}"
+            )
+        mapped_ratio = _validate_snapshot_ratio(
+            mapped_count=len(materialized),
+            raw_entry_count=raw_entry_count,
+            minimum_mapped_ratio=minimum_mapped_ratio,
+            snapshot_kind="catalog",
+        )
+        codes = [entry.code.strip() for entry in materialized]
+        if any(len(code) != 6 or not code.isdigit() for code in codes):
+            raise ValueError("catalog snapshot contains an invalid six-digit fund code")
+        if len(codes) != len(set(codes)):
+            raise ValueError("catalog snapshot contains duplicate fund codes")
+        updated_at = _utc_now(now).isoformat()
+        expires_at = (_utc_now(now) + timedelta(days=ttl_days)).isoformat()
+        source = materialized[0].source.removeprefix("cache:")
+        with self._connect() as conn:
+            conn.execute("UPDATE fund_catalog_snapshots SET active = 0 WHERE active = 1")
+            conn.execute(
+                """
+                INSERT INTO fund_catalog_snapshots (
+                    snapshot_id, as_of, source, entry_count, active,
+                    metadata_json, updated_at, expires_at
+                ) VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+                """,
+                (
+                    snapshot_id,
+                    as_of,
+                    source,
+                    len(materialized),
+                    json.dumps(
+                        {
+                            **(metadata or {}),
+                            "raw_entry_count": raw_entry_count,
+                            "mapped_entry_count": len(materialized),
+                            "mapped_ratio": mapped_ratio,
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ),
+                    updated_at,
+                    expires_at,
+                ),
+            )
+            conn.executemany(
+                """
+                INSERT INTO fund_catalog_entries (
+                    snapshot_id, code, name, fund_type, exchange_traded,
+                    catalog_sources_json, source, metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        snapshot_id,
+                        entry.code.strip(),
+                        entry.name,
+                        entry.fund_type,
+                        1 if entry.exchange_traded else 0,
+                        json.dumps(entry.catalog_sources, ensure_ascii=False),
+                        entry.source.removeprefix("cache:"),
+                        json.dumps(entry.metadata, ensure_ascii=False, sort_keys=True),
+                    )
+                    for entry in materialized
+                ],
+            )
+
+    def load_catalog_entries(
+        self,
+        *,
+        code: str | None = None,
+        allow_stale: bool = False,
+        now: datetime | None = None,
+    ) -> list[FundCatalogEntry]:
+        current_time = _utc_now(now).isoformat()
+        clauses = ["snapshot.active = 1"]
+        params: list[object] = []
+        if code is not None:
+            clauses.append("entry.code = ?")
+            params.append(code.strip())
+        if not allow_stale:
+            clauses.append("snapshot.expires_at >= ?")
+            params.append(current_time)
+        where = " AND ".join(clauses)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT entry.*, snapshot.as_of, snapshot.updated_at, snapshot.expires_at
+                FROM fund_catalog_entries AS entry
+                JOIN fund_catalog_snapshots AS snapshot
+                  ON snapshot.snapshot_id = entry.snapshot_id
+                WHERE {where}
+                ORDER BY entry.code
+                """,
+                params,
+            ).fetchall()
+        return [self._row_to_catalog_entry(row, current_time=current_time) for row in rows]
+
+    def replace_purchase_snapshot(
+        self,
+        rules: Iterable[FundTradingRule],
+        *,
+        snapshot_id: str,
+        as_of: str,
+        ttl_days: int = 1,
+        minimum_entry_count: int = 1,
+        raw_entry_count: int | None = None,
+        minimum_mapped_ratio: float = 0.0,
+        now: datetime | None = None,
+        metadata: dict | None = None,
+    ) -> None:
+        materialized = list(rules)
+        if len(materialized) < minimum_entry_count:
+            raise ValueError(
+                f"purchase snapshot did not reach minimum entry count: "
+                f"{len(materialized)} < {minimum_entry_count}"
+            )
+        mapped_ratio = _validate_snapshot_ratio(
+            mapped_count=len(materialized),
+            raw_entry_count=raw_entry_count,
+            minimum_mapped_ratio=minimum_mapped_ratio,
+            snapshot_kind="purchase",
+        )
+        codes = [rule.code.strip() for rule in materialized]
+        if any(len(code) != 6 or not code.isdigit() for code in codes):
+            raise ValueError("purchase snapshot contains an invalid six-digit fund code")
+        if len(codes) != len(set(codes)):
+            raise ValueError("purchase snapshot contains duplicate fund codes")
+        updated_at = _utc_now(now).isoformat()
+        expires_at = (_utc_now(now) + timedelta(days=ttl_days)).isoformat()
+        source = materialized[0].source.removeprefix("cache:")
+        with self._connect() as conn:
+            conn.execute("UPDATE fund_purchase_snapshots SET active = 0 WHERE active = 1")
+            conn.execute(
+                """
+                INSERT INTO fund_purchase_snapshots (
+                    snapshot_id, as_of, source, entry_count, active,
+                    metadata_json, updated_at, expires_at
+                ) VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+                """,
+                (
+                    snapshot_id,
+                    as_of,
+                    source,
+                    len(materialized),
+                    json.dumps(
+                        {
+                            **(metadata or {}),
+                            "raw_entry_count": raw_entry_count,
+                            "mapped_entry_count": len(materialized),
+                            "mapped_ratio": mapped_ratio,
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ),
+                    updated_at,
+                    expires_at,
+                ),
+            )
+            conn.executemany(
+                """
+                INSERT INTO fund_purchase_statuses (
+                    snapshot_id, code, rule_json, source, metadata_json
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        snapshot_id,
+                        rule.code.strip(),
+                        json.dumps(asdict(rule), ensure_ascii=False, sort_keys=True),
+                        rule.source.removeprefix("cache:"),
+                        json.dumps(rule.metadata, ensure_ascii=False, sort_keys=True),
+                    )
+                    for rule in materialized
+                ],
+            )
+
+    def load_purchase_statuses(
+        self,
+        *,
+        code: str | None = None,
+        allow_stale: bool = False,
+        now: datetime | None = None,
+    ) -> list[FundTradingRule]:
+        current_time = _utc_now(now).isoformat()
+        clauses = ["snapshot.active = 1"]
+        params: list[object] = []
+        if code is not None:
+            clauses.append("status.code = ?")
+            params.append(code.strip())
+        if not allow_stale:
+            clauses.append("snapshot.expires_at >= ?")
+            params.append(current_time)
+        where = " AND ".join(clauses)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT status.*, snapshot.as_of, snapshot.updated_at, snapshot.expires_at
+                FROM fund_purchase_statuses AS status
+                JOIN fund_purchase_snapshots AS snapshot
+                  ON snapshot.snapshot_id = status.snapshot_id
+                WHERE {where}
+                ORDER BY status.code
+                """,
+                params,
+            ).fetchall()
+        return [self._row_to_trading_rule(row, current_time=current_time) for row in rows]
+
+    def upsert_fund_profiles(
+        self,
+        profiles: Iterable[FundProfile],
+        *,
+        as_of: str,
+        ttl_days: int = 7,
+        now: datetime | None = None,
+    ) -> None:
+        updated_at = _utc_now(now).isoformat()
+        expires_at = (_utc_now(now) + timedelta(days=ttl_days)).isoformat()
+        with self._connect() as conn:
+            for profile in profiles:
+                conn.execute(
+                    """
+                    INSERT INTO fund_profiles (
+                        code, as_of, profile_json, source, updated_at, expires_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(code, as_of, source) DO UPDATE SET
+                        profile_json = excluded.profile_json,
+                        updated_at = excluded.updated_at,
+                        expires_at = excluded.expires_at
+                    """,
+                    (
+                        profile.code.strip(),
+                        as_of,
+                        json.dumps(asdict(profile), ensure_ascii=False, sort_keys=True),
+                        profile.source.removeprefix("cache:"),
+                        updated_at,
+                        expires_at,
+                    ),
+                )
+
+    def load_fund_profiles(
+        self,
+        *,
+        code: str,
+        allow_stale: bool = False,
+        now: datetime | None = None,
+    ) -> list[FundProfile]:
+        current_time = _utc_now(now).isoformat()
+        clauses = ["code = ?"]
+        params: list[object] = [code.strip()]
+        if not allow_stale:
+            clauses.append("expires_at >= ?")
+            params.append(current_time)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM fund_profiles WHERE {' AND '.join(clauses)} ORDER BY as_of DESC",
+                params,
+            ).fetchall()
+        return [self._row_to_profile(row, current_time=current_time) for row in rows]
+
+    def upsert_fund_trading_rules(
+        self,
+        rules: Iterable[FundTradingRule],
+        *,
+        as_of: str,
+        ttl_days: int = 7,
+        now: datetime | None = None,
+    ) -> None:
+        updated_at = _utc_now(now).isoformat()
+        expires_at = (_utc_now(now) + timedelta(days=ttl_days)).isoformat()
+        with self._connect() as conn:
+            for rule in rules:
+                conn.execute(
+                    """
+                    INSERT INTO fund_trading_rules (
+                        code, as_of, rule_json, source, updated_at, expires_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(code, as_of, source) DO UPDATE SET
+                        rule_json = excluded.rule_json,
+                        updated_at = excluded.updated_at,
+                        expires_at = excluded.expires_at
+                    """,
+                    (
+                        rule.code.strip(),
+                        as_of,
+                        json.dumps(asdict(rule), ensure_ascii=False, sort_keys=True),
+                        rule.source.removeprefix("cache:"),
+                        updated_at,
+                        expires_at,
+                    ),
+                )
+
+    def load_fund_trading_rules(
+        self,
+        *,
+        code: str,
+        allow_stale: bool = False,
+        now: datetime | None = None,
+    ) -> list[FundTradingRule]:
+        current_time = _utc_now(now).isoformat()
+        clauses = ["code = ?"]
+        params: list[object] = [code.strip()]
+        if not allow_stale:
+            clauses.append("expires_at >= ?")
+            params.append(current_time)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM fund_trading_rules WHERE {' AND '.join(clauses)} ORDER BY as_of DESC",
+                params,
+            ).fetchall()
+        return [self._row_to_trading_rule(row, current_time=current_time) for row in rows]
+
+    def replace_fund_fees(
+        self,
+        code: str,
+        fees: Iterable[FundFee],
+        *,
+        as_of: str,
+        ttl_days: int = 7,
+        now: datetime | None = None,
+    ) -> None:
+        materialized = list(fees)
+        updated_at = _utc_now(now).isoformat()
+        expires_at = (_utc_now(now) + timedelta(days=ttl_days)).isoformat()
+        with self._connect() as conn:
+            conn.execute("DELETE FROM fund_fees WHERE code = ? AND as_of = ?", (code.strip(), as_of))
+            for fee_index, fee in enumerate(materialized):
+                conn.execute(
+                    """
+                    INSERT INTO fund_fees (
+                        code, as_of, source, fee_index, fee_json, updated_at, expires_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        code.strip(),
+                        as_of,
+                        fee.source.removeprefix("cache:"),
+                        fee_index,
+                        json.dumps(asdict(fee), ensure_ascii=False, sort_keys=True),
+                        updated_at,
+                        expires_at,
+                    ),
+                )
+
+    def load_fund_fees(
+        self,
+        *,
+        code: str,
+        allow_stale: bool = False,
+        now: datetime | None = None,
+    ) -> list[FundFee]:
+        current_time = _utc_now(now).isoformat()
+        clauses = ["code = ?"]
+        params: list[object] = [code.strip()]
+        if not allow_stale:
+            clauses.append("expires_at >= ?")
+            params.append(current_time)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM fund_fees WHERE {' AND '.join(clauses)} ORDER BY as_of DESC, fee_index",
+                params,
+            ).fetchall()
+        if not rows:
+            return []
+        latest_as_of = rows[0]["as_of"]
+        return [
+            self._row_to_fee(row, current_time=current_time)
+            for row in rows
+            if row["as_of"] == latest_as_of
+        ]
 
     def upsert_nav_points(
         self,
@@ -644,6 +1115,138 @@ class FundCache:
             metadata=metadata,
         )
 
+    def _row_to_catalog_entry(
+        self,
+        row: sqlite3.Row,
+        *,
+        current_time: str,
+    ) -> FundCatalogEntry:
+        stale = str(row["expires_at"]) < current_time
+        metadata = json.loads(row["metadata_json"] or "{}")
+        metadata.update(
+            {
+                "cache_source": row["source"],
+                "cache_as_of": row["as_of"],
+                "snapshot_id": row["snapshot_id"],
+                "updated_at": row["updated_at"],
+                "expires_at": row["expires_at"],
+                "stale": stale,
+            }
+        )
+        return FundCatalogEntry(
+            code=str(row["code"]).strip(),
+            name=str(row["name"]),
+            fund_type=row["fund_type"],
+            exchange_traded=bool(row["exchange_traded"]),
+            catalog_sources=tuple(json.loads(row["catalog_sources_json"] or "[]")),
+            source=f"cache:{row['source']}",
+            as_of=row["as_of"],
+            updated_at=row["updated_at"],
+            expires_at=row["expires_at"],
+            stale=stale,
+            metadata=metadata,
+        )
+
+    def _row_to_profile(self, row: sqlite3.Row, *, current_time: str) -> FundProfile:
+        payload = json.loads(row["profile_json"] or "{}")
+        stale = str(row["expires_at"]) < current_time
+        metadata = dict(payload.get("metadata", {}))
+        metadata.update(
+            {
+                "cache_source": row["source"],
+                "cache_as_of": row["as_of"],
+                "updated_at": row["updated_at"],
+                "expires_at": row["expires_at"],
+                "stale": stale,
+            }
+        )
+        return FundProfile(
+            code=str(row["code"]).strip(),
+            name=payload.get("name"),
+            full_name=payload.get("full_name"),
+            fund_type=payload.get("fund_type"),
+            fund_company=payload.get("fund_company"),
+            custodian=payload.get("custodian"),
+            fund_manager=payload.get("fund_manager"),
+            issue_date=payload.get("issue_date"),
+            inception_date=payload.get("inception_date"),
+            asset_scale=payload.get("asset_scale"),
+            asset_scale_unit=payload.get("asset_scale_unit"),
+            share_scale=payload.get("share_scale"),
+            share_scale_unit=payload.get("share_scale_unit"),
+            benchmark=payload.get("benchmark"),
+            tracking_target=payload.get("tracking_target"),
+            source=f"cache:{row['source']}",
+            as_of=row["as_of"],
+            updated_at=row["updated_at"],
+            expires_at=row["expires_at"],
+            stale=stale,
+            metadata=metadata,
+        )
+
+    def _row_to_trading_rule(
+        self,
+        row: sqlite3.Row,
+        *,
+        current_time: str,
+    ) -> FundTradingRule:
+        payload = json.loads(row["rule_json"] or "{}")
+        stale = str(row["expires_at"]) < current_time
+        metadata = dict(payload.get("metadata", {}))
+        metadata.update(
+            {
+                "cache_source": row["source"],
+                "cache_as_of": row["as_of"],
+                "updated_at": row["updated_at"],
+                "expires_at": row["expires_at"],
+                "stale": stale,
+            }
+        )
+        return FundTradingRule(
+            code=str(row["code"]).strip(),
+            purchase_status=payload.get("purchase_status"),
+            redemption_status=payload.get("redemption_status"),
+            next_open_date=payload.get("next_open_date"),
+            minimum_purchase_amount=payload.get("minimum_purchase_amount"),
+            daily_purchase_limit=payload.get("daily_purchase_limit"),
+            confirmation_rule=payload.get("confirmation_rule"),
+            source=f"cache:{row['source']}",
+            as_of=row["as_of"],
+            updated_at=row["updated_at"],
+            expires_at=row["expires_at"],
+            stale=stale,
+            metadata=metadata,
+        )
+
+    def _row_to_fee(self, row: sqlite3.Row, *, current_time: str) -> FundFee:
+        payload = json.loads(row["fee_json"] or "{}")
+        stale = str(row["expires_at"]) < current_time
+        metadata = dict(payload.get("metadata", {}))
+        metadata.update(
+            {
+                "cache_source": row["source"],
+                "cache_as_of": row["as_of"],
+                "updated_at": row["updated_at"],
+                "expires_at": row["expires_at"],
+                "stale": stale,
+            }
+        )
+        return FundFee(
+            code=str(row["code"]).strip(),
+            fee_type=str(payload.get("fee_type", "费率")),
+            condition=payload.get("condition"),
+            period=payload.get("period"),
+            channel=payload.get("channel"),
+            original_rate=payload.get("original_rate"),
+            discounted_rate=payload.get("discounted_rate"),
+            source=f"cache:{row['source']}",
+            as_of=row["as_of"],
+            updated_at=row["updated_at"],
+            expires_at=row["expires_at"],
+            stale=stale,
+            metadata=metadata,
+        )
+
     def _row_to_nav_point(self, row: sqlite3.Row, *, current_time: str) -> FundNavPoint:
         metadata = json.loads(row["metadata_json"] or "{}")
         stale = str(row["expires_at"]) < current_time
@@ -743,6 +1346,34 @@ def _utc_now(value: datetime | None = None) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _validate_snapshot_ratio(
+    *,
+    mapped_count: int,
+    raw_entry_count: int | None,
+    minimum_mapped_ratio: float,
+    snapshot_kind: str,
+) -> float | None:
+    if not 0.0 <= minimum_mapped_ratio <= 1.0:
+        raise ValueError("minimum mapped ratio must be between 0 and 1")
+    if raw_entry_count is None:
+        if minimum_mapped_ratio > 0:
+            raise ValueError(
+                f"{snapshot_kind} snapshot requires raw entry count for mapped-ratio validation"
+            )
+        return None
+    if raw_entry_count < mapped_count or raw_entry_count < 0:
+        raise ValueError(
+            f"{snapshot_kind} snapshot raw entry count cannot be smaller than mapped count"
+        )
+    mapped_ratio = 1.0 if raw_entry_count == 0 else mapped_count / raw_entry_count
+    if mapped_ratio < minimum_mapped_ratio:
+        raise ValueError(
+            f"{snapshot_kind} snapshot did not reach minimum mapped ratio: "
+            f"{mapped_ratio:.4f} < {minimum_mapped_ratio:.4f}"
+        )
+    return mapped_ratio
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:

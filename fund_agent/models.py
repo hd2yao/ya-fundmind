@@ -233,6 +233,20 @@ class FundFee:
 
 
 @dataclass(frozen=True)
+class FundProfileBundle:
+    code: str
+    catalog: FundCatalogEntry | None
+    profile: FundProfile | None
+    trading_rule: FundTradingRule | None
+    fees: tuple[FundFee, ...]
+    data_status: str
+    profile_status: str
+    trading_status: str
+    fee_status: str
+    warnings: tuple[dict[str, Any], ...] = ()
+
+
+@dataclass(frozen=True)
 class FundDetail:
     code: str
     name: str
