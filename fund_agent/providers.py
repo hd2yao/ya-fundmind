@@ -1801,7 +1801,7 @@ def _to_int(value: object) -> int | None:
     return int(number) if number is not None else None
 
 
-def _first(row: object, *keys: str) -> object:
+def _first(row: object, *keys: object) -> object:
     for key in keys:
         if hasattr(row, "get"):
             value = row.get(key)
@@ -1814,6 +1814,8 @@ def _first(row: object, *keys: str) -> object:
 
 def _date_text(value: object) -> str | None:
     text = str(value or "").strip()
+    if text.casefold() in {"nat", "nan", "none"} or text in {"--", "-", "暂无", "无"}:
+        return None
     return text[:10] or None
 
 
@@ -2132,24 +2134,31 @@ def _merge_trading_rule_rows(
     for row_index, row in iterrows():
         live_row_count += 1
         try:
+            paired_values = _paired_label_values(row)
             candidates = {
                 "purchase_status": _clean_profile_text(
                     _first(row, "申购状态", "购买状态", "purchase_status")
+                    or _first(paired_values, "申购状态", "购买状态")
                 ),
                 "redemption_status": _clean_profile_text(
                     _first(row, "赎回状态", "redemption_status")
+                    or _first(paired_values, "赎回状态")
                 ),
                 "next_open_date": _date_text(
                     _first(row, "下一开放日", "next_open_date")
+                    or _first(paired_values, "下一开放日")
                 ),
                 "minimum_purchase_amount": _clean_profile_text(
                     _first(row, "购买起点", "申购起点", "起购金额", "minimum_purchase_amount")
+                    or _first(paired_values, "购买起点", "申购起点", "起购金额")
                 ),
                 "daily_purchase_limit": _clean_profile_text(
                     _first(row, "日累计限定金额", "日累计申购限额", "daily_purchase_limit")
+                    or _first(paired_values, "日累计限定金额", "日累计申购限额")
                 ),
                 "confirmation_rule": _clean_profile_text(
                     _first(row, "确认规则", "交易确认日", "确认时间", "confirmation_rule")
+                    or _first(paired_values, "确认规则", "交易确认日", "确认时间")
                 ),
             }
             if indicator == "交易确认日" and candidates["confirmation_rule"] is None:
@@ -2161,6 +2170,13 @@ def _merge_trading_rule_rows(
                 )
                 if transaction_type and confirmation_day:
                     candidates["confirmation_rule"] = f"{transaction_type} {confirmation_day}"
+                elif paired_values:
+                    confirmation_parts = [
+                        f"{label} {value}"
+                        for label, value in paired_values.items()
+                        if "确认日" in label and value
+                    ]
+                    candidates["confirmation_rule"] = "；".join(confirmation_parts) or None
         except Exception as exc:
             skipped_row_count += 1
             warnings.append(
@@ -2804,6 +2820,24 @@ def _fund_fees_from_akshare_rows(
     for row_index, row in iterrows():
         live_row_count += 1
         try:
+            paired_values = _paired_label_values(row)
+            pair_fees = [
+                (label, value)
+                for label, value in paired_values.items()
+                if "费" in label and _clean_profile_text(value) is not None
+            ]
+            if pair_fees:
+                fees.extend(
+                    FundFee(
+                        code=resolved_code,
+                        fee_type=label,
+                        original_rate=_clean_profile_text(value),
+                        source="akshare",
+                        metadata={"endpoint": "fund_fee_em", "indicator": indicator},
+                    )
+                    for label, value in pair_fees
+                )
+                continue
             condition = _clean_profile_text(
                 _first(row, "适用金额", "适用条件", "金额条件", "condition")
             )
@@ -2811,7 +2845,15 @@ def _fund_fees_from_akshare_rows(
                 _first(row, "适用期限", "持有期限", "期限", "period")
             )
             original_rate = _clean_profile_text(
-                _first(row, "原费率", "费率", "标准费率", "original_rate")
+                _first(
+                    row,
+                    "原费率",
+                    "费率",
+                    indicator,
+                    indicator.replace("（前端）", "").replace("（后端）", ""),
+                    "标准费率",
+                    "original_rate",
+                )
             )
             channels = _fee_channels(row)
         except Exception as exc:
@@ -2860,10 +2902,20 @@ def _fund_fees_from_akshare_rows(
 
 
 def _clean_profile_text(value: object) -> str | None:
-    text = str(value or "").strip()
-    if not text or text in {"--", "-", "暂无", "无", "nan", "None"}:
+    text = "" if value is None else str(value).strip()
+    if not text or text.casefold() in {"nan", "nat", "none"} or text in {"--", "-", "暂无", "无"}:
         return None
     return text
+
+
+def _paired_label_values(row: object) -> dict[str, str]:
+    pairs: dict[str, str] = {}
+    for label_key, value_key in ((0, 1), (2, 3), (4, 5)):
+        label = _clean_profile_text(_first(row, label_key, str(label_key)))
+        value = _clean_profile_text(_first(row, value_key, str(value_key)))
+        if label is not None and value is not None:
+            pairs[label] = value
+    return pairs
 
 
 def _clean_tracking_target(value: object) -> str | None:

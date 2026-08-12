@@ -4,6 +4,8 @@ from fund_agent.providers import (
     AkshareProvider,
     _fund_fees_from_akshare_rows,
     _fund_profile_from_akshare_row,
+    _merge_trading_rule_rows,
+    _purchase_rules_from_rows,
 )
 from fund_agent.cache import FundCache
 
@@ -142,6 +144,149 @@ def test_fee_mapper_skips_empty_and_malformed_rows() -> None:
     assert result.fees == ()
     assert result.skipped_row_count == 2
     assert all(warning.code == "skipped_rows" for warning in result.warnings)
+
+
+def test_fee_mapper_accepts_runtime_redemption_rate_column() -> None:
+    result = _fund_fees_from_akshare_rows(
+        FakeDataFrame(
+            [
+                (0, {"适用期限": "大于等于1天，小于等于6天", "赎回费率": "1.50%"}),
+                (1, {"适用期限": "大于等于30天", "赎回费率": "0.00%"}),
+            ]
+        ),
+        code="021511",
+        indicator="赎回费率",
+    )
+
+    assert [(fee.period, fee.original_rate) for fee in result.fees] == [
+        ("大于等于1天，小于等于6天", "1.50%"),
+        ("大于等于30天", "0.00%"),
+    ]
+    assert result.skipped_row_count == 0
+
+
+def test_fee_mapper_expands_runtime_operation_fee_pairs() -> None:
+    result = _fund_fees_from_akshare_rows(
+        FakeDataFrame(
+            [
+                (
+                    0,
+                    {
+                        "0": "管理费率",
+                        "1": "1.20%（每年）",
+                        "2": "托管费率",
+                        "3": "0.20%（每年）",
+                        "4": "销售服务费率",
+                        "5": "0.30%（每年）",
+                    },
+                )
+            ]
+        ),
+        code="021511",
+        indicator="运作费用",
+    )
+
+    assert [(fee.fee_type, fee.original_rate) for fee in result.fees] == [
+        ("管理费率", "1.20%（每年）"),
+        ("托管费率", "0.20%（每年）"),
+        ("销售服务费率", "0.30%（每年）"),
+    ]
+    assert result.skipped_row_count == 0
+
+
+def test_trading_rule_mapper_accepts_runtime_label_value_pairs() -> None:
+    values = {
+        "purchase_status": None,
+        "redemption_status": None,
+        "next_open_date": None,
+        "minimum_purchase_amount": None,
+        "daily_purchase_limit": None,
+        "confirmation_rule": None,
+    }
+
+    first_counts = _merge_trading_rule_rows(
+        FakeDataFrame(
+            [
+                (
+                    0,
+                    {
+                        "0": "申购状态",
+                        "1": "开放申购",
+                        "2": "赎回状态",
+                        "3": "开放赎回",
+                        "4": "定投状态",
+                        "5": "支持",
+                    },
+                )
+            ]
+        ),
+        values,
+        indicator="交易状态",
+    )
+    _merge_trading_rule_rows(
+        FakeDataFrame(
+            [
+                (
+                    0,
+                    {
+                        "0": "申购起点",
+                        "1": "10.00元",
+                        "2": "定投起点",
+                        "3": "10.00元",
+                        "4": "日累计申购限额",
+                        "5": "无限额",
+                    },
+                )
+            ]
+        ),
+        values,
+        indicator="申购与赎回金额",
+    )
+    _merge_trading_rule_rows(
+        FakeDataFrame(
+            [(0, {"0": "买入确认日", "1": "T+1", "2": "卖出确认日", "3": "T+1"})]
+        ),
+        values,
+        indicator="交易确认日",
+    )
+
+    assert first_counts[:3] == (1, 1, 0)
+    assert values == {
+        "purchase_status": "开放申购",
+        "redemption_status": "开放赎回",
+        "next_open_date": None,
+        "minimum_purchase_amount": "10.00元",
+        "daily_purchase_limit": "无限额",
+        "confirmation_rule": "买入确认日 T+1；卖出确认日 T+1",
+    }
+
+
+def test_purchase_snapshot_treats_nat_as_missing_date() -> None:
+    result = _purchase_rules_from_rows(
+        FakeDataFrame(
+            [
+                (
+                    0,
+                    {
+                        "基金代码": "021511",
+                        "基金简称": "示例混合C",
+                        "申购状态": "开放申购",
+                        "赎回状态": "开放赎回",
+                        "下一开放日": "NaT",
+                        "购买起点": 0,
+                        "日累计限定金额": 0,
+                        "手续费": 0,
+                    },
+                )
+            ]
+        ),
+        endpoint="fund_purchase_em",
+    )
+
+    assert result.rules[0].next_open_date is None
+    assert result.rules[0].minimum_purchase_amount == "0"
+    assert result.rules[0].daily_purchase_limit == "0"
+    assert result.rules[0].metadata["fee_text"] == "0"
 
 
 class ProfileAkshare:
