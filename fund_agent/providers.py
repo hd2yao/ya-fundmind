@@ -20,11 +20,13 @@ from urllib.request import urlopen
 
 from .cache import FundCache
 from .models import (
+    FundCatalogEntry,
     FundFee,
     FundDetail,
     FundNavPoint,
     FundProfile,
     FundRecord,
+    FundTradingRule,
     MarketEntity,
     MarketSeriesPoint,
     ProviderEndpointTrace,
@@ -60,6 +62,13 @@ def normalize_fund_code(value: object) -> str:
     if len(text) == 8 and text[:2].isalpha() and text[2:].isdigit():
         return text[2:]
     return text
+
+
+def _require_fund_code(value: object) -> str:
+    code = normalize_fund_code(value)
+    if len(code) != 6 or not code.isdigit():
+        raise ValueError("a six-digit fund code is required")
+    return code
 
 
 def normalize_fund_name(value: object) -> str:
@@ -244,6 +253,423 @@ class AkshareProvider:
             endpoints=tuple(endpoints),
         )
         return normalized_funds
+
+    def fetch_fund_catalog(
+        self,
+        *,
+        as_of: str | None = None,
+    ) -> list[FundCatalogEntry]:
+        started_at = _utc_now()
+        resolved_as_of = as_of or date.today().isoformat()
+        if self._ak is None:
+            raise ProviderUnavailable("AKShare is not installed")
+        endpoint_specs = (
+            ("fund_name_em", {}, _fund_catalog_from_name_row),
+            (
+                "fund_open_fund_rank_em",
+                {"symbol": self.fund_type},
+                _fund_catalog_from_rank_row,
+            ),
+            ("fund_etf_spot_em", {}, _fund_catalog_from_etf_row),
+        )
+        entries: list[FundCatalogEntry] = []
+        warnings: list[ProviderWarning] = []
+        endpoint_traces: list[ProviderEndpointTrace] = []
+        live_row_count = 0
+        skipped_row_count = 0
+        for endpoint, kwargs, mapper in endpoint_specs:
+            result = self._call_akshare(endpoint, **kwargs)
+            endpoint_traces.append(result.trace)
+            if not result.success:
+                warnings.append(
+                    ProviderWarning(
+                        code="live_fetch_error",
+                        message=f"{endpoint}: {result.error}",
+                    )
+                )
+                continue
+            mapping = _fund_catalog_entries_from_rows(
+                result.data,
+                mapper,
+                endpoint=endpoint,
+            )
+            live_row_count += mapping.live_row_count
+            skipped_row_count += mapping.skipped_row_count
+            warnings.extend(mapping.warnings)
+            entries.extend(mapping.entries)
+            endpoint_traces[-1] = replace(
+                endpoint_traces[-1],
+                live_row_count=mapping.live_row_count,
+                mapped_row_count=len(mapping.entries),
+                skipped_row_count=mapping.skipped_row_count,
+            )
+        normalized = _dedupe_catalog_entries(entries)
+        if not normalized:
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                live_row_count=live_row_count,
+                skipped_row_count=skipped_row_count,
+                endpoints=tuple(endpoint_traces),
+                warnings=tuple(warnings),
+            )
+            raise ProviderUnavailable("AKShare returned no valid fund catalog rows")
+        updated_at = _utc_now()
+        expires_at = updated_at + timedelta(days=self.cache_ttl_days)
+        normalized = [
+            replace(
+                entry,
+                as_of=resolved_as_of,
+                updated_at=updated_at.isoformat(),
+                expires_at=expires_at.isoformat(),
+                stale=False,
+            )
+            for entry in normalized
+        ]
+        self.last_health = _build_health(
+            provider="akshare",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=live_row_count,
+            mapped_row_count=len(normalized),
+            skipped_row_count=skipped_row_count,
+            endpoints=tuple(endpoint_traces),
+            warnings=tuple(warnings),
+        )
+        return normalized
+
+    def fetch_purchase_statuses(
+        self,
+        *,
+        as_of: str | None = None,
+    ) -> list[FundTradingRule]:
+        started_at = _utc_now()
+        resolved_as_of = as_of or date.today().isoformat()
+        if self._ak is None:
+            raise ProviderUnavailable("AKShare is not installed")
+        result = self._call_akshare("fund_purchase_em")
+        if not result.success:
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                endpoints=(result.trace,),
+                warnings=(
+                    ProviderWarning(
+                        code="live_fetch_error",
+                        message=f"fund_purchase_em: {result.error}",
+                        severity="critical",
+                    ),
+                ),
+            )
+            raise ProviderUnavailable(f"AKShare purchase status fetch failed: {result.error}")
+        mapping = _purchase_rules_from_rows(result.data, endpoint="fund_purchase_em")
+        endpoint_trace = replace(
+            result.trace,
+            live_row_count=mapping.live_row_count,
+            mapped_row_count=len(mapping.rules),
+            skipped_row_count=mapping.skipped_row_count,
+        )
+        if not mapping.rules:
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                live_row_count=mapping.live_row_count,
+                skipped_row_count=mapping.skipped_row_count,
+                endpoints=(endpoint_trace,),
+                warnings=mapping.warnings,
+            )
+            raise ProviderUnavailable("AKShare returned no valid purchase status rows")
+        updated_at = _utc_now()
+        expires_at = updated_at + timedelta(days=self.cache_ttl_days)
+        rules = [
+            replace(
+                rule,
+                as_of=resolved_as_of,
+                updated_at=updated_at.isoformat(),
+                expires_at=expires_at.isoformat(),
+                stale=False,
+            )
+            for rule in mapping.rules
+        ]
+        self.last_health = _build_health(
+            provider="akshare",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=mapping.live_row_count,
+            mapped_row_count=len(rules),
+            skipped_row_count=mapping.skipped_row_count,
+            endpoints=(endpoint_trace,),
+            warnings=mapping.warnings,
+        )
+        return rules
+
+    def fetch_fund_profile(
+        self,
+        code: str,
+        *,
+        as_of: str | None = None,
+    ) -> FundProfile:
+        started_at = _utc_now()
+        resolved_code = _require_fund_code(code)
+        resolved_as_of = as_of or date.today().isoformat()
+        if self._ak is None:
+            raise ProviderUnavailable("AKShare is not installed")
+        result = self._call_akshare("fund_overview_em", symbol=resolved_code)
+        if not result.success:
+            self._set_profile_failure_health(started_at, result.trace, result.error)
+            raise ProviderUnavailable(f"AKShare fund overview fetch failed: {result.error}")
+        iterrows = getattr(result.data, "iterrows", None)
+        if not callable(iterrows):
+            self._set_profile_failure_health(
+                started_at,
+                replace(result.trace, success=False, error="invalid_response"),
+                "invalid_response",
+            )
+            raise ProviderUnavailable("AKShare fund overview returned a non-tabular response")
+        live_row_count = 0
+        skipped_row_count = 0
+        warnings: list[ProviderWarning] = []
+        profile: FundProfile | None = None
+        for row_index, row in iterrows():
+            live_row_count += 1
+            try:
+                profile = _fund_profile_from_akshare_row(row, code=resolved_code)
+            except Exception as exc:
+                skipped_row_count += 1
+                warnings.append(
+                    ProviderWarning(
+                        code="skipped_rows",
+                        message=f"fund_overview_em row {row_index} skipped: {exc}",
+                        details={"endpoint": "fund_overview_em", "row_index": row_index},
+                    )
+                )
+                continue
+            break
+        endpoint_trace = replace(
+            result.trace,
+            live_row_count=live_row_count,
+            mapped_row_count=1 if profile is not None else 0,
+            skipped_row_count=skipped_row_count,
+        )
+        if profile is None:
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                live_row_count=live_row_count,
+                skipped_row_count=skipped_row_count,
+                endpoints=(endpoint_trace,),
+                warnings=tuple(warnings),
+            )
+            raise ProviderUnavailable("AKShare returned no valid fund overview row")
+        updated_at = _utc_now()
+        profile = replace(
+            profile,
+            as_of=resolved_as_of,
+            updated_at=updated_at.isoformat(),
+            expires_at=(updated_at + timedelta(days=self.cache_ttl_days)).isoformat(),
+            stale=False,
+        )
+        self.last_health = _build_health(
+            provider="akshare",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=live_row_count,
+            mapped_row_count=1,
+            skipped_row_count=skipped_row_count,
+            endpoints=(endpoint_trace,),
+            warnings=tuple(warnings),
+        )
+        return profile
+
+    def fetch_fund_trading_rule(
+        self,
+        code: str,
+        *,
+        as_of: str | None = None,
+    ) -> FundTradingRule:
+        started_at = _utc_now()
+        resolved_code = _require_fund_code(code)
+        resolved_as_of = as_of or date.today().isoformat()
+        if self._ak is None:
+            raise ProviderUnavailable("AKShare is not installed")
+        indicators = ("交易状态", "申购与赎回金额", "交易确认日")
+        values: dict[str, str | None] = {
+            "purchase_status": None,
+            "redemption_status": None,
+            "next_open_date": None,
+            "minimum_purchase_amount": None,
+            "daily_purchase_limit": None,
+            "confirmation_rule": None,
+        }
+        endpoint_traces: list[ProviderEndpointTrace] = []
+        warnings: list[ProviderWarning] = []
+        live_row_count = 0
+        mapped_row_count = 0
+        skipped_row_count = 0
+        for indicator in indicators:
+            result = self._call_akshare(
+                "fund_fee_em",
+                symbol=resolved_code,
+                indicator=indicator,
+            )
+            endpoint_traces.append(result.trace)
+            if not result.success:
+                warnings.append(
+                    ProviderWarning(
+                        code="live_fetch_error",
+                        message=f"fund_fee_em[{indicator}]: {result.error}",
+                    )
+                )
+                continue
+            counts = _merge_trading_rule_rows(result.data, values, indicator=indicator)
+            live_row_count += counts[0]
+            mapped_row_count += counts[1]
+            skipped_row_count += counts[2]
+            warnings.extend(counts[3])
+            endpoint_traces[-1] = replace(
+                endpoint_traces[-1],
+                live_row_count=counts[0],
+                mapped_row_count=counts[1],
+                skipped_row_count=counts[2],
+            )
+        if not any(values.values()):
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                live_row_count=live_row_count,
+                skipped_row_count=skipped_row_count,
+                endpoints=tuple(endpoint_traces),
+                warnings=tuple(warnings),
+            )
+            raise ProviderUnavailable("AKShare returned no valid fund trading rule fields")
+        updated_at = _utc_now()
+        rule = FundTradingRule(
+            code=resolved_code,
+            **values,
+            source="akshare",
+            as_of=resolved_as_of,
+            updated_at=updated_at.isoformat(),
+            expires_at=(updated_at + timedelta(days=self.cache_ttl_days)).isoformat(),
+            stale=False,
+            metadata={"endpoint": "fund_fee_em", "indicators": indicators},
+        )
+        self.last_health = _build_health(
+            provider="akshare",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=live_row_count,
+            mapped_row_count=mapped_row_count,
+            skipped_row_count=skipped_row_count,
+            endpoints=tuple(endpoint_traces),
+            warnings=tuple(warnings),
+        )
+        return rule
+
+    def fetch_fund_fees(
+        self,
+        code: str,
+        *,
+        as_of: str | None = None,
+        indicators: tuple[str, ...] = ("申购费率（前端）", "赎回费率", "运作费用"),
+    ) -> list[FundFee]:
+        started_at = _utc_now()
+        resolved_code = _require_fund_code(code)
+        resolved_as_of = as_of or date.today().isoformat()
+        if self._ak is None:
+            raise ProviderUnavailable("AKShare is not installed")
+        fees: list[FundFee] = []
+        warnings: list[ProviderWarning] = []
+        endpoint_traces: list[ProviderEndpointTrace] = []
+        live_row_count = 0
+        skipped_row_count = 0
+        for indicator in indicators:
+            result = self._call_akshare(
+                "fund_fee_em",
+                symbol=resolved_code,
+                indicator=indicator,
+            )
+            endpoint_traces.append(result.trace)
+            if not result.success:
+                warnings.append(
+                    ProviderWarning(
+                        code="live_fetch_error",
+                        message=f"fund_fee_em[{indicator}]: {result.error}",
+                    )
+                )
+                continue
+            mapping = _fund_fees_from_akshare_rows(
+                result.data,
+                code=resolved_code,
+                indicator=indicator,
+            )
+            live_row_count += mapping.live_row_count
+            skipped_row_count += mapping.skipped_row_count
+            warnings.extend(mapping.warnings)
+            fees.extend(mapping.fees)
+            endpoint_traces[-1] = replace(
+                endpoint_traces[-1],
+                live_row_count=mapping.live_row_count,
+                mapped_row_count=len(mapping.fees),
+                skipped_row_count=mapping.skipped_row_count,
+            )
+        if not fees:
+            self.last_health = _build_health(
+                provider="akshare",
+                provider_version=self.provider_version,
+                started_at=started_at,
+                live_row_count=live_row_count,
+                skipped_row_count=skipped_row_count,
+                endpoints=tuple(endpoint_traces),
+                warnings=tuple(warnings),
+            )
+            raise ProviderUnavailable("AKShare returned no valid fund fee rows")
+        updated_at = _utc_now()
+        normalized = [
+            replace(
+                fee,
+                as_of=resolved_as_of,
+                updated_at=updated_at.isoformat(),
+                expires_at=(updated_at + timedelta(days=self.cache_ttl_days)).isoformat(),
+                stale=False,
+            )
+            for fee in fees
+        ]
+        self.last_health = _build_health(
+            provider="akshare",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            live_row_count=live_row_count,
+            mapped_row_count=len(normalized),
+            skipped_row_count=skipped_row_count,
+            endpoints=tuple(endpoint_traces),
+            warnings=tuple(warnings),
+        )
+        return normalized
+
+    def _set_profile_failure_health(
+        self,
+        started_at: datetime,
+        trace: ProviderEndpointTrace,
+        error: str | None,
+    ) -> None:
+        self.last_health = _build_health(
+            provider="akshare",
+            provider_version=self.provider_version,
+            started_at=started_at,
+            endpoints=(trace,),
+            warnings=(
+                ProviderWarning(
+                    code="live_fetch_error",
+                    message=f"fund_overview_em: {error}",
+                    severity="critical",
+                ),
+            ),
+        )
 
     def fetch_nav_history(
         self,
@@ -1335,6 +1761,22 @@ class _FundFeeMappingResult:
 
 
 @dataclass(frozen=True)
+class _FundCatalogMappingResult:
+    live_row_count: int
+    entries: tuple[FundCatalogEntry, ...]
+    skipped_row_count: int
+    warnings: tuple[ProviderWarning, ...]
+
+
+@dataclass(frozen=True)
+class _TradingRuleMappingResult:
+    live_row_count: int
+    rules: tuple[FundTradingRule, ...]
+    skipped_row_count: int
+    warnings: tuple[ProviderWarning, ...]
+
+
+@dataclass(frozen=True)
 class _EndpointCallResult:
     data: object | None
     success: bool
@@ -1527,6 +1969,238 @@ def _funds_from_rows(df: object, mapper, *, endpoint: str) -> _RowMappingResult:
         skipped_row_count=skipped_row_count,
         warnings=tuple(warnings),
     )
+
+
+def _fund_catalog_entries_from_rows(
+    df: object,
+    mapper,
+    *,
+    endpoint: str,
+) -> _FundCatalogMappingResult:
+    iterrows = getattr(df, "iterrows", None)
+    if not callable(iterrows):
+        return _FundCatalogMappingResult(
+            live_row_count=0,
+            entries=(),
+            skipped_row_count=0,
+            warnings=(
+                ProviderWarning(
+                    code="invalid_response",
+                    message=f"{endpoint} returned a non-tabular response",
+                    severity="critical",
+                    details={"endpoint": endpoint},
+                ),
+            ),
+        )
+    entries: list[FundCatalogEntry] = []
+    warnings: list[ProviderWarning] = []
+    live_row_count = 0
+    skipped_row_count = 0
+    for row_index, row in iterrows():
+        live_row_count += 1
+        try:
+            entry = mapper(row)
+        except Exception as exc:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=f"{endpoint} row {row_index} skipped: {exc}",
+                    details={"endpoint": endpoint, "row_index": row_index},
+                )
+            )
+            continue
+        if len(entry.code) != 6 or not entry.code.isdigit() or not entry.name:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=f"{endpoint} row {row_index} skipped: missing code or name",
+                    severity="info",
+                    details={"endpoint": endpoint, "row_index": row_index},
+                )
+            )
+            continue
+        entries.append(entry)
+    return _FundCatalogMappingResult(
+        live_row_count=live_row_count,
+        entries=tuple(entries),
+        skipped_row_count=skipped_row_count,
+        warnings=tuple(warnings),
+    )
+
+
+def _purchase_rules_from_rows(
+    df: object,
+    *,
+    endpoint: str,
+) -> _TradingRuleMappingResult:
+    iterrows = getattr(df, "iterrows", None)
+    if not callable(iterrows):
+        return _TradingRuleMappingResult(
+            live_row_count=0,
+            rules=(),
+            skipped_row_count=0,
+            warnings=(
+                ProviderWarning(
+                    code="invalid_response",
+                    message=f"{endpoint} returned a non-tabular response",
+                    severity="critical",
+                    details={"endpoint": endpoint},
+                ),
+            ),
+        )
+    rules: list[FundTradingRule] = []
+    warnings: list[ProviderWarning] = []
+    live_row_count = 0
+    skipped_row_count = 0
+    for row_index, row in iterrows():
+        live_row_count += 1
+        try:
+            code = normalize_fund_code(_first(row, "基金代码", "代码", "fund_code"))
+            if len(code) != 6 or not code.isdigit():
+                raise ValueError("missing six-digit fund code")
+            rule = FundTradingRule(
+                code=code,
+                purchase_status=_clean_profile_text(
+                    _first(row, "申购状态", "购买状态", "purchase_status")
+                ),
+                redemption_status=_clean_profile_text(
+                    _first(row, "赎回状态", "redemption_status")
+                ),
+                next_open_date=_date_text(
+                    _first(row, "下一开放日", "next_open_date")
+                ),
+                minimum_purchase_amount=_clean_profile_text(
+                    _first(row, "购买起点", "起购金额", "minimum_purchase_amount")
+                ),
+                daily_purchase_limit=_clean_profile_text(
+                    _first(row, "日累计限定金额", "日累计申购限额", "daily_purchase_limit")
+                ),
+                source="akshare",
+                metadata={
+                    "endpoint": endpoint,
+                    "name": _clean_profile_text(_first(row, "基金简称", "基金名称")),
+                    "fund_type": _clean_profile_text(_first(row, "基金类型")),
+                    "fee_text": _clean_profile_text(_first(row, "手续费")),
+                },
+            )
+        except Exception as exc:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=f"{endpoint} row {row_index} skipped: {exc}",
+                    details={"endpoint": endpoint, "row_index": row_index},
+                )
+            )
+            continue
+        rules.append(rule)
+    return _TradingRuleMappingResult(
+        live_row_count=live_row_count,
+        rules=tuple(rules),
+        skipped_row_count=skipped_row_count,
+        warnings=tuple(warnings),
+    )
+
+
+def _merge_trading_rule_rows(
+    df: object,
+    values: dict[str, str | None],
+    *,
+    indicator: str,
+) -> tuple[int, int, int, tuple[ProviderWarning, ...]]:
+    iterrows = getattr(df, "iterrows", None)
+    if not callable(iterrows):
+        return (
+            0,
+            0,
+            0,
+            (
+                ProviderWarning(
+                    code="invalid_response",
+                    message=f"fund_fee_em[{indicator}] returned a non-tabular response",
+                    severity="critical",
+                    details={"endpoint": "fund_fee_em", "indicator": indicator},
+                ),
+            ),
+        )
+    live_row_count = 0
+    mapped_row_count = 0
+    skipped_row_count = 0
+    warnings: list[ProviderWarning] = []
+    for row_index, row in iterrows():
+        live_row_count += 1
+        try:
+            candidates = {
+                "purchase_status": _clean_profile_text(
+                    _first(row, "申购状态", "购买状态", "purchase_status")
+                ),
+                "redemption_status": _clean_profile_text(
+                    _first(row, "赎回状态", "redemption_status")
+                ),
+                "next_open_date": _date_text(
+                    _first(row, "下一开放日", "next_open_date")
+                ),
+                "minimum_purchase_amount": _clean_profile_text(
+                    _first(row, "购买起点", "申购起点", "起购金额", "minimum_purchase_amount")
+                ),
+                "daily_purchase_limit": _clean_profile_text(
+                    _first(row, "日累计限定金额", "日累计申购限额", "daily_purchase_limit")
+                ),
+                "confirmation_rule": _clean_profile_text(
+                    _first(row, "确认规则", "交易确认日", "确认时间", "confirmation_rule")
+                ),
+            }
+            if indicator == "交易确认日" and candidates["confirmation_rule"] is None:
+                transaction_type = _clean_profile_text(
+                    _first(row, "交易类型", "业务类型", "类型")
+                )
+                confirmation_day = _clean_profile_text(
+                    _first(row, "确认日", "确认天数", "时间")
+                )
+                if transaction_type and confirmation_day:
+                    candidates["confirmation_rule"] = f"{transaction_type} {confirmation_day}"
+        except Exception as exc:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=f"fund_fee_em[{indicator}] row {row_index} skipped: {exc}",
+                    details={
+                        "endpoint": "fund_fee_em",
+                        "indicator": indicator,
+                        "row_index": row_index,
+                    },
+                )
+            )
+            continue
+        contributed = False
+        for key, candidate in candidates.items():
+            if candidate is None:
+                continue
+            if key == "confirmation_rule" and values[key] and candidate not in values[key]:
+                values[key] = f"{values[key]}；{candidate}"
+            elif values[key] is None:
+                values[key] = candidate
+            contributed = True
+        if contributed:
+            mapped_row_count += 1
+        else:
+            skipped_row_count += 1
+            warnings.append(
+                ProviderWarning(
+                    code="skipped_rows",
+                    message=f"fund_fee_em[{indicator}] row {row_index} skipped: no recognized fields",
+                    severity="info",
+                    details={
+                        "endpoint": "fund_fee_em",
+                        "indicator": indicator,
+                        "row_index": row_index,
+                    },
+                )
+            )
+    return live_row_count, mapped_row_count, skipped_row_count, tuple(warnings)
 
 
 def _nav_points_from_akshare_rows(
@@ -1954,6 +2628,75 @@ def _fund_from_akshare_row(row: object) -> FundRecord:
         fee_rate=_to_float(_first(row, "费率", "手续费", "fee_rate")),
         source="akshare",
     )
+
+
+def _fund_catalog_from_name_row(row: object) -> FundCatalogEntry:
+    return FundCatalogEntry(
+        code=normalize_fund_code(_first(row, "基金代码", "代码", "fund_code")),
+        name=normalize_fund_name(_first(row, "基金简称", "基金名称", "名称", "name")),
+        fund_type=_clean_profile_text(_first(row, "基金类型", "类型", "fund_type")),
+        exchange_traded=False,
+        catalog_sources=("fund_name_em",),
+        source="akshare",
+        metadata={"endpoint": "fund_name_em"},
+    )
+
+
+def _fund_catalog_from_rank_row(row: object) -> FundCatalogEntry:
+    return FundCatalogEntry(
+        code=normalize_fund_code(_first(row, "基金代码", "代码", "fund_code")),
+        name=normalize_fund_name(_first(row, "基金简称", "基金名称", "名称", "name")),
+        fund_type=_clean_profile_text(_first(row, "基金类型", "类型", "fund_type")),
+        exchange_traded=False,
+        catalog_sources=("fund_open_fund_rank_em",),
+        source="akshare",
+        metadata={"endpoint": "fund_open_fund_rank_em"},
+    )
+
+
+def _fund_catalog_from_etf_row(row: object) -> FundCatalogEntry:
+    return FundCatalogEntry(
+        code=normalize_fund_code(_first(row, "代码", "基金代码", "fund_code")),
+        name=normalize_fund_name(_first(row, "名称", "基金简称", "基金名称", "name")),
+        fund_type="ETF",
+        exchange_traded=True,
+        catalog_sources=("fund_etf_spot_em",),
+        source="akshare",
+        metadata={"endpoint": "fund_etf_spot_em"},
+    )
+
+
+def _dedupe_catalog_entries(
+    entries: list[FundCatalogEntry],
+) -> list[FundCatalogEntry]:
+    by_code: dict[str, FundCatalogEntry] = {}
+    for entry in entries:
+        existing = by_code.get(entry.code)
+        if existing is None:
+            by_code[entry.code] = entry
+            continue
+        sources = tuple(dict.fromkeys((*existing.catalog_sources, *entry.catalog_sources)))
+        endpoints = tuple(
+            dict.fromkeys(
+                (
+                    *existing.metadata.get("endpoints", (existing.metadata.get("endpoint"),)),
+                    *entry.metadata.get("endpoints", (entry.metadata.get("endpoint"),)),
+                )
+            )
+        )
+        by_code[entry.code] = replace(
+            existing,
+            name=entry.name if entry.exchange_traded else existing.name,
+            fund_type=(
+                entry.fund_type
+                if entry.exchange_traded or existing.fund_type is None
+                else existing.fund_type
+            ),
+            exchange_traded=existing.exchange_traded or entry.exchange_traded,
+            catalog_sources=sources,
+            metadata={"endpoints": tuple(item for item in endpoints if item)},
+        )
+    return [by_code[code] for code in sorted(by_code)]
 
 
 def _fund_profile_from_akshare_row(

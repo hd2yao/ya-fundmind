@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from fund_agent.providers import (
+    AkshareProvider,
     _fund_fees_from_akshare_rows,
     _fund_profile_from_akshare_row,
 )
+from fund_agent.cache import FundCache
 
 
 class FakeDataFrame:
@@ -140,3 +142,156 @@ def test_fee_mapper_skips_empty_and_malformed_rows() -> None:
     assert result.fees == ()
     assert result.skipped_row_count == 2
     assert all(warning.code == "skipped_rows" for warning in result.warnings)
+
+
+class ProfileAkshare:
+    __version__ = "9.9.9"
+
+    def __init__(self):
+        self.calls = []
+
+    def fund_name_em(self):
+        self.calls.append(("fund_name_em", {}))
+        return FakeDataFrame(
+            [
+                (0, {"基金代码": "021511", "基金简称": "示例混合A", "基金类型": "混合型"}),
+                (1, {"基金代码": "021580", "基金简称": "示例ETF联接A", "基金类型": "指数型"}),
+                (2, {"基金代码": "", "基金简称": "坏行"}),
+            ]
+        )
+
+    def fund_open_fund_rank_em(self, *, symbol):
+        self.calls.append(("fund_open_fund_rank_em", {"symbol": symbol}))
+        return FakeDataFrame(
+            [
+                (0, {"基金代码": "021511", "基金简称": "示例混合A", "基金类型": "混合型-偏股"}),
+                (1, {"基金代码": "000311", "基金简称": "示例指数联接A", "基金类型": "指数型"}),
+            ]
+        )
+
+    def fund_etf_spot_em(self):
+        self.calls.append(("fund_etf_spot_em", {}))
+        return FakeDataFrame([(0, {"代码": "510300", "名称": "沪深300ETF"})])
+
+    def fund_purchase_em(self):
+        self.calls.append(("fund_purchase_em", {}))
+        return FakeDataFrame(
+            [
+                (
+                    0,
+                    {
+                        "基金代码": "021511",
+                        "基金简称": "示例混合A",
+                        "申购状态": "开放申购",
+                        "赎回状态": "开放赎回",
+                        "下一开放日": "2026-07-29",
+                        "购买起点": 10,
+                        "日累计限定金额": 1000000,
+                    },
+                ),
+                (1, {"基金代码": "", "基金简称": "坏行"}),
+            ]
+        )
+
+    def fund_overview_em(self, *, symbol):
+        self.calls.append(("fund_overview_em", {"symbol": symbol}))
+        return FakeDataFrame(
+            [
+                (
+                    0,
+                    {
+                        "基金代码": symbol,
+                        "基金简称": "示例混合A",
+                        "基金全称": "示例混合型证券投资基金A",
+                        "基金管理人": "示例基金",
+                    },
+                )
+            ]
+        )
+
+    def fund_fee_em(self, *, symbol, indicator):
+        self.calls.append(("fund_fee_em", {"symbol": symbol, "indicator": indicator}))
+        if indicator == "交易状态":
+            return FakeDataFrame(
+                [(0, {"申购状态": "开放申购", "赎回状态": "开放赎回", "下一开放日": "2026-07-29"})]
+            )
+        if indicator == "申购与赎回金额":
+            return FakeDataFrame([(0, {"购买起点": "10元", "日累计限定金额": "100万元"})])
+        if indicator == "交易确认日":
+            return FakeDataFrame([(0, {"确认规则": "申购 T+1；赎回 T+2"})])
+        return FakeDataFrame(
+            [
+                (
+                    0,
+                    {
+                        "适用金额": "小于100万元",
+                        "原费率": "1.20%",
+                        "天天基金优惠费率": "0.12%",
+                    },
+                )
+            ]
+        )
+
+
+def test_catalog_and_purchase_operations_are_independent_from_legacy_cache(tmp_path) -> None:
+    cache = FundCache(tmp_path / "funds.sqlite")
+    ak = ProfileAkshare()
+    provider = AkshareProvider(ak_module=ak, cache=cache)
+
+    catalog = provider.fetch_fund_catalog(as_of="2026-07-28")
+
+    assert [item.code for item in catalog] == ["000311", "021511", "021580", "510300"]
+    mixed = next(item for item in catalog if item.code == "021511")
+    assert mixed.catalog_sources == ("fund_name_em", "fund_open_fund_rank_em")
+    etf = next(item for item in catalog if item.code == "510300")
+    assert etf.exchange_traded is True
+    assert cache.load_funds(allow_stale=True) == []
+    assert [trace.endpoint for trace in provider.last_health.endpoints] == [
+        "fund_name_em",
+        "fund_open_fund_rank_em",
+        "fund_etf_spot_em",
+    ]
+
+    rules = provider.fetch_purchase_statuses(as_of="2026-07-28")
+
+    assert len(rules) == 1
+    assert rules[0].code == "021511"
+    assert rules[0].minimum_purchase_amount == "10"
+    assert rules[0].daily_purchase_limit == "1000000"
+    assert cache.load_funds(allow_stale=True) == []
+    assert cache.load_fund_details(allow_stale=True) == []
+    assert provider.last_health.endpoints[0].endpoint == "fund_purchase_em"
+
+
+def test_single_fund_profile_operations_only_call_code_scoped_endpoints(tmp_path) -> None:
+    ak = ProfileAkshare()
+    provider = AkshareProvider(
+        ak_module=ak,
+        cache=FundCache(tmp_path / "funds.sqlite"),
+    )
+
+    profile = provider.fetch_fund_profile("021511", as_of="2026-07-28")
+    rule = provider.fetch_fund_trading_rule("021511", as_of="2026-07-28")
+    fees = provider.fetch_fund_fees("021511", as_of="2026-07-28")
+
+    assert profile.fund_company == "示例基金"
+    assert rule.purchase_status == "开放申购"
+    assert rule.redemption_status == "开放赎回"
+    assert rule.next_open_date == "2026-07-29"
+    assert rule.minimum_purchase_amount == "10元"
+    assert rule.daily_purchase_limit == "100万元"
+    assert rule.confirmation_rule == "申购 T+1；赎回 T+2"
+    assert len(fees) == 3
+    assert {fee.fee_type for fee in fees} == {"申购费率（前端）", "赎回费率", "运作费用"}
+    called_names = [name for name, _kwargs in ak.calls]
+    assert "fund_name_em" not in called_names
+    assert "fund_purchase_em" not in called_names
+    assert called_names == [
+        "fund_overview_em",
+        "fund_fee_em",
+        "fund_fee_em",
+        "fund_fee_em",
+        "fund_fee_em",
+        "fund_fee_em",
+        "fund_fee_em",
+    ]

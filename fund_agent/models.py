@@ -425,6 +425,8 @@ class ProviderEndpointTrace:
     live_row_count: int = 0
     mapped_row_count: int = 0
     skipped_row_count: int = 0
+    cache_read_count: int = 0
+    cache_write_count: int = 0
 
 
 @dataclass(frozen=True)
