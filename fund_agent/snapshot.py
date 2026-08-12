@@ -106,6 +106,8 @@ def provider_health_to_dict(item) -> dict[str, Any]:
                 "live_row_count": endpoint.live_row_count,
                 "mapped_row_count": endpoint.mapped_row_count,
                 "skipped_row_count": endpoint.skipped_row_count,
+                "cache_read_count": endpoint.cache_read_count,
+                "cache_write_count": endpoint.cache_write_count,
             }
             for endpoint in item.endpoints
         ],

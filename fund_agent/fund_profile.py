@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import replace
+import json
+from dataclasses import asdict, replace
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from .cache import FundCache
-from .models import FundFee, FundProfile, FundProfileBundle, FundTradingRule
+from .models import FundFee, FundProfile, FundProfileBundle, FundTradingRule, ProviderHealth
 from .providers import ProviderUnavailable, normalize_fund_code
 
 
@@ -23,6 +25,7 @@ class FundProfileService:
         self.cache = cache
         self.provider = provider
         self.cache_ttl_days = cache_ttl_days
+        self.last_provider_health: tuple[ProviderHealth, ...] = ()
 
     def get_profile(
         self,
@@ -31,6 +34,7 @@ class FundProfileService:
         as_of: str | None = None,
         now: datetime | None = None,
     ) -> FundProfileBundle:
+        self.last_provider_health = ()
         resolved_code = normalize_fund_code(code)
         if len(resolved_code) != 6 or not resolved_code.isdigit():
             raise ValueError("profile requires a six-digit fund code")
@@ -79,6 +83,7 @@ class FundProfileService:
                     as_of=resolved_as_of,
                 )
             except ProviderUnavailable as exc:
+                self._capture_provider_health(operation="fund_profile")
                 failures.append(str(exc))
                 warnings.append(_fallback_warning("profile", exc))
             else:
@@ -94,6 +99,10 @@ class FundProfileService:
                     ttl_days=self.cache_ttl_days,
                     now=resolved_now,
                 )
+                self._capture_provider_health(
+                    operation="fund_profile",
+                    cache_write_count=1,
+                )
 
         if trading_rule is None:
             try:
@@ -102,6 +111,7 @@ class FundProfileService:
                     as_of=resolved_as_of,
                 )
             except ProviderUnavailable as exc:
+                self._capture_provider_health(operation="fund_trading_rule")
                 failures.append(str(exc))
                 warnings.append(_fallback_warning("trading_rule", exc))
                 trading_rule = purchase_snapshot_rule
@@ -118,6 +128,10 @@ class FundProfileService:
                     ttl_days=self.cache_ttl_days,
                     now=resolved_now,
                 )
+                self._capture_provider_health(
+                    operation="fund_trading_rule",
+                    cache_write_count=1,
+                )
 
         if not fees:
             try:
@@ -126,6 +140,7 @@ class FundProfileService:
                     as_of=resolved_as_of,
                 )
             except ProviderUnavailable as exc:
+                self._capture_provider_health(operation="fund_fees")
                 failures.append(str(exc))
                 warnings.append(_fallback_warning("fees", exc))
             else:
@@ -144,6 +159,10 @@ class FundProfileService:
                     as_of=resolved_as_of,
                     ttl_days=self.cache_ttl_days,
                     now=resolved_now,
+                )
+                self._capture_provider_health(
+                    operation="fund_fees",
+                    cache_write_count=len(fees),
                 )
 
         fallback_used = bool(failures)
@@ -199,6 +218,66 @@ class FundProfileService:
             fees=fees,
             warnings=tuple(warnings),
         )
+
+    def _capture_provider_health(
+        self,
+        *,
+        operation: str,
+        cache_write_count: int = 0,
+    ) -> None:
+        health = getattr(self.provider, "last_health", None)
+        if not isinstance(health, ProviderHealth):
+            return
+        captured = replace(
+            health,
+            cache_write_count=health.cache_write_count + cache_write_count,
+            metadata={**health.metadata, "operation": operation},
+        )
+        self.last_provider_health = (*self.last_provider_health, captured)
+
+
+def fund_profile_artifact_payload(
+    bundle: FundProfileBundle,
+    *,
+    as_of: str | None,
+    generated_at: datetime | None = None,
+) -> dict:
+    return {
+        "schema_version": "1.0",
+        "generated_at": _utc_now(generated_at).isoformat(),
+        "generator": "fund_agent",
+        **asdict(bundle),
+        "as_of": as_of,
+        "not_production_model": True,
+        "main_score_changed": False,
+        "main_risk_changed": False,
+    }
+
+
+def write_fund_profile_artifact(
+    bundle: FundProfileBundle,
+    output_dir: Path | str,
+    *,
+    as_of: str | None,
+    generated_at: datetime | None = None,
+) -> Path:
+    destination = Path(output_dir) / "fund_profiles" / f"fund_profile-{bundle.code}.json"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(
+            fund_profile_artifact_payload(
+                bundle,
+                as_of=as_of,
+                generated_at=generated_at,
+            ),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return destination
 
 
 def _bundle(

@@ -9,6 +9,7 @@ import sys
 from dataclasses import asdict, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from .agents import run_research
 from .cache import FundCache
@@ -32,6 +33,11 @@ from .fund_detail import (
     build_fund_detail_views,
     write_single_fund_detail,
     write_watchlist_fund_details,
+)
+from .fund_profile import (
+    FundProfileService,
+    FundProfileUnavailable,
+    write_fund_profile_artifact,
 )
 from .historical_backfill import run_historical_backfill
 from .long_horizon import evaluate_long_horizon_stability, write_long_horizon_stability
@@ -296,6 +302,8 @@ def _run_validate_contract(args) -> int:
         results.append(validate_contract_file(args.mcp_result, "mcp_tool_result"))
     if args.release_readiness:
         results.append(validate_contract_file(args.release_readiness, "release_readiness"))
+    if args.fund_profile:
+        results.append(validate_contract_file(args.fund_profile, "fund_profile"))
     if not results:
         results = list(validate_output_dir(args.output_dir).results)
     summary = ContractValidationSummary(results=tuple(results))
@@ -687,6 +695,230 @@ def _parse_refresh_as_of(as_of: str) -> str | None:
         return date.fromisoformat(as_of).isoformat()
     except ValueError as exc:
         raise ValueError("--as-of must be an ISO date, for example 2026-07-27.") from exc
+
+
+def _build_fund_profile_runtime(args):
+    provider_config = load_provider_config(args.provider_config).akshare
+    cache = FundCache(args.cache_file)
+    provider = AkshareProvider(
+        cache=cache,
+        cache_ttl_days=int(getattr(args, "profile_cache_ttl_days", 7)),
+        verbose=bool(getattr(args, "provider_verbose", False) or provider_config.verbose),
+        timeout_seconds=provider_config.timeout_seconds,
+        retry_count=provider_config.retry_count,
+        retry_backoff_seconds=provider_config.retry_backoff_seconds,
+    )
+    return cache, provider, provider_config
+
+
+def _health_with_cache_writes(health, count: int):
+    if not isinstance(health, ProviderHealth):
+        return None
+    return replace(
+        health,
+        cache_write_count=health.cache_write_count + count,
+    )
+
+
+def _run_refresh_fund_profile_reference(args) -> int:
+    if args.reference_ttl_days < 1:
+        print("--reference-ttl-days must be at least 1")
+        return 2
+    if args.minimum_entry_count < 1:
+        print("--minimum-entry-count must be at least 1")
+        return 2
+    if not 0 <= args.catalog_minimum_mapped_ratio <= 1:
+        print("--catalog-minimum-mapped-ratio must be between 0 and 1")
+        return 2
+    if not 0 <= args.purchase_minimum_mapped_ratio <= 1:
+        print("--purchase-minimum-mapped-ratio must be between 0 and 1")
+        return 2
+    try:
+        as_of = _parse_refresh_as_of(args.as_of) or date.today().isoformat()
+        cache, provider, provider_config = _build_fund_profile_runtime(args)
+    except (OSError, ValueError) as exc:
+        print(f"Fund profile reference refresh failed: {exc}")
+        return 2
+    if not getattr(provider, "available", True):
+        print("AKShare is not installed; fund profile reference refresh is unavailable.")
+        return 2
+
+    generated_at = datetime.now(timezone.utc)
+    provider_health: list[ProviderHealth] = []
+    components: dict[str, dict] = {}
+
+    try:
+        catalog = provider.fetch_fund_catalog(as_of=as_of)
+        catalog_health = getattr(provider, "last_health", None)
+        cache.replace_fund_catalog_snapshot(
+            catalog,
+            snapshot_id=f"catalog-{as_of}-{uuid4().hex}",
+            as_of=as_of,
+            ttl_days=args.reference_ttl_days,
+            minimum_entry_count=args.minimum_entry_count,
+            raw_entry_count=(catalog_health.live_row_count if catalog_health else None),
+            minimum_mapped_ratio=args.catalog_minimum_mapped_ratio,
+            now=generated_at,
+            metadata={"refresh_command": "refresh-fund-profile-reference"},
+        )
+    except (ProviderUnavailable, ValueError, OSError) as exc:
+        catalog_health = getattr(provider, "last_health", None)
+        components["catalog"] = {
+            "status": "failed",
+            "entry_count": 0,
+            "error": str(exc),
+        }
+    else:
+        catalog_health = _health_with_cache_writes(catalog_health, len(catalog))
+        components["catalog"] = {
+            "status": "success",
+            "entry_count": len(catalog),
+            "raw_entry_count": catalog_health.live_row_count if catalog_health else None,
+        }
+    if isinstance(catalog_health, ProviderHealth):
+        provider_health.append(catalog_health)
+
+    try:
+        purchase_rules = provider.fetch_purchase_statuses(as_of=as_of)
+        purchase_health = getattr(provider, "last_health", None)
+        cache.replace_purchase_snapshot(
+            purchase_rules,
+            snapshot_id=f"purchase-{as_of}-{uuid4().hex}",
+            as_of=as_of,
+            ttl_days=args.reference_ttl_days,
+            minimum_entry_count=args.minimum_entry_count,
+            raw_entry_count=(purchase_health.live_row_count if purchase_health else None),
+            minimum_mapped_ratio=args.purchase_minimum_mapped_ratio,
+            now=generated_at,
+            metadata={"refresh_command": "refresh-fund-profile-reference"},
+        )
+    except (ProviderUnavailable, ValueError, OSError) as exc:
+        purchase_health = getattr(provider, "last_health", None)
+        components["purchase"] = {
+            "status": "failed",
+            "entry_count": 0,
+            "error": str(exc),
+        }
+    else:
+        purchase_health = _health_with_cache_writes(
+            purchase_health,
+            len(purchase_rules),
+        )
+        components["purchase"] = {
+            "status": "success",
+            "entry_count": len(purchase_rules),
+            "raw_entry_count": purchase_health.live_row_count if purchase_health else None,
+        }
+    if isinstance(purchase_health, ProviderHealth):
+        provider_health.append(purchase_health)
+
+    success_count = sum(item["status"] == "success" for item in components.values())
+    status = "success" if success_count == 2 else "partial" if success_count else "unavailable"
+    trace_path = write_provider_health_trace(
+        as_of=as_of,
+        provider_health=tuple(provider_health),
+        output_dir=args.output_dir,
+        filename_prefix="provider-fund-profile-reference",
+        retention_days=provider_config.trace_retention_days,
+        max_trace_files=provider_config.max_trace_files,
+        now=generated_at,
+    )
+    report = {
+        "schema_version": "1.0",
+        "generated_at": generated_at.isoformat(),
+        "generator": "fund_agent",
+        "as_of": as_of,
+        "status": status,
+        **components,
+        "provider_trace": str(trace_path.relative_to(args.output_dir)),
+        "boundaries": {
+            "legacy_fund_basics_written": False,
+            "legacy_fund_details_written": False,
+            "daily_scheduler_changed": False,
+            "main_score_changed": False,
+            "main_risk_changed": False,
+        },
+    }
+    report_path = args.output_dir / "fund_profiles" / "reference_refresh_report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Fund profile reference report: {report_path}")
+    print(f"Provider trace: {trace_path}")
+    print(
+        "Fund profile reference refresh: "
+        f"status={status} catalog={components['catalog']['status']} "
+        f"purchase={components['purchase']['status']}"
+    )
+    return 0 if status == "success" else 2
+
+
+def _run_fetch_fund_profile(args) -> int:
+    code = normalize_fund_code(args.code)
+    if len(code) != 6 or not code.isdigit():
+        print("fetch-fund-profile requires a six-digit fund code")
+        return 2
+    if args.profile_cache_ttl_days < 1:
+        print("--profile-cache-ttl-days must be at least 1")
+        return 2
+    try:
+        as_of = _parse_refresh_as_of(args.as_of) or date.today().isoformat()
+        cache, provider, provider_config = _build_fund_profile_runtime(args)
+    except (OSError, ValueError) as exc:
+        print(f"Fund profile fetch failed: {exc}")
+        return 2
+    if not getattr(provider, "available", True):
+        print("AKShare is not installed; fund profile fetch is unavailable.")
+        return 2
+
+    generated_at = datetime.now(timezone.utc)
+    service = FundProfileService(
+        cache=cache,
+        provider=provider,
+        cache_ttl_days=args.profile_cache_ttl_days,
+    )
+    try:
+        bundle = service.get_profile(code, as_of=as_of, now=generated_at)
+    except (FundProfileUnavailable, ProviderUnavailable, ValueError) as exc:
+        trace_path = write_provider_health_trace(
+            as_of=as_of,
+            provider_health=service.last_provider_health,
+            output_dir=args.output_dir,
+            filename_prefix=f"provider-fund-profile-{code}",
+            retention_days=provider_config.trace_retention_days,
+            max_trace_files=provider_config.max_trace_files,
+            now=generated_at,
+        )
+        print(f"Fund profile fetch failed: {exc}")
+        print(f"Provider trace: {trace_path}")
+        return 2
+
+    artifact_path = write_fund_profile_artifact(
+        bundle,
+        args.output_dir,
+        as_of=as_of,
+        generated_at=generated_at,
+    )
+    trace_path = write_provider_health_trace(
+        as_of=as_of,
+        provider_health=service.last_provider_health,
+        output_dir=args.output_dir,
+        filename_prefix=f"provider-fund-profile-{code}",
+        retention_days=provider_config.trace_retention_days,
+        max_trace_files=provider_config.max_trace_files,
+        now=generated_at,
+    )
+    validation = validate_contract_file(artifact_path, "fund_profile", strict=True)
+    print(f"Fund profile artifact: {artifact_path}")
+    print(f"Provider trace: {trace_path}")
+    print(f"Fund profile status: {bundle.data_status}")
+    if not validation.ok:
+        for error in validation.errors:
+            print(f"  contract error: {error}")
+        return 2
+    return 0
 
 
 def _parse_market_sector_symbols(value: str) -> list[str]:
@@ -1789,6 +2021,66 @@ def build_parser() -> argparse.ArgumentParser:
         func=_run_refresh_market_sector_history
     )
 
+    refresh_fund_profile_reference = subparsers.add_parser(
+        "refresh-fund-profile-reference",
+        help="显式刷新基金目录和全量申购状态快照；不进入 daily 或详情请求",
+    )
+    refresh_fund_profile_reference.add_argument(
+        "--provider",
+        choices=["akshare"],
+        default="akshare",
+    )
+    refresh_fund_profile_reference.add_argument(
+        "--cache-file",
+        type=Path,
+        default=DEFAULT_CACHE_FILE,
+    )
+    refresh_fund_profile_reference.add_argument(
+        "--provider-config",
+        type=Path,
+        default=DEFAULT_PROVIDER_CONFIG,
+    )
+    refresh_fund_profile_reference.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("outputs"),
+    )
+    refresh_fund_profile_reference.add_argument("--as-of", default="")
+    refresh_fund_profile_reference.add_argument("--reference-ttl-days", type=int, default=1)
+    refresh_fund_profile_reference.add_argument("--minimum-entry-count", type=int, default=100)
+    refresh_fund_profile_reference.add_argument(
+        "--catalog-minimum-mapped-ratio",
+        type=float,
+        default=0.35,
+    )
+    refresh_fund_profile_reference.add_argument(
+        "--purchase-minimum-mapped-ratio",
+        type=float,
+        default=0.8,
+    )
+    refresh_fund_profile_reference.add_argument("--provider-verbose", action="store_true")
+    refresh_fund_profile_reference.set_defaults(
+        func=_run_refresh_fund_profile_reference,
+        profile_cache_ttl_days=7,
+    )
+
+    fetch_fund_profile = subparsers.add_parser(
+        "fetch-fund-profile",
+        help="按代码读取或补全基金概况、交易规则与费率；不调用全量目录/申购接口",
+    )
+    fetch_fund_profile.add_argument("--code", required=True)
+    fetch_fund_profile.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_FILE)
+    fetch_fund_profile.add_argument(
+        "--provider-config",
+        type=Path,
+        default=DEFAULT_PROVIDER_CONFIG,
+    )
+    fetch_fund_profile.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    fetch_fund_profile.add_argument("--as-of", default="")
+    fetch_fund_profile.add_argument("--profile-cache-ttl-days", type=int, default=7)
+    fetch_fund_profile.add_argument("--provider-verbose", action="store_true")
+    fetch_fund_profile.set_defaults(func=_run_fetch_fund_profile)
+
     historical = subparsers.add_parser("historical-backfill", help="生成历史回填观察数据，不修改主评分/风险")
     historical.add_argument("--provider", choices=["fixture", "cache"], default="fixture")
     historical.add_argument("--start-date", required=True)
@@ -1935,6 +2227,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--research-answer", type=Path)
     validate.add_argument("--mcp-result", type=Path)
     validate.add_argument("--release-readiness", type=Path)
+    validate.add_argument("--fund-profile", type=Path)
     validate.set_defaults(func=_run_validate_contract)
 
     release_readiness = subparsers.add_parser(

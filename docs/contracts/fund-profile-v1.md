@@ -20,7 +20,7 @@
 | --- | --- |
 | `schema_version` | 固定为 `1.0`。 |
 | `generated_at` | ISO 8601 UTC 生成时间。 |
-| `generator` | 生成器，例如 `ya-fundmind/3.0.0a1`。 |
+| `generator` | 固定为 `fund_agent`，与既有 JSON artifact 契约一致。 |
 | `code` | 规范化六位基金代码。 |
 | `as_of` | 本次资料快照日期，可为 `null`。 |
 | `catalog` | `FundCatalogEntry` 对象或 `null`。 |
@@ -68,7 +68,7 @@
 
 ## Trace 与错误分类
 
-每次显式 profile/参考快照刷新写 Provider Trace v1。endpoint 名称为 `fund_name_em`、`fund_open_fund_rank_em`、`fund_etf_spot_em`、`fund_purchase_em`、`fund_overview_em`、`fund_fee_em`。每个 endpoint 保存 attempts、success、error、raw/mapped/skipped 与 endpoint 级 cache read/write count；可分类 `config_missing`、`timeout`、`connection_error`、`http_error`、`invalid_response`、`empty_response`、`mapping_error`。
+每次显式 profile/参考快照刷新写 Provider Trace v1。单基金 trace 使用 `provider-fund-profile-<code>-<as_of>.json`，避免不同基金在同一天互相覆盖；参考快照 trace 使用独立的 `provider-fund-profile-reference-<as_of>.json` 前缀。endpoint 名称为 `fund_name_em`、`fund_open_fund_rank_em`、`fund_etf_spot_em`、`fund_purchase_em`、`fund_overview_em`、`fund_fee_em`。每个 endpoint 保存 attempts、success、error、raw/mapped/skipped 与 endpoint 级 cache read/write count；可分类 `config_missing`、`timeout`、`connection_error`、`http_error`、`invalid_response`、`empty_response`、`mapping_error`。
 
 ## 下游读取建议
 
