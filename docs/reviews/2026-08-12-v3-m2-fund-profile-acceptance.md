@@ -2,7 +2,7 @@
 
 日期：2026-08-12
 
-结论：M2 代码、离线回归、真实 AKShare 数据、contract 和产品浏览器门禁通过，可形成本地 `3.0.0a2` 候选。远端 PR、CI、push 和 `v3.0.0-alpha.2` annotated tag 未获本轮授权，因此尚未对外发布，也不进入 M3 实现。
+结论：M2 代码、离线回归、真实 AKShare 数据、contract 和产品浏览器门禁通过。实现 PR #55 的 Python 3.10、Python 3.12 与 Product Web CI 全绿后已合并到 `main`，并完成 `v3.0.0-alpha.2` annotated tag 发布门禁。M3 实现尚未开始。
 
 ## 用户可见结果
 
@@ -56,8 +56,9 @@ AKShare `1.18.64` 的当前上游标题与旧“申购费率（前端）”indic
 - 可访问性：tablist/tab/tabpanel、方向键/Home/End、active `tabindex`、控件可访问名称、44px 移动控件和非颜色唯一表达通过。
 - 真实交互：`021511 + 开放申购` 精确返回 1 条，详情跳转保留 `return_to` 查询；费率页展示 6 条真实行。
 
-## 剩余门禁与回滚
+## 发布与回滚
 
-- 待用户明确授权后才能执行远端 push、PR、CI 和 annotated tag；在此之前不写成“alpha.2 已发布”。
+- 实现 PR：[#55](https://github.com/hd2yao/ya-fundmind/pull/55)，merge commit `90fc27f89f325ab29d7ec28696a84a7120a4053f`；三项必需 CI 全部通过。
+- `v3.0.0-alpha.2` annotated tag 从通过发布门禁的 clean `main` 创建并推送。
 - M3 ETF Market Workspace 尚未开始，不得把 M2 的场内交易状态当成 ETF 盘口、订单或交易能力。
 - 回滚到 `v3.0.0-alpha.1` 时只切换代码并重新部署 Product Web；不得删除 SQLite、`outputs/`、用户配置或 scheduler 来掩盖外部数据问题。
