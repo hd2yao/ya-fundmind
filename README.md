@@ -6,11 +6,10 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 
 ## 当前状态
 
-- 当前稳定版本：`v2.6.0`；当前已发布预览版本：`v3.0.0-alpha.1`。
-- 当前本地候选版本：`v3.0.0-alpha.2`（Python package version：`3.0.0a2`）；M2 代码、真实数据和浏览器门禁已通过，远端 PR/CI/push/tag 尚未执行。
-- 当前发布状态：M1 alpha 已发布；M2 Fund Profile Data 已完成本地验收但尚未对外发布；`v2.6.0` 仍是稳定基线。
+- 当前稳定版本：`v2.6.0`；当前已发布预览版本：`v3.0.0-alpha.2`（Python package version：`3.0.0a2`）。
+- 当前发布状态：M1 与 M2 alpha 均已发布；`v2.6.0` 仍是稳定基线。
 - 下一大版本定位：从“研究报告工作台”收敛为“本地基金/ETF 信息平台”，优先补齐基金档案、ETF 行情、产品信息架构和开源交付质量。
-- V3 当前状态：M2 本地候选已完成，M3 尚未开始。主评分、主风险、默认 Provider 与自动化运行边界继续冻结。
+- V3 当前状态：M2 Fund Profile Data 已完成发布，下一里程碑为 M3 ETF Market；M3 实现尚未开始。主评分、主风险、默认 Provider 与自动化运行边界继续冻结。
 - V3 产品评审：`docs/reviews/2026-07-28-v2.6-product-reassessment.md`
 - V3 开源复盘：`docs/research/2026-07-28-fund-platform-open-source-refresh.md`
 - V3 架构：`docs/architecture/v3-fund-information-platform.md`
@@ -24,7 +23,7 @@ YA FundMind OS v2 是建立在稳定 V1 自动研究底座上的本地、证据�
 - V3 M2 Fund Profile 规格：`specs/v3-fund-information-platform/m2-fund-profile-spec.md`
 - V3 M2 Fund Profile 实现计划：`docs/plans/2026-07-28-v3-m2-fund-profile-data.md`
 - V3 M2 本地验收：`docs/reviews/2026-08-12-v3-m2-fund-profile-acceptance.md`
-- V3 M2 alpha.2 候选报告：`docs/releases/v3.0.0-alpha.2-release-report.md`
+- V3 M2 alpha.2 发布报告：`docs/releases/v3.0.0-alpha.2-release-report.md`
 - V1 架构冻结：`docs/architecture/v1-system-architecture.md`
 - V1 路线图：`docs/roadmap/v1-delivery-roadmap.md`
 - V1 Todo：`docs/backlog/v1-todo.md`
@@ -408,7 +407,7 @@ python -m fund_agent.cli product-web --output-dir outputs
 
 后续 `v2.4`–`v2.6` 的范围、验收与回滚边界见 [`docs/plans/2026-07-28-v2.3-to-v2.6-product-delivery.md`](docs/plans/2026-07-28-v2.3-to-v2.6-product-delivery.md)。
 
-`v3.0.0-alpha.2` 候选在 M1 产品骨架上增加独立基金资料层：
+`v3.0.0-alpha.2` 在 M1 产品骨架上增加独立基金资料层：
 
 - 显式运行 `refresh-fund-profile-reference` 才会刷新基金目录和全量申购状态；详情页、Product API、daily 与 scheduler 都不会调用这些全量 endpoint。
 - 基金终端使用 `fund_name_em`、`fund_open_fund_rank_em`、`fund_etf_spot_em` 的规范化并集，支持代码、名称、类型、场内标记、申购状态、排序和服务端分页。
@@ -426,7 +425,7 @@ python -m fund_agent.cli product-web \
   --output-dir outputs --cache-file data/cache/funds.sqlite
 ```
 
-完整验收见 [`docs/reviews/2026-08-12-v3-m2-fund-profile-acceptance.md`](docs/reviews/2026-08-12-v3-m2-fund-profile-acceptance.md)。这些资料只用于浏览和研究核对；alpha.2 的远端 PR、CI、push 与 annotated tag 尚未执行。
+完整验收见 [`docs/reviews/2026-08-12-v3-m2-fund-profile-acceptance.md`](docs/reviews/2026-08-12-v3-m2-fund-profile-acceptance.md)。这些资料只用于浏览和研究核对；M2 没有改变主评分、主风险、默认 Provider 或自动化运行边界。
 
 `v2.4` 将已有的基金详情和净值缓存路径提升为独立本地浏览页面：
 
