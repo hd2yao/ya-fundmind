@@ -43,6 +43,8 @@
 - 核心 domain service 不依赖 CLI 或 React。
 - provider 原始字段只能进入 mapper。
 - 全量 endpoint 只能由 TTL snapshot job 刷新，单基金详情不得逐基金触发全量 endpoint。
+- M2 的 catalog、purchase status 和 profile 必须写入独立新表；禁止写入或改变旧 `fund_basics` / `fund_details` 的语义。
+- M2 全量 snapshot 通过完整性与映射阈值后才能原子切换 active snapshot；失败批次不得覆盖上一份可用快照。
 - 新公共 JSON 有 schema、validator 和兼容测试。
 - 默认测试无网络；对应 Milestone 的核心 AKShare endpoint 在发布前必须有真实 smoke 和 trace，失败阻断该版本发布。
 - API 列表服务端分页。
@@ -62,6 +64,7 @@
 
 - RED -> GREEN -> focused diff -> commit。
 - endpoint mapper 覆盖缺列、空值、坏行和字段变体。
+- M2 每个回滚单元都验证旧表 round-trip、详情请求全量 endpoint 零调用，以及 legacy daily/score/risk 回归。
 - 连续两个页面重复转换逻辑时回到 product view model。
 - 范围、schema、权限或版本变化时先更新契约。
 

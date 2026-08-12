@@ -9,6 +9,7 @@ import type {
   MarketSectorSearchResponse,
   ProductFundDetailResponse,
   ProductFundHistoryResponse,
+  ProductFundProfileResponse,
   ProductFundSearchResponse,
   ProductMarketHistoryResponse,
   ProductMarketSectorSearchResponse
@@ -73,6 +74,7 @@ export async function searchFunds(
   appendQuery(query, "fund_type", params.fundType);
   appendQuery(query, "theme", params.theme);
   appendQuery(query, "exchange_traded", params.exchangeTraded);
+  appendQuery(query, "purchase_status", params.purchaseStatus);
   appendQuery(query, "quality", params.quality);
   appendQuery(query, "sort", params.sort);
   appendQuery(query, "direction", params.direction);
@@ -109,6 +111,25 @@ export async function getFundHistory(
     typeof payload.point_count !== "number"
   ) {
     throw new ApiError("Local API returned an invalid fund history payload.", 502);
+  }
+  return payload;
+}
+
+export async function getFundProfile(
+  code: string,
+  signal?: AbortSignal
+): Promise<ProductFundProfileResponse> {
+  const payload = await getJson<ProductFundProfileResponse>(
+    `/api/product/funds/${encodeURIComponent(code)}/profile`,
+    signal
+  );
+  if (
+    payload.fund?.code !== code ||
+    !payload.data_status ||
+    !payload.component_status ||
+    !Array.isArray(payload.fees)
+  ) {
+    throw new ApiError("Local API returned an invalid fund profile payload.", 502);
   }
   return payload;
 }

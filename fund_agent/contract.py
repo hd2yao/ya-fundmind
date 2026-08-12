@@ -119,6 +119,24 @@ CORE_FIELDS = {
         "blockers",
         "warnings",
     ),
+    "fund_profile": (
+        "schema_version",
+        "generated_at",
+        "generator",
+        "code",
+        "as_of",
+        "catalog",
+        "profile",
+        "trading_rule",
+        "fees",
+        "data_status",
+        "profile_status",
+        "trading_status",
+        "fee_status",
+        "not_production_model",
+        "main_score_changed",
+        "main_risk_changed",
+    ),
 }
 
 
@@ -189,6 +207,8 @@ def validate_contract_file(
         _validate_mcp_tool_result_values(payload, errors)
     elif contract_type == "release_readiness":
         _validate_release_readiness_values(payload, errors)
+    elif contract_type == "fund_profile":
+        _validate_fund_profile_values(payload, errors)
     return ContractValidationResult(
         path=resolved_path,
         contract_type=contract_type,
@@ -212,6 +232,7 @@ def validate_output_dir(
         (resolved_dir / "evidence" / "research_evidence.json", "evidence_bundle"),
         (resolved_dir / "copilot" / "research_answer.json", "research_answer"),
         (resolved_dir / "release" / "v2_release_readiness.json", "release_readiness"),
+        (_latest_fund_profile(resolved_dir), "fund_profile"),
     ]
     results = [
         validate_contract_file(path, contract_type, strict=strict)
@@ -277,6 +298,7 @@ def _validate_shape(payload: dict[str, Any], contract_type: str, errors: list[st
             "blockers",
             "warnings",
         ),
+        "fund_profile": ("fees",),
     }
     dict_fields = {
         "report": ("valuations", "report_metadata"),
@@ -306,6 +328,61 @@ def _latest_snapshot(output_dir: Path) -> Path | None:
         return None
     candidates = sorted(snapshot_dir.glob("*.json"))
     return candidates[-1] if candidates else None
+
+
+def _validate_fund_profile_values(payload: dict[str, Any], errors: list[str]) -> None:
+    code = payload.get("code")
+    if not isinstance(code, str) or len(code) != 6 or not code.isdigit():
+        errors.append("Fund profile code must be a six-digit string")
+
+    as_of = payload.get("as_of")
+    if as_of is not None and not isinstance(as_of, str):
+        errors.append("Field must be a string or null: as_of")
+
+    statuses = {"updated", "attention", "limited", "unavailable"}
+    for field in (
+        "data_status",
+        "profile_status",
+        "trading_status",
+        "fee_status",
+    ):
+        if payload.get(field) not in statuses:
+            errors.append(f"Unsupported fund profile status: {field}={payload.get(field)}")
+
+    expected_boundaries = {
+        "not_production_model": True,
+        "main_score_changed": False,
+        "main_risk_changed": False,
+    }
+    for field, expected in expected_boundaries.items():
+        if payload.get(field) is not expected:
+            errors.append(
+                f"Fund profile {field} must be {str(expected).lower()}"
+            )
+
+    for field in ("catalog", "profile", "trading_rule"):
+        component = payload.get(field)
+        if component is not None and not isinstance(component, dict):
+            errors.append(f"Field must be an object or null: {field}")
+            continue
+        if isinstance(component, dict) and code and component.get("code") != code:
+            errors.append(f"{field}.code must match the top-level code")
+
+    fees = payload.get("fees")
+    if not isinstance(fees, list):
+        return
+    for index, fee in enumerate(fees):
+        if not isinstance(fee, dict):
+            errors.append(f"fees[{index}] must be an object")
+            continue
+        if fee.get("code") != code:
+            errors.append(f"fees[{index}].code must match the top-level code")
+        if not isinstance(fee.get("fee_type"), str) or not fee.get("fee_type"):
+            errors.append(f"fees[{index}].fee_type must be a non-empty string")
+        for field in ("condition", "period", "channel", "original_rate", "discounted_rate"):
+            value = fee.get(field)
+            if value is not None and not isinstance(value, str):
+                errors.append(f"fees[{index}].{field} must be a string or null")
 
 
 def _validate_research_context_values(payload: dict[str, Any], errors: list[str]) -> None:
@@ -542,3 +619,11 @@ def _latest_trace(output_dir: Path) -> Path | None:
     # provider-sector-history-YYYY-MM-DD.json.
     candidates = sorted(trace_dir.glob("provider-????-??-??.json"))
     return candidates[-1] if candidates else None
+
+
+def _latest_fund_profile(output_dir: Path) -> Path | None:
+    profile_dir = output_dir / "fund_profiles"
+    if not profile_dir.exists():
+        return None
+    candidates = list(profile_dir.glob("fund_profile-??????.json"))
+    return max(candidates, key=lambda item: item.stat().st_mtime) if candidates else None

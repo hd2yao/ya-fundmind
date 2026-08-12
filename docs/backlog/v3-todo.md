@@ -9,11 +9,11 @@
 
 ## 当前状态
 
-- 当前稳定版本：`v2.6.0`；当前预发布候选：`v3.0.0-alpha.1`（待 merge、CI 和 clean `main` tag）
-- 当前开发状态：M1 实现与验收完成，alpha 发布门正在执行；M2 Fund Profile Data 尚未开始实现。
-- 当前 Milestone：M1 alpha release gate
+- 当前稳定版本：`v2.6.0`；当前已发布预览版本：`v3.0.0-alpha.1`（tag 指向 `8a13d4d898f90558ae222593947d8456d10851ab`）
+- 当前开发状态：M2 实现和本地验收已完成；`3.0.0a2` 候选等待远端 PR/CI/push/tag 授权与门禁。
+- 当前 Milestone：M2 Fund Profile Data
 - 当前 P0：无
-- 当前 P1：M1 alpha release gate
+- 当前 P1：M2 远端发布门；M3 尚未开始
 
 ## P0 Blocking
 
@@ -41,14 +41,15 @@
 - [x] fixture 新闻默认不作为正式入口。
 - [x] 完成 1440/768/375、a11y 基础检查和全量回归。
 - [x] 行业日线使用 AKShare 精确同名 endpoint 回退；新增受控预热命令、cache 覆盖与用户层空态，真实 smoke 覆盖 `BK1042`、`BK1036`。
-- [ ] 完成 PR、CI、clean `main` 验收和 `v3.0.0-alpha.1` annotated tag 发布门禁。
+- [x] 完成 PR #54、CI、clean `main` 验收和 `v3.0.0-alpha.1` annotated tag 发布门禁。
 - [x] 用 v2.6 fixture score/risk snapshot 与离线 daily/weekly 回归证明主模型、Research/Evidence 不变；live smoke 仍按对应数据 Milestone 单独执行。
 
 ### M2
 
-- [ ] 冻结 Fund Profile 数据契约、字段语义与 AKShare endpoint coverage。
-- [ ] 完成 Fund Profile cache、API、CLI、详情页和三类基金真实 smoke。
-- [ ] 完成 PR、CI、clean `main` 验收和 `v3.0.0-alpha.2` 发布门禁。
+- [x] 冻结 Fund Profile 数据契约、P0 隔离边界、字段语义与 AKShare endpoint coverage。
+- [x] 完成独立 cache、API、CLI、基金终端目录并集/申购筛选、详情 tabs 和三类基金真实 smoke。
+- [x] 完成本地全量回归、contract、真实浏览器和 clean-main 集成准备。
+- [ ] 完成远端 PR、CI、push 和 `v3.0.0-alpha.2` annotated tag 发布门禁；未获远端授权前不执行。
 
 ### M3-M6
 

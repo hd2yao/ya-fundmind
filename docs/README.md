@@ -1,6 +1,6 @@
 # Documentation Index
 
-当前文档同时维护稳定运行的 V1/V2 基线和正在交付的 V3 Fund Information Platform。稳定产品版本为 `v2.6.0`；V3 M1 的 `v3.0.0-alpha.1` 发布候选已完成实现与验收，等待 merge、CI 和 clean `main` annotated tag。各大版本使用有限 Milestone 和明确发布门，不使用无限 Phase 追加方式。
+当前文档同时维护稳定运行的 V1/V2 基线和正在交付的 V3 Fund Information Platform。稳定产品版本为 `v2.6.0`；V3 M1 已发布 `v3.0.0-alpha.1`，M2 本地候选已通过实现、真实数据和浏览器门禁，远端 PR/CI/push/tag 尚未执行。各大版本使用有限 Milestone 和明确发布门，不使用无限 Phase 追加方式。
 
 ## Active Delivery Docs
 
@@ -66,7 +66,11 @@ These files are runtime or OS noise and should not be committed:
 - `roadmap/v3-delivery-roadmap.md`：V3 M1-M6、版本和发布门。
 - `backlog/v3-todo.md`：V3 P0/P1/P2。
 - `plans/2026-07-28-v3-fund-information-platform.md`：TDD 实现主计划。
-- `releases/v3.0.0-alpha.1-release-report.md`：M1 alpha 发布候选的证据、边界、回滚和 tag 前提。
+- `releases/v3.0.0-alpha.1-release-report.md`：M1 alpha 发布证据、边界和回滚。
+- `reviews/2026-08-12-v3-m2-fund-profile-acceptance.md`：M2 本地数据、代码、浏览器和边界验收。
+- `releases/v3.0.0-alpha.2-release-report.md`：M2 alpha.2 候选状态与待完成远端门禁。
+- `contracts/fund-profile-v1.md`：M2 基金概况、交易规则和费率资料契约。
+- `plans/2026-07-28-v3-m2-fund-profile-data.md`：M2 实现、测试、发布与回滚计划。
 - `../specs/v3-fund-information-platform/`：Spec、技术方案、任务和执行契约。
 
 ## V2 Release Entry Points

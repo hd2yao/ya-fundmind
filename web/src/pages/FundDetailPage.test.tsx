@@ -31,6 +31,42 @@ const history = {
   data_status: { state: "attention", label: "请留意数据日期", description: "当前展示截至 2026-07-21 的数据，最新更新仍待确认。", as_of: "2026-07-21" }
 };
 
+const profile = {
+  fund: { code: "510300", name: "沪深300ETF华泰柏瑞", fund_type: "ETF" },
+  profile: {
+    full_name: "华泰柏瑞沪深300交易型开放式指数证券投资基金",
+    fund_company: "华泰柏瑞基金",
+    custodian: "中国工商银行",
+    fund_manager: "基金经理",
+    inception_date: "2012-05-04",
+    asset_scale: 520.5,
+    asset_scale_unit: "亿元",
+    benchmark: "沪深300指数"
+  },
+  trading_rule: {
+    purchase_status: "开放申购",
+    redemption_status: "开放赎回",
+    next_open_date: "2026-07-29",
+    minimum_purchase_amount: "10元"
+  },
+  fees: [
+    {
+      fee_type: "申购费率（前端）",
+      condition: "小于100万元",
+      period: null,
+      channel: "银行卡购买",
+      original_rate: "1.20%",
+      discounted_rate: "0.12%"
+    }
+  ],
+  data_status: { state: "updated", label: "资料已更新", description: "资料可供浏览。", as_of: "2026-07-28" },
+  component_status: {
+    profile: { state: "updated", label: "概况已更新", description: "概况资料可供浏览。", as_of: "2026-07-28" },
+    trading_rule: { state: "updated", label: "规则已更新", description: "申赎规则可供浏览。", as_of: "2026-07-28" },
+    fees: { state: "updated", label: "费率已更新", description: "费率资料可供浏览。", as_of: "2026-07-28" }
+  }
+};
+
 function stubApi() {
   const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
     const url = String(input);
@@ -56,6 +92,9 @@ function stubApi() {
       const range = new URL(url, "http://localhost").searchParams.get("range") || "6m";
       return Promise.resolve({ ok: true, json: async () => ({ ...history, range }) });
     }
+    if (url === "/api/product/funds/510300/profile") {
+      return Promise.resolve({ ok: true, json: async () => profile });
+    }
     throw new Error(`Unexpected request: ${url}`);
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -75,26 +114,38 @@ function renderDetail(entry = "/funds/510300?return_to=%2Ffunds%3Fq%3D510300") {
 describe("FundDetailPage", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("renders product fund detail and historical NAV without changing research boundaries", async () => {
+  it("renders accessible profile, NAV and fee tabs without changing research boundaries", async () => {
     const fetchMock = stubApi();
     renderDetail();
 
     expect(await screen.findByRole("heading", { name: "沪深300ETF华泰柏瑞" })).toBeInTheDocument();
-    expect(screen.getByText("华泰柏瑞基金")).toBeInTheDocument();
+    expect(await screen.findByText("中国工商银行")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "概览" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "净值与业绩" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "费率与规则" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getAllByText("数据日期").length).toBeGreaterThan(0);
-    expect(screen.getByRole("img", { name: "510300 历史净值曲线" })).toBeInTheDocument();
-    expect(screen.getByText("3 个净值点")).toBeInTheDocument();
     expect(screen.getByText(/不修改主评分或主风险/)).toBeInTheDocument();
     expect(screen.queryByText("akshare")).not.toBeInTheDocument();
     expect(screen.queryByText("cache:akshare")).not.toBeInTheDocument();
     expect(screen.queryByText("warning")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "返回上一页" })).toHaveAttribute("href", "/funds?q=510300");
 
+    fireEvent.keyDown(screen.getByRole("tab", { name: "概览" }), { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: "净值与业绩" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("img", { name: "510300 历史净值曲线" })).toBeInTheDocument();
+    expect(screen.getByText("3 个净值点")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "1 月" }));
     await waitFor(() => {
       const urls = fetchMock.mock.calls.map((call) => String(call[0]));
       expect(urls.some((url) => url.endsWith("history?range=1m"))).toBe(true);
     });
+
+    fireEvent.click(screen.getByRole("tab", { name: "费率与规则" }));
+    expect(screen.getByText("开放申购")).toBeInTheDocument();
+    expect(screen.getByText("0.12%")).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "510300 历史净值曲线" })).not.toBeInTheDocument();
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls.filter((url) => url.endsWith("/profile"))).toHaveLength(1);
   });
 
   it("keeps invalid direct URLs recoverable", () => {

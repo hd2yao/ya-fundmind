@@ -61,6 +61,7 @@ def test_product_web_rejects_non_loopback_host(tmp_path, capsys):
 def test_product_web_starts_uvicorn_with_fixed_roots(monkeypatch, tmp_path):
     output_dir = tmp_path / "outputs"
     review_state = tmp_path / "review.json"
+    cache_file = tmp_path / "funds.sqlite"
     static_dir = _write_static_app(tmp_path / "dist")
     calls = []
 
@@ -78,6 +79,8 @@ def test_product_web_starts_uvicorn_with_fixed_roots(monkeypatch, tmp_path):
             str(review_state),
             "--static-dir",
             str(static_dir),
+            "--cache-file",
+            str(cache_file),
             "--host",
             "127.0.0.1",
             "--port",
@@ -91,6 +94,7 @@ def test_product_web_starts_uvicorn_with_fixed_roots(monkeypatch, tmp_path):
             "output_dir": output_dir,
             "review_state_path": review_state,
             "static_dir": static_dir,
+            "cache_file": cache_file,
             "host": "127.0.0.1",
             "port": 8765,
         }

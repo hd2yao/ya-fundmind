@@ -15,6 +15,7 @@ const searchResponse = {
       nav: 4.21,
       scale: 520.5,
       exchange_traded: true,
+      purchase_status: "场内交易",
       returns: { "1m": 2.5, "3m": 5, "6m": 8, "1y": 12 },
       data_date: "2026-07-21",
       data_status: { state: "updated", label: "数据已更新", description: "当前展示截至 2026-07-21 的结构化数据。", as_of: "2026-07-21" }
@@ -28,6 +29,7 @@ const searchResponse = {
     fund_types: { ETF: 1200, 基金: 20370 },
     themes: { 宽基: 500, 人工智能: 120 },
     exchange_traded: { true: 1200, false: 20370 },
+    purchase_statuses: { 开放申购: 18000, 暂停申购: 2370, 场内交易: 1200 },
     data_states: { updated: 21570 }
   },
   data_date: "2026-07-21",
@@ -103,11 +105,15 @@ describe("FundsPage", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "基金类型" }), {
       target: { value: "ETF" }
     });
+    fireEvent.change(screen.getByRole("combobox", { name: "申购状态" }), {
+      target: { value: "场内交易" }
+    });
 
     await waitFor(() => {
       const urls = fetchMock.mock.calls.map((call) => String(call[0]));
       expect(urls.some((url) => url.includes("q=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD"))).toBe(true);
       expect(urls.some((url) => url.includes("fund_type=ETF"))).toBe(true);
+      expect(urls.some((url) => url.includes("purchase_status=%E5%9C%BA%E5%86%85%E4%BA%A4%E6%98%93"))).toBe(true);
     });
   });
 

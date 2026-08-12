@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from fund_agent.cache import FundCache
 from fund_agent.fund_history import FundHistoryUnavailable
+from fund_agent.models import FundCatalogEntry, FundTradingRule
 from fund_agent.web_api import _build_fund_history_service, create_web_app
 
 
@@ -50,6 +53,46 @@ def _write_market(output_dir: Path) -> None:
     )
 
 
+def _write_profile_reference_cache(path: Path) -> FundCache:
+    cache = FundCache(path)
+    now = datetime(2026, 7, 21, 14, 0, tzinfo=timezone.utc)
+    cache.replace_fund_catalog_snapshot(
+        [
+            FundCatalogEntry(
+                code="510300",
+                name="目录版沪深300ETF",
+                fund_type="ETF-指数型",
+                exchange_traded=True,
+                catalog_sources=("fund_name_em", "fund_etf_spot_em"),
+                source="akshare",
+            ),
+            FundCatalogEntry(
+                code="021511",
+                name="创新药混合A",
+                fund_type="混合型",
+                exchange_traded=False,
+                catalog_sources=("fund_name_em", "fund_open_fund_rank_em"),
+                source="akshare",
+            ),
+        ],
+        snapshot_id="catalog-v1",
+        as_of="2026-07-21",
+        ttl_days=30,
+        now=now,
+    )
+    cache.replace_purchase_snapshot(
+        [
+            FundTradingRule(code="510300", purchase_status="场内交易", source="akshare"),
+            FundTradingRule(code="021511", purchase_status="开放申购", source="akshare"),
+        ],
+        snapshot_id="purchase-v1",
+        as_of="2026-07-21",
+        ttl_days=30,
+        now=now,
+    )
+    return cache
+
+
 def test_search_api_supports_query_filters_and_pagination(tmp_path: Path) -> None:
     output_dir = tmp_path / "outputs"
     _write_market(output_dir)
@@ -87,6 +130,29 @@ def test_search_api_validates_parameters(tmp_path: Path) -> None:
     assert client.get("/api/funds/search", params={"page_size": 101}).status_code == 422
     assert client.get("/api/funds/search", params={"sort": "secret"}).status_code == 422
     assert client.get("/api/funds/search", params={"quality": "perfect"}).status_code == 422
+
+
+def test_product_search_uses_catalog_union_and_purchase_status(tmp_path: Path) -> None:
+    output_dir = tmp_path / "outputs"
+    _write_market(output_dir)
+    cache = _write_profile_reference_cache(tmp_path / "funds.sqlite")
+    client = TestClient(
+        create_web_app(output_dir=output_dir, fund_catalog_cache=cache)
+    )
+
+    response = client.get(
+        "/api/product/funds/search",
+        params={"purchase_status": "开放申购"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["code"] == "021511"
+    assert payload["items"][0]["purchase_status"] == "开放申购"
+    assert payload["facets"]["purchase_statuses"] == {"开放申购": 1}
+    assert "source" not in payload["items"][0]
+    assert "catalog_sources" not in response.text
 
 
 def test_fund_detail_api_merges_safe_research_detail(tmp_path: Path) -> None:
