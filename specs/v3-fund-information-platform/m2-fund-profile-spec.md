@@ -47,4 +47,4 @@ V3 M1 已把市场、基金、自选和组合整理为用户可浏览的产品�
 
 ## 待确认问题
 
-无阻断问题。实际 fee indicator 的可用组合、三类 smoke 代码和字段列名以实现阶段的真实 endpoint 结果写入 trace/验收报告；若与本 spec 的字段语义冲突，先更新本 spec、contract 和计划后再继续。
+无实现阻断问题。2026-08-12 的 AKShare `1.18.64` 真实返回证明：交易规则和运作费用使用 `0/1、2/3、4/5` label/value 对，赎回费率列名为“赎回费率”。三类 artifact 均为 `updated`，没有 critical warning；旧“申购费率（前端）”indicator 对当前上游标题会产生非 critical warning，已取得的赎回费率和运作费用按原始文本展示，不绕过 AKShare 抓取或补造缺失费率。完整证据见 `docs/reviews/2026-08-12-v3-m2-fund-profile-acceptance.md`。

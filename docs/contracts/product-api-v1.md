@@ -49,11 +49,14 @@
 | `GET /api/product/market/sectors/{symbol}/history` | 板块历史 | 板块点位、窗口、数据日期、数据状态 |
 | `GET /api/product/funds/search` | 基金库服务端分页 | 基金摘要、筛选 facets、数据日期、数据状态 |
 | `GET /api/product/funds/{code}` | 基金资料 | 基金摘要、补充资料、字段缺口说明 |
+| `GET /api/product/funds/{code}/profile` | 基金概况与费率规则 | 概况字段、申购赎回、费率、组件状态 |
 | `GET /api/product/funds/{code}/history` | 基金净值曲线 | 净值点、窗口、数据日期、数据状态 |
 | `GET /api/product/watchlist` | 只读自选页 | 配置自选基金、覆盖摘要、数据状态 |
 | `GET /api/product/portfolio` | 组合页 | 配置持仓、估值状态、暴露、观察项 |
 
-产品基金摘要只包含：代码、名称、类型、主题、净值、规模、场内标记、收益窗口、数据日期和数据状态。它不包含 `source`、`updated_at`、`expires_at`、`stale`、`fallback_reason` 或原始质量等级。
+产品基金摘要只包含：代码、名称、类型、主题、净值、规模、场内标记、申购状态、收益窗口、数据日期和数据状态。基金搜索可按申购状态筛选，facets 返回 `purchase_statuses`。摘要不包含 `source`、`updated_at`、`expires_at`、`stale`、`fallback_reason` 或原始质量等级。
+
+基金 profile 产品响应只展示可读概况、规则、费率和中文组件状态；不返回 artifact 的 `source`、`metadata`、endpoint、cache 或 raw warning。详情存在性同时接受 M1 market index 与 M2 catalog，目录独有基金不需要先进入旧 `fund_details`。
 
 组合估值状态使用中文业务语义：`估值已齐全`、`部分持仓待估值`、`当前估值暂不可用`、`尚未配置持仓`。缺失估值保持 `null`，不生成零值、`-100%` 或权重。
 

@@ -9,11 +9,11 @@
 
 ## 当前状态
 
-- 当前稳定版本：`v2.6.0`；当前预发布版本：`v3.0.0-alpha.1`（tag 指向 `8a13d4d898f90558ae222593947d8456d10851ab`）
-- 当前开发状态：M1 已发布；M2 Fund Profile Data 的 contract 与实现正在执行。
+- 当前稳定版本：`v2.6.0`；当前已发布预览版本：`v3.0.0-alpha.1`（tag 指向 `8a13d4d898f90558ae222593947d8456d10851ab`）
+- 当前开发状态：M2 实现和本地验收已完成；`3.0.0a2` 候选等待远端 PR/CI/push/tag 授权与门禁。
 - 当前 Milestone：M2 Fund Profile Data
 - 当前 P0：无
-- 当前 P1：M2 Fund Profile Data
+- 当前 P1：M2 远端发布门；M3 尚未开始
 
 ## P0 Blocking
 
@@ -46,9 +46,10 @@
 
 ### M2
 
-- [ ] 冻结 Fund Profile 数据契约、字段语义与 AKShare endpoint coverage。
-- [ ] 完成 Fund Profile cache、API、CLI、详情页和三类基金真实 smoke。
-- [ ] 完成 PR、CI、clean `main` 验收和 `v3.0.0-alpha.2` 发布门禁。
+- [x] 冻结 Fund Profile 数据契约、P0 隔离边界、字段语义与 AKShare endpoint coverage。
+- [x] 完成独立 cache、API、CLI、基金终端目录并集/申购筛选、详情 tabs 和三类基金真实 smoke。
+- [x] 完成本地全量回归、contract、真实浏览器和 clean-main 集成准备。
+- [ ] 完成远端 PR、CI、push 和 `v3.0.0-alpha.2` annotated tag 发布门禁；未获远端授权前不执行。
 
 ### M3-M6
 

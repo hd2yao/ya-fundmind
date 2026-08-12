@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Prepare the local `3.0.0a2` candidate with an independent AKShare fund catalog, purchase-status snapshot, code-scoped profile/fee cache, Product API and Fund Detail tabs.
+- Add server-side catalog-union search, purchase-status filtering and stable catalog-only detail routes without changing daily, watchlist, portfolio, scheduler, main score or main risk behavior.
+- Validate real reference snapshots for 27,487 catalog entries and 27,181 purchase-status rows, plus three representative code-scoped live profile traces. Remote PR, CI, push and annotated tag publication remain pending.
+
 ## v3.0.0-alpha.1 - 2026-07-28
 
 - Add an AKShare industry-history endpoint fallback that uses only an exact same-name industry board. A controlled `refresh-market-sector-history` CLI can prewarm selected `BK` codes without changing the daily schedule.
