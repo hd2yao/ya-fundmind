@@ -33,13 +33,13 @@
 
 ## Batch 2：M2 Fund Profile
 
-- [ ] `T201` 冻结 Fund Profile contract 和模型。
-  映射：`AC-012` 至 `AC-014`
+- [ ] `T201` 冻结 Fund Profile contract、模型和三个 P0 隔离门禁；增加旧表 round-trip 与全量 endpoint 零调用测试义务。
+  映射：`AC-012` 至 `AC-014`、`AC-M2-08`、`AC-M2-09`
 - [ ] `T202` 定义 AKShare 基金库并集、去重/份额规则和 endpoint coverage report。
 - [ ] `T203` 接入基金目录/概况 mapper，稳定详情 URL。
 - [ ] `T204` 按“全量 TTL snapshot / 单基金按需”接入申购赎回和费率，保留条件、渠道和原/优惠费率。
-- [ ] `T205` 新增 cache migration、TTL 和 stale fallback。
-- [ ] `T206` 新增 profile service/API/CLI 和申购状态筛选。
+- [ ] `T205` 新增独立 catalog/purchase/profile cache migration、原子 snapshot 切换、TTL 和 stale fallback；证明 `fund_basics` / `fund_details` 未改变。
+- [ ] `T206` 新增 profile service/API/CLI 和申购状态筛选；详情路径禁止调用 catalog/purchase 全量 endpoint。
 - [ ] `T207` 新增概览、净值与业绩、费率与规则 UI。
 - [ ] `T208` 完成三类基金 mandatory live smoke、trace、回归、PR 和 `alpha.2`。
 
